@@ -1,14 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm:*)",
-      "Bash(cargo:*)",
-      "Bash(ls:*)",
-      "Bash(cat:*)",
-      "Bash(ps:*)",
+      "Bash(*)",
       "Edit",
       "Read",
-      "Write"
+      "Write",
+      "Task",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "NotebookEdit",
+      "mcp__*"
     ]
   }
 }
