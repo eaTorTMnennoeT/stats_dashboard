@@ -1,0 +1,11 @@
+/opt/rust/simple_ws/target/release/deps/libserde_path_to_error-7571fb47509f4417.rmeta: /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/lib.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/de.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/path.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/ser.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/wrap.rs
+
+/opt/rust/simple_ws/target/release/deps/libserde_path_to_error-7571fb47509f4417.rlib: /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/lib.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/de.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/path.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/ser.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/wrap.rs
+
+/opt/rust/simple_ws/target/release/deps/serde_path_to_error-7571fb47509f4417.d: /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/lib.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/de.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/path.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/ser.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/wrap.rs
+
+/root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/lib.rs:
+/root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/de.rs:
+/root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/path.rs:
+/root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/ser.rs:
+/root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_path_to_error-0.1.20/src/wrap.rs:

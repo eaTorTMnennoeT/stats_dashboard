@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P2P Stats Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f23;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+    }
+    .sidebar {
+      width: 220px;
+      background: linear-gradient(180deg, #1a1a3e 0%, #0d0d1f 100%);
+      border-right: 1px solid rgba(255,255,255,0.1);
+      position: fixed;
+      left: 0; top: 0; bottom: 0;
+      padding: 20px 12px;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar h1 { font-size: 18px; margin-bottom: 25px; color: #00d4ff; }
+    .menu { list-style: none; flex: 1; }
+    .menu-item a {
+      display: block;
+      padding: 12px 14px;
+      color: #888;
+      text-decoration: none;
+      border-radius: 8px;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+    .menu-item a:hover { background: rgba(0,212,255,0.1); color: #00d4ff; }
+    .menu-item a.active { background: linear-gradient(90deg, #00d4ff, #0088ff); color: #fff; }
+    .settings-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 14px;
+      color: #888;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .settings-btn:hover { background: rgba(0,212,255,0.1); color: #00d4ff; border-color: rgba(0,212,255,0.3); }
+    .main { margin-left: 220px; flex: 1; padding: 20px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .header h2 { font-size: 22px; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .header-right select {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      padding: 6px 12px;
+      color: #fff;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .cache-indicator { font-size: 11px; color: #888; padding: 4px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; }
+    .cache-indicator.active { color: #00ff88; background: rgba(0,255,136,0.1); }
+    .status { padding: 6px 14px; border-radius: 20px; font-size: 12px; }
+    .status.ok { background: #16a34a; }
+    .status.err { background: #dc2626; }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: linear-gradient(135deg, #1a1a3e 0%, #2d2d5a 100%);
+      border-radius: 10px;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .card h3 { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 6px; }
+    .card .val { font-size: 24px; font-weight: 700; background: linear-gradient(90deg, #00d4ff, #00ff88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .card .unit { font-size: 12px; color: #666; }
+    .card.p2p .val { background: linear-gradient(90deg, #00ff88, #88ff00); -webkit-background-clip: text; }
+    .card.http .val { background: linear-gradient(90deg, #ff6b6b, #ffa502); -webkit-background-clip: text; }
+    .panel { background: linear-gradient(135deg, #1a1a3e 0%, #2d2d5a 100%); border-radius: 10px; padding: 16px; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.1); }
+    .panel h3 { font-size: 14px; color: #00d4ff; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+    th { padding: 8px; text-align: left; color: #00d4ff; font-size: 10px; text-transform: uppercase; background: rgba(0,212,255,0.1); }
+    th:nth-child(1) { width: 40px; }
+    th:nth-child(2) { width: 35%; }
+    th:nth-child(3) { width: 20%; }
+    th:nth-child(4) { width: 60px; }
+    th:nth-child(5) { width: 80px; }
+    th:nth-child(6) { width: 80px; }
+    th:nth-child(7) { width: 60px; }
+    td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .page-nav { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
+    .page-nav button { padding: 6px 12px; background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.3); border-radius: 6px; color: #00d4ff; cursor: pointer; }
+    .page-nav button:disabled { opacity: 0.3; cursor: not-allowed; }
+    .page-nav span { color: #888; line-height: 30px; }
+    canvas { max-height: 180px; }
+    .section { font-size: 14px; color: #00d4ff; margin: 20px 0 10px; }
+
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle.on { background: #00d4ff; }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle.on::after { transform: translateX(20px); }
+
+    /* Settings Page */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .settings-panel {
+      background: linear-gradient(135deg, #1a1a3e 0%, #2d2d5a 100%);
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .settings-panel h3 {
+      font-size: 14px;
+      color: #00d4ff;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .setting-row:last-child { border-bottom: none; }
+    .setting-label { font-size: 13px; color: #ccc; }
+    .setting-row select {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: #fff;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .setting-row select:focus { outline: none; border-color: #00d4ff; }
+    .save-btn {
+      display: inline-block;
+      padding: 12px 32px;
+      background: linear-gradient(90deg, #00d4ff, #0088ff);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .save-btn:hover { opacity: 0.9; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #16a34a;
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 9999;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <h1>P2P Stats</h1>
+    <ul class="menu">
+      <li class="menu-item"><a href="#dashboard" class="active">Dashboard</a></li>
+      <li class="menu-item"><a href="#realtime">실시간</a></li>
+      <li class="menu-item"><a href="#live">시청 중</a></li>
+      <li class="menu-item"><a href="#history">히스토리</a></li>
+      <li class="menu-item"><a href="#settings">설정</a></li>
+    </ul>
+  </aside>
+
+  <main class="main" id="app"></main>
+
+<script>
+const app = document.getElementById('app');
+let page = 'dashboard';
+let chart = null;
+const history = { labels: [], viewers: [], uniqueUsers: [], http: [], p2p: [] };
+
+// Settings & Cache
+const defaultSettings = {
+  dashboard: { interval: 3000, cache: false },
+  realtime: { interval: 3000, cache: false },
+  live: { interval: 3000, cache: false },
+  cacheTTL: 3000
+};
+
+let settings = JSON.parse(localStorage.getItem('p2p-settings')) || defaultSettings;
+const cache = { realtime: null, live: null, realtimeTime: 0, liveTime: 0 };
+
+function toggleSetting(el) {
+  el.classList.toggle('on');
+}
+
+function saveSettings() {
+  settings = {
+    dashboard: {
+      interval: parseInt(document.getElementById('set-dashboard-interval').value),
+      cache: document.getElementById('set-dashboard-cache').classList.contains('on')
+    },
+    realtime: {
+      interval: parseInt(document.getElementById('set-realtime-interval').value),
+      cache: document.getElementById('set-realtime-cache').classList.contains('on')
+    },
+    live: {
+      interval: parseInt(document.getElementById('set-live-interval').value),
+      cache: document.getElementById('set-live-cache').classList.contains('on')
+    },
+    cacheTTL: parseInt(document.getElementById('set-cache-ttl').value)
+  };
+  localStorage.setItem('p2p-settings', JSON.stringify(settings));
+  showToast('설정이 저장되었습니다');
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.classList.add('show'), 10);
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 2000);
+}
+
+async function fetchWithCache(endpoint, pageKey) {
+  const now = Date.now();
+  const cacheKey = endpoint.split('?')[0].replace('/api/', '');
+
+  if (settings[pageKey]?.cache && cache[cacheKey] && (now - cache[cacheKey + 'Time']) < settings.cacheTTL) {
+    return cache[cacheKey];
+  }
+
+  const r = await fetch(endpoint);
+  const data = await r.json();
+
+  if (settings[pageKey]?.cache) {
+    cache[cacheKey] = data;
+    cache[cacheKey + 'Time'] = now;
+  }
+
+  return data;
+}
+
+function formatBytes(b) {
+  if (!b) return '0 B';
+  const u = ['B','KB','MB','GB','TB'];
+  const i = Math.floor(Math.log(b) / Math.log(1024));
+  return (b / Math.pow(1024, i)).toFixed(i > 2 ? 2 : 1) + ' ' + u[i];
+}
+
+function card(title, val, unit = '', cls = '') {
+  return `<div class="card ${cls}"><h3>${title}</h3><div class="val">${val}<span class="unit">${unit}</span></div></div>`;
+}
+
+function cacheIndicator(pageKey) {
+  const active = settings[pageKey]?.cache;
+  return `<div class="cache-indicator ${active ? 'active' : ''}">${active ? 'Cache ON' : 'Cache OFF'}</div>`;
+}
+
+function intervalOptions(selected) {
+  return [1000,2000,3000,5000,10000,30000].map(v =>
+    `<option value="${v}" ${selected===v?'selected':''}>${v/1000}초</option>`
+  ).join('');
+}
+
+const pages = {
+  dashboard: () => `
+    <div class="header"><h2>Dashboard</h2><div class="header-right">${cacheIndicator('dashboard')}<div id="status" class="status ok">Connected</div></div></div>
+    <div class="stats-grid" id="stats"></div>
+    <div class="panel"><h3>실시간 트래픽</h3><canvas id="chart"></canvas></div>
+  `,
+  realtime: () => `
+    <div class="header"><h2>실시간 접속자</h2><div class="header-right">${cacheIndicator('realtime')}<div id="status" class="status ok">Connected</div></div></div>
+    <div class="stats-grid" id="mainStats"></div>
+    <div class="section">디바이스 타입</div>
+    <div class="stats-grid" id="deviceStats"></div>
+    <div class="section">기기</div>
+    <div class="stats-grid" id="deviceNameStats"></div>
+    <div class="section">브라우저</div>
+    <div class="stats-grid" id="browserStats"></div>
+    <div class="section">유입 경로</div>
+    <div class="stats-grid" id="refStats"></div>
+  `,
+  live: () => `
+    <div class="header"><h2>시청 중</h2><div class="header-right">${cacheIndicator('live')}<div id="status" class="status ok">Connected</div></div></div>
+    <div class="panel">
+      <table id="liveTable">
+        <thead><tr><th>#</th><th>파일명</th><th>Swarm</th><th>시청자</th><th>HTTP</th><th>P2P</th><th>P2P%</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="page-nav">
+        <button id="prev">이전</button>
+        <span id="pageInfo">1 / 1</span>
+        <button id="next">다음</button>
+      </div>
+    </div>
+  `,
+  history: () => `
+    <div class="header">
+      <h2>히스토리</h2>
+      <div class="header-right">
+        <select id="historyPeriod" onchange="loadHistory()">
+          <option value="1h">1시간</option>
+          <option value="6h">6시간</option>
+          <option value="1d" selected>24시간</option>
+          <option value="7d">7일</option>
+          <option value="30d">30일</option>
+        </select>
+      </div>
+    </div>
+    <div class="panel"><h3>시청자 추이</h3><canvas id="historyChart"></canvas></div>
+    <div class="panel"><h3>트래픽 추이 (TB)</h3><canvas id="trafficChart"></canvas></div>
+  `,
+  settings: () => `
+    <div class="header"><h2>설정</h2></div>
+    <div class="settings-grid">
+      <div class="settings-panel">
+        <h3>Dashboard</h3>
+        <div class="setting-row">
+          <div class="setting-label">업데이트 주기</div>
+          <select id="set-dashboard-interval">${intervalOptions(settings.dashboard.interval)}</select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">캐싱</div>
+          <div class="toggle ${settings.dashboard.cache?'on':''}" id="set-dashboard-cache" onclick="toggleSetting(this)"></div>
+        </div>
+      </div>
+      <div class="settings-panel">
+        <h3>실시간</h3>
+        <div class="setting-row">
+          <div class="setting-label">업데이트 주기</div>
+          <select id="set-realtime-interval">${intervalOptions(settings.realtime.interval)}</select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">캐싱</div>
+          <div class="toggle ${settings.realtime.cache?'on':''}" id="set-realtime-cache" onclick="toggleSetting(this)"></div>
+        </div>
+      </div>
+      <div class="settings-panel">
+        <h3>시청 중</h3>
+        <div class="setting-row">
+          <div class="setting-label">업데이트 주기</div>
+          <select id="set-live-interval">${intervalOptions(settings.live.interval)}</select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">캐싱</div>
+          <div class="toggle ${settings.live.cache?'on':''}" id="set-live-cache" onclick="toggleSetting(this)"></div>
+        </div>
+      </div>
+      <div class="settings-panel">
+        <h3>캐시</h3>
+        <div class="setting-row">
+          <div class="setting-label">유지 시간</div>
+          <select id="set-cache-ttl">${intervalOptions(settings.cacheTTL)}</select>
+        </div>
+      </div>
+    </div>
+    <button class="save-btn" onclick="saveSettings()">저장</button>
+  `
+};
+
+function nav(p) {
+  page = p;
+  document.querySelectorAll('.menu-item a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + p));
+  app.innerHTML = pages[p]();
+  if (p === 'dashboard') initDashboard();
+  else if (p === 'realtime') initRealtime();
+  else if (p === 'live') initLive();
+  else if (p === 'history') initHistory();
+}
+
+async function initDashboard() {
+  async function update() {
+    try {
+      const d = await fetchWithCache('/api/realtime', 'dashboard');
+      if (d.error) { document.getElementById('status').className = 'status err'; document.getElementById('status').textContent = 'Offline'; return; }
+      document.getElementById('status').className = 'status ok';
+      document.getElementById('status').textContent = 'Connected';
+      document.getElementById('stats').innerHTML = `
+        ${card('고유 유저', d.total?.uniqueUsers || 0, '명')}
+        ${card('연결 수', d.total?.viewers || 0, '개')}
+        ${card('Swarms', d.activeSwarms || 0, '개')}
+        ${card('P2P 효율', d.total?.p2pRatio || '0', '%', 'p2p')}
+        ${card('HTTP', formatBytes(d.total?.httpBytes || 0), '', 'http')}
+        ${card('P2P Down', formatBytes(d.total?.p2pBytes || 0), '', 'p2p')}
+        ${card('P2P Up', formatBytes(d.total?.p2pUpBytes || 0), '', 'p2p')}
+      `;
+      const t = new Date().toLocaleTimeString();
+      history.labels.push(t);
+      history.viewers.push(d.total?.viewers || 0);
+      history.uniqueUsers.push(d.total?.uniqueUsers || 0);
+      history.http.push((d.total?.httpBytes || 0) / 1024 / 1024 / 1024 / 1024);
+      history.p2p.push((d.total?.p2pBytes || 0) / 1024 / 1024 / 1024 / 1024);
+      if (history.labels.length > 30) { history.labels.shift(); history.viewers.shift(); history.uniqueUsers.shift(); history.http.shift(); history.p2p.shift(); }
+      if (chart) chart.update('none');
+    } catch (e) { console.error(e); }
+  }
+  update();
+  chart = new Chart(document.getElementById('chart'), {
+    type: 'line',
+    data: { labels: history.labels, datasets: [
+      { label: '고유 유저', data: history.uniqueUsers, borderColor: '#00d4ff', tension: 0.3, yAxisID: 'y1' },
+      { label: 'HTTP', data: history.http, borderColor: '#ff6b6b', tension: 0.3, yAxisID: 'y' },
+      { label: 'P2P Down', data: history.p2p, borderColor: '#00ff88', tension: 0.3, yAxisID: 'y' }
+    ]},
+    options: {
+      responsive: true,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: '#fff' } } },
+      scales: {
+        x: { display: false },
+        y: { type: 'linear', position: 'left', ticks: { color: '#888' }, grid: { color: '#333' }, title: { display: true, text: 'TB', color: '#888' } },
+        y1: { type: 'linear', position: 'right', ticks: { color: '#00d4ff' }, grid: { drawOnChartArea: false }, title: { display: true, text: '유저', color: '#00d4ff' } }
+      }
+    }
+  });
+  const intv = setInterval(update, settings.dashboard.interval);
+  window.addEventListener('hashchange', () => { if (page !== 'dashboard') clearInterval(intv); }, { once: true });
+}
+
+async function initRealtime() {
+  async function update() {
+    try {
+      const d = await fetchWithCache('/api/realtime', 'realtime');
+      if (d.error) return;
+      document.getElementById('mainStats').innerHTML = `
+        ${card('고유 유저', d.total?.uniqueUsers || 0)}
+        ${card('연결 수', d.total?.viewers || 0)}
+        ${card('플레이어1', d.player1?.viewers || 0)}
+        ${card('플레이어2', d.player2?.viewers || 0)}
+        ${card('P2P 피어', d.total?.peers || 0)}
+        ${card('Swarms', d.activeSwarms || 0)}
+      `;
+      const dev = d.devices || {};
+      const devT = Object.values(dev).reduce((a, b) => a + b, 0) || 1;
+      document.getElementById('deviceStats').innerHTML = `
+        ${card('모바일', dev.mobile || 0, `(${((dev.mobile||0)/devT*100).toFixed(1)}%)`)}
+        ${card('데스크톱', dev.desktop || 0, `(${((dev.desktop||0)/devT*100).toFixed(1)}%)`)}
+        ${card('태블릿', dev.tablet || 0, `(${((dev.tablet||0)/devT*100).toFixed(1)}%)`)}
+        ${card('기타', dev.unknown || 0, `(${((dev.unknown||0)/devT*100).toFixed(1)}%)`)}
+      `;
+      const dn = d.deviceNames || [];
+      document.getElementById('deviceNameStats').innerHTML = dn.length ? dn.map(x => card(x.name, x.count)).join('') : '<div class="card"><h3>-</h3><div class="val">0</div></div>';
+      const br = d.browsers || [];
+      document.getElementById('browserStats').innerHTML = br.length ? br.map(b => card(b.name, b.count)).join('') : '<div class="card"><h3>-</h3><div class="val">0</div></div>';
+      const ref = d.referrers || [];
+      document.getElementById('refStats').innerHTML = ref.length ? ref.map(r => card(r.name.length > 15 ? r.name.slice(0,15)+'...' : r.name, r.count)).join('') : '<div class="card"><h3>direct</h3><div class="val">0</div></div>';
+    } catch (e) { console.error(e); }
+  }
+  update();
+  const intv = setInterval(update, settings.realtime.interval);
+  window.addEventListener('hashchange', () => { if (page !== 'realtime') clearInterval(intv); }, { once: true });
+}
+
+function initLive() {
+  let st = { p: 1, size: 20, total: 0 };
+  async function load() {
+    try {
+      const res = await fetchWithCache(`/api/live?limit=${st.size}&offset=${(st.p-1)*st.size}`, 'live');
+      st.total = res.total || 0;
+      const data = res.data || [];
+      document.querySelector('#liveTable tbody').innerHTML = data.map((d, i) => {
+        const idx = (st.p - 1) * st.size + i + 1;
+        const t = (d.http_bytes || 0) + (d.p2p_bytes || 0);
+        const ratio = t > 0 ? ((d.p2p_bytes || 0) / t * 100).toFixed(1) : '0';
+        const sw = d.swarm_id?.length > 20 ? d.swarm_id.slice(0, 12) + '...' + d.swarm_id.slice(-6) : d.swarm_id;
+        const fn = d.filename?.length > 25 ? d.filename.slice(0, 25) + '...' : (d.filename || '-');
+        return `<tr><td>${idx}</td><td title="${d.filename}">${fn}</td><td title="${d.swarm_id}" style="font-size:10px">${sw}</td><td style="color:#ff6b6b"><b>${d.viewers || 0}</b></td><td>${formatBytes(d.http_bytes)}</td><td>${formatBytes(d.p2p_bytes)}</td><td style="color:#00ff88"><b>${ratio}%</b></td></tr>`;
+      }).join('') || '<tr><td colspan="7" style="text-align:center">데이터 없음</td></tr>';
+      const pages = Math.ceil(st.total / st.size) || 1;
+      document.getElementById('pageInfo').textContent = `${st.p} / ${pages}`;
+      document.getElementById('prev').disabled = st.p === 1;
+      document.getElementById('next').disabled = st.p >= pages;
+    } catch (e) { console.error(e); }
+  }
+  document.getElementById('prev').onclick = () => { if (st.p > 1) { st.p--; load(); } };
+  document.getElementById('next').onclick = () => { if (st.p < Math.ceil(st.total / st.size)) { st.p++; load(); } };
+  load();
+  const intv = setInterval(load, settings.live.interval);
+  window.addEventListener('hashchange', () => { if (page !== 'live') clearInterval(intv); }, { once: true });
+}
+
+let historyChart = null;
+let trafficChart = null;
+
+function initHistory() {
+  loadHistory();
+}
+
+async function loadHistory() {
+  const period = document.getElementById('historyPeriod')?.value || '1d';
+  const sampleMap = { '1h': '1m', '6h': '5m', '1d': '10m', '7d': '1h', '30d': '6h' };
+  const sample = sampleMap[period] || '10m';
+
+  try {
+    const r = await fetch(`/api/history/stats?period=${period}&sample=${sample}`);
+    const data = await r.json();
+
+    if (data.error) {
+      console.error('History error:', data.error);
+      return;
+    }
+
+    const rows = data.dataset || [];
+    const labels = rows.map(r => {
+      const d = new Date(r[0]);
+      return period === '1h' || period === '6h' ? d.toLocaleTimeString() : d.toLocaleString();
+    });
+    const viewers = rows.map(r => r[1] || 0);
+    const uniqueUsers = rows.map(r => r[2] || 0);
+    const httpTB = rows.map(r => (r[3] || 0) / 1024 / 1024 / 1024 / 1024);
+    const p2pTB = rows.map(r => (r[4] || 0) / 1024 / 1024 / 1024 / 1024);
+
+    // Destroy old charts
+    if (historyChart) historyChart.destroy();
+    if (trafficChart) trafficChart.destroy();
+
+    // Viewers chart
+    historyChart = new Chart(document.getElementById('historyChart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: '고유 유저', data: uniqueUsers, borderColor: '#00d4ff', tension: 0.3, fill: false },
+          { label: '연결 수', data: viewers, borderColor: '#ffa502', tension: 0.3, fill: false }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#fff' } } },
+        scales: {
+          x: { ticks: { color: '#888', maxTicksLimit: 12 }, grid: { color: '#333' } },
+          y: { ticks: { color: '#888' }, grid: { color: '#333' } }
+        }
+      }
+    });
+
+    // Traffic chart
+    trafficChart = new Chart(document.getElementById('trafficChart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'HTTP', data: httpTB, borderColor: '#ff6b6b', tension: 0.3, fill: false },
+          { label: 'P2P Down', data: p2pTB, borderColor: '#00ff88', tension: 0.3, fill: false }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#fff' } } },
+        scales: {
+          x: { ticks: { color: '#888', maxTicksLimit: 12 }, grid: { color: '#333' } },
+          y: { ticks: { color: '#888' }, grid: { color: '#333' } }
+        }
+      }
+    });
+  } catch (e) {
+    console.error('History fetch error:', e);
+  }
+}
+
+document.querySelectorAll('.menu-item a').forEach(a => {
+  a.onclick = e => { e.preventDefault(); window.location.hash = a.getAttribute('href').slice(1); };
+});
+window.onhashchange = () => nav(location.hash.slice(1) || 'dashboard');
+nav(location.hash.slice(1) || 'dashboard');
+</script>
+</body>
+</html>

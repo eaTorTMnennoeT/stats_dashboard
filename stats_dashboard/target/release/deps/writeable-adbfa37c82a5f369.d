@@ -1,0 +1,12 @@
+/opt/rust/stats_dashboard/target/release/deps/libwriteable-adbfa37c82a5f369.rmeta: /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/lib.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/cmp.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/impls.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/ops.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/parts_write_adapter.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/try_writeable.rs
+
+/opt/rust/stats_dashboard/target/release/deps/libwriteable-adbfa37c82a5f369.rlib: /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/lib.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/cmp.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/impls.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/ops.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/parts_write_adapter.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/try_writeable.rs
+
+/opt/rust/stats_dashboard/target/release/deps/writeable-adbfa37c82a5f369.d: /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/lib.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/cmp.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/impls.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/ops.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/parts_write_adapter.rs /root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/try_writeable.rs
+
+/root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/lib.rs:
+/root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/cmp.rs:
+/root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/impls.rs:
+/root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/ops.rs:
+/root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/parts_write_adapter.rs:
+/root/.cargo/registry/src/index.crates.io-6f17d22bba15001f/writeable-0.6.2/src/try_writeable.rs:
