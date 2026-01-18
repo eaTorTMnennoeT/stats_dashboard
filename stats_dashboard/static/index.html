@@ -6,254 +6,914 @@
   <title>P2P Stats Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0f0f23;
-      color: #fff;
-      min-height: 100vh;
-      display: flex;
-    }
-    .sidebar {
-      width: 220px;
-      background: linear-gradient(180deg, #1a1a3e 0%, #0d0d1f 100%);
-      border-right: 1px solid rgba(255,255,255,0.1);
-      position: fixed;
-      left: 0; top: 0; bottom: 0;
-      padding: 20px 12px;
-      display: flex;
-      flex-direction: column;
-    }
-    .sidebar h1 { font-size: 18px; margin-bottom: 25px; color: #00d4ff; }
-    .menu { list-style: none; flex: 1; }
-    .menu-item a {
-      display: block;
-      padding: 12px 14px;
-      color: #888;
-      text-decoration: none;
-      border-radius: 8px;
-      margin-bottom: 4px;
-      font-size: 14px;
-    }
-    .menu-item a:hover { background: rgba(0,212,255,0.1); color: #00d4ff; }
-    .menu-item a.active { background: linear-gradient(90deg, #00d4ff, #0088ff); color: #fff; }
-    .settings-btn {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 14px;
-      color: #888;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: all 0.2s;
-    }
-    .settings-btn:hover { background: rgba(0,212,255,0.1); color: #00d4ff; border-color: rgba(0,212,255,0.3); }
-    .main { margin-left: 220px; flex: 1; padding: 20px; }
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .header h2 { font-size: 22px; }
-    .header-right { display: flex; align-items: center; gap: 12px; }
-    .header-right select {
-      background: rgba(0,0,0,0.3);
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 6px;
-      padding: 6px 12px;
-      color: #fff;
-      font-size: 13px;
-      cursor: pointer;
-    }
-    .cache-indicator { font-size: 11px; color: #888; padding: 4px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; }
-    .cache-indicator.active { color: #00ff88; background: rgba(0,255,136,0.1); }
-    .status { padding: 6px 14px; border-radius: 20px; font-size: 12px; }
-    .status.ok { background: #16a34a; }
-    .status.err { background: #dc2626; }
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-    .card {
-      background: linear-gradient(135deg, #1a1a3e 0%, #2d2d5a 100%);
-      border-radius: 10px;
-      padding: 16px;
-      border: 1px solid rgba(255,255,255,0.1);
-    }
-    .card h3 { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 6px; }
-    .card .val { font-size: 24px; font-weight: 700; background: linear-gradient(90deg, #00d4ff, #00ff88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .card .unit { font-size: 12px; color: #666; }
-    .card.p2p .val { background: linear-gradient(90deg, #00ff88, #88ff00); -webkit-background-clip: text; }
-    .card.http .val { background: linear-gradient(90deg, #ff6b6b, #ffa502); -webkit-background-clip: text; }
-    .panel { background: linear-gradient(135deg, #1a1a3e 0%, #2d2d5a 100%); border-radius: 10px; padding: 16px; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.1); }
-    .panel h3 { font-size: 14px; color: #00d4ff; margin-bottom: 12px; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
-    th { padding: 8px; text-align: left; color: #00d4ff; font-size: 10px; text-transform: uppercase; background: rgba(0,212,255,0.1); }
-    th:nth-child(1) { width: 40px; }
-    th:nth-child(2) { width: 35%; }
-    th:nth-child(3) { width: 20%; }
-    th:nth-child(4) { width: 60px; }
-    th:nth-child(5) { width: 80px; }
-    th:nth-child(6) { width: 80px; }
-    th:nth-child(7) { width: 60px; }
-    td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .page-nav { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
-    .page-nav button { padding: 6px 12px; background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.3); border-radius: 6px; color: #00d4ff; cursor: pointer; }
-    .page-nav button:disabled { opacity: 0.3; cursor: not-allowed; }
-    .page-nav span { color: #888; line-height: 30px; }
-    canvas { max-height: 180px; }
-    .section { font-size: 14px; color: #00d4ff; margin: 20px 0 10px; }
+:root {
+  --bg-primary: #0f0f23;
+  --bg-secondary: #1a1a3e;
+  --bg-card: linear-gradient(135deg, #1a1a3e 0%, #2d2d5a 100%);
+  --text-primary: #ffffff;
+  --text-secondary: #888888;
+  --accent: #00d4ff;
+  --accent2: #00ff88;
+  --danger: #ff6b6b;
+  --warning: #ffa502;
+  --border: rgba(255,255,255,0.1);
+  --glow: rgba(0,212,255,0.3);
+}
 
-    .toggle {
-      position: relative;
-      width: 44px;
-      height: 24px;
-      background: rgba(255,255,255,0.1);
-      border-radius: 12px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .toggle.on { background: #00d4ff; }
-    .toggle::after {
-      content: '';
-      position: absolute;
-      top: 3px;
-      left: 3px;
-      width: 18px;
-      height: 18px;
-      background: #fff;
-      border-radius: 50%;
-      transition: transform 0.2s;
-    }
-    .toggle.on::after { transform: translateX(20px); }
+[data-theme="light"] {
+  --bg-primary: #f5f7fa;
+  --bg-secondary: #ffffff;
+  --bg-card: linear-gradient(135deg, #ffffff 0%, #f0f2f5 100%);
+  --text-primary: #1a1a2e;
+  --text-secondary: #666666;
+  --border: rgba(0,0,0,0.1);
+  --glow: rgba(0,212,255,0.2);
+}
 
-    /* Settings Page */
-    .settings-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-    .settings-panel {
-      background: linear-gradient(135deg, #1a1a3e 0%, #2d2d5a 100%);
-      border-radius: 12px;
-      padding: 20px;
-      border: 1px solid rgba(255,255,255,0.1);
-    }
-    .settings-panel h3 {
-      font-size: 14px;
-      color: #00d4ff;
-      margin-bottom: 16px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid rgba(255,255,255,0.1);
-    }
-    .setting-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-    .setting-row:last-child { border-bottom: none; }
-    .setting-label { font-size: 13px; color: #ccc; }
-    .setting-row select {
-      background: rgba(0,0,0,0.3);
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 6px;
-      padding: 8px 12px;
-      color: #fff;
-      font-size: 13px;
-      cursor: pointer;
-    }
-    .setting-row select:focus { outline: none; border-color: #00d4ff; }
-    .save-btn {
-      display: inline-block;
-      padding: 12px 32px;
-      background: linear-gradient(90deg, #00d4ff, #0088ff);
-      border: none;
-      border-radius: 8px;
-      color: #fff;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-    .save-btn:hover { opacity: 0.9; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-    /* Toast */
-    .toast {
-      position: fixed;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: #16a34a;
-      color: #fff;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-size: 14px;
-      opacity: 0;
-      transition: all 0.3s;
-      z-index: 9999;
-    }
-    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  transition: background 0.3s, color 0.3s;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 220px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  transition: transform 0.3s, background 0.3s;
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.sidebar h1 { font-size: 18px; color: var(--accent); }
+
+.theme-toggle {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.menu { list-style: none; flex: 1; }
+.menu-item a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: 8px;
+  margin-bottom: 4px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+.menu-item a:hover { background: rgba(0,212,255,0.1); color: var(--accent); }
+.menu-item a.active { background: linear-gradient(90deg, #00d4ff, #0088ff); color: #fff; }
+.menu-item .shortcut {
+  margin-left: auto;
+  font-size: 10px;
+  opacity: 0.5;
+  background: var(--border);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.sidebar-footer {
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+}
+
+.ws-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ws-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+.ws-dot.connected { background: var(--accent2); }
+
+/* Mobile menu toggle */
+.menu-toggle {
+  display: none;
+  position: fixed;
+  top: 15px; left: 15px;
+  z-index: 200;
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  border: none;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+/* Main */
+.main {
+  margin-left: 220px;
+  flex: 1;
+  padding: 20px;
+  transition: margin 0.3s;
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.header h2 { font-size: 22px; }
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.status {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.status.ok { background: #16a34a; }
+.status.err { background: #dc2626; }
+.status.warn { background: var(--warning); color: #000; }
+
+.pause-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+.pause-btn:hover { background: rgba(0,212,255,0.1); color: var(--accent); }
+.pause-btn.paused { background: var(--warning); color: #000; border-color: var(--warning); }
+
+select, input[type="date"] {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+[data-theme="light"] select,
+[data-theme="light"] input[type="date"] {
+  background: #fff;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+/* Card */
+.card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+}
+.card.glow {
+  animation: cardGlow 0.5s ease;
+}
+@keyframes cardGlow {
+  0%, 100% { box-shadow: 0 0 0 rgba(0,212,255,0); }
+  50% { box-shadow: 0 0 20px var(--glow); }
+}
+.card h3 {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+.card .val {
+  font-size: 26px;
+  font-weight: 700;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.card .unit { font-size: 12px; color: var(--text-secondary); margin-left: 4px; }
+.card.p2p .val { background: linear-gradient(90deg, #00ff88, #88ff00); -webkit-background-clip: text; background-clip: text; }
+.card.http .val { background: linear-gradient(90deg, #ff6b6b, #ffa502); -webkit-background-clip: text; background-clip: text; }
+.card .trend {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 10px;
+}
+.card .trend.up { background: rgba(0,255,136,0.2); color: #00ff88; }
+.card .trend.down { background: rgba(255,107,107,0.2); color: #ff6b6b; }
+
+/* Sparkline */
+.sparkline {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  opacity: 0.3;
+}
+
+/* Panel */
+.panel {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+.panel h3 { font-size: 14px; color: var(--accent); }
+.panel-actions {
+  display: flex;
+  gap: 8px;
+}
+.export-btn {
+  padding: 5px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+}
+.export-btn:hover { background: rgba(0,212,255,0.1); color: var(--accent); }
+
+/* Table */
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th {
+  padding: 10px 8px;
+  text-align: left;
+  color: var(--accent);
+  font-size: 10px;
+  text-transform: uppercase;
+  background: rgba(0,212,255,0.1);
+  position: sticky;
+  top: 0;
+}
+td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+tr:hover td { background: rgba(0,212,255,0.05); }
+
+/* Pagination */
+.page-nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 15px;
+}
+.page-nav button {
+  padding: 8px 16px;
+  background: rgba(0,212,255,0.1);
+  border: 1px solid rgba(0,212,255,0.3);
+  border-radius: 6px;
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.page-nav button:hover:not(:disabled) { background: rgba(0,212,255,0.2); }
+.page-nav button:disabled { opacity: 0.3; cursor: not-allowed; }
+.page-nav span { color: var(--text-secondary); }
+
+/* Section title */
+.section {
+  font-size: 13px;
+  color: var(--accent);
+  margin: 25px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* Heatmap */
+.heatmap {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 3px;
+}
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+.heatmap-cell:hover { transform: scale(1.2); z-index: 1; }
+.heatmap-labels {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 3px;
+  margin-top: 5px;
+}
+.heatmap-labels span {
+  text-align: center;
+  font-size: 9px;
+  color: var(--text-secondary);
+}
+
+/* Alerts */
+.alerts-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 350px;
+}
+.alert {
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border-left: 4px solid var(--warning);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  animation: slideIn 0.3s ease;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.alert.critical { border-left-color: var(--danger); }
+.alert .alert-icon { font-size: 18px; }
+.alert .alert-content { flex: 1; }
+.alert .alert-title { font-weight: 600; font-size: 13px; margin-bottom: 3px; }
+.alert .alert-msg { font-size: 12px; color: var(--text-secondary); }
+.alert .alert-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 16px;
+}
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Health Bar */
+.health-bar {
+  display: flex;
+  gap: 15px;
+  padding: 10px 15px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.health-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.health-item .label { color: var(--text-secondary); }
+.health-item .value { font-weight: 600; }
+.health-item .bar {
+  width: 60px;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.health-item .bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+.health-item .bar-fill.ok { background: var(--accent2); }
+.health-item .bar-fill.warn { background: var(--warning); }
+.health-item .bar-fill.danger { background: var(--danger); }
+
+/* Efficiency Card */
+.efficiency-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+.efficiency-item {
+  text-align: center;
+  padding: 20px;
+  background: rgba(0,255,136,0.05);
+  border-radius: 10px;
+  border: 1px solid rgba(0,255,136,0.2);
+}
+.efficiency-item .big-val {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--accent2);
+}
+.efficiency-item .label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 5px;
+}
+
+/* Loading skeleton */
+.skeleton {
+  background: linear-gradient(90deg, var(--border) 25%, rgba(255,255,255,0.1) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton-text { height: 20px; width: 60%; margin-bottom: 8px; }
+.skeleton-val { height: 30px; width: 80%; }
+
+/* Settings */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.settings-panel {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--border);
+}
+.settings-panel h3 {
+  font-size: 14px;
+  color: var(--accent);
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.setting-row:last-child { border-bottom: none; }
+.setting-label { font-size: 13px; color: var(--text-secondary); }
+
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.toggle.on { background: var(--accent); }
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.toggle.on::after { transform: translateX(20px); }
+
+.save-btn {
+  padding: 12px 32px;
+  background: linear-gradient(90deg, var(--accent), #0088ff);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 20px;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #16a34a;
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  opacity: 0;
+  transition: all 0.3s;
+  z-index: 9999;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Charts */
+canvas { max-height: 200px; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .menu-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .main {
+    margin-left: 0;
+    padding: 70px 15px 15px;
+  }
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Keyboard hint */
+.kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 10px;
+  background: var(--border);
+  border-radius: 4px;
+  margin-left: 5px;
+}
   </style>
 </head>
 <body>
-  <aside class="sidebar">
-    <h1>P2P Stats</h1>
+  <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h1>P2P Stats</h1>
+      <button class="theme-toggle" onclick="toggleTheme()" title="테마 전환 (T)">🌙</button>
+    </div>
     <ul class="menu">
-      <li class="menu-item"><a href="#dashboard" class="active">Dashboard</a></li>
-      <li class="menu-item"><a href="#realtime">실시간</a></li>
-      <li class="menu-item"><a href="#live">시청 중</a></li>
-      <li class="menu-item"><a href="#history">히스토리</a></li>
-      <li class="menu-item"><a href="#settings">설정</a></li>
+      <li class="menu-item"><a href="#dashboard" class="active">📊 Dashboard<span class="shortcut">1</span></a></li>
+      <li class="menu-item"><a href="#realtime">📡 실시간<span class="shortcut">2</span></a></li>
+      <li class="menu-item"><a href="#live">🎬 시청 중<span class="shortcut">3</span></a></li>
+      <li class="menu-item"><a href="#analytics">📈 분석<span class="shortcut">4</span></a></li>
+      <li class="menu-item"><a href="#history">📜 히스토리<span class="shortcut">5</span></a></li>
+      <li class="menu-item"><a href="#settings">⚙️ 설정<span class="shortcut">6</span></a></li>
     </ul>
+    <div class="sidebar-footer">
+      <div class="ws-status">
+        <span class="ws-dot" id="wsDot"></span>
+        <span id="wsStatus">연결 중...</span>
+      </div>
+    </div>
   </aside>
 
+  <div class="alerts-container" id="alerts"></div>
   <main class="main" id="app"></main>
 
 <script>
-const app = document.getElementById('app');
+// State
 let page = 'dashboard';
-let chart = null;
-const history = { labels: [], viewers: [], uniqueUsers: [], http: [], p2p: [] };
+let ws = null;
+let paused = false;
+let theme = localStorage.getItem('theme') || 'dark';
+let lastData = null;
+let prevData = null;
+let sparklineData = {};
+let alerts = [];
 
-// Settings & Cache
+// Settings
 const defaultSettings = {
-  dashboard: { interval: 3000, cache: false },
-  realtime: { interval: 3000, cache: false },
-  live: { interval: 3000, cache: false },
-  cacheTTL: 3000
+  alerts: {
+    viewersMin: 0,
+    viewersMax: 500000,
+    p2pRatioMin: 30,
+    enabled: true
+  },
+  display: {
+    animateNumbers: true,
+    showSparklines: true
+  }
 };
+let settings = JSON.parse(localStorage.getItem('p2p-settings-v2')) || defaultSettings;
 
-let settings = JSON.parse(localStorage.getItem('p2p-settings')) || defaultSettings;
-const cache = { realtime: null, live: null, realtimeTime: 0, liveTime: 0 };
+// Initialize theme
+document.documentElement.setAttribute('data-theme', theme);
+updateThemeIcon();
+
+// Format helpers
+function formatNum(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return n?.toLocaleString() || '0';
+}
+
+function formatBytes(b) {
+  if (!b) return '0 B';
+  const u = ['B','KB','MB','GB','TB','PB'];
+  const i = Math.floor(Math.log(b) / Math.log(1024));
+  return (b / Math.pow(1024, i)).toFixed(i > 2 ? 2 : 1) + ' ' + u[i];
+}
+
+function formatTB(b) {
+  return (b / 1024 / 1024 / 1024 / 1024).toFixed(2);
+}
+
+// Card with optional sparkline
+function card(id, title, val, unit = '', cls = '', trend = null) {
+  const trendHtml = trend !== null ?
+    `<span class="trend ${trend >= 0 ? 'up' : 'down'}">${trend >= 0 ? '↑' : '↓'}${Math.abs(trend).toFixed(1)}%</span>` : '';
+  return `<div class="card ${cls}" id="card-${id}" data-value="${val}">
+    <h3>${title}</h3>
+    <div class="val">${settings.display.animateNumbers ? '0' : formatNum(val)}<span class="unit">${unit}</span></div>
+    ${trendHtml}
+    ${settings.display.showSparklines ? `<canvas class="sparkline" id="spark-${id}"></canvas>` : ''}
+  </div>`;
+}
+
+// Animate number
+function animateValue(el, start, end, duration = 500) {
+  if (!settings.display.animateNumbers) {
+    el.innerHTML = formatNum(end) + el.innerHTML.match(/<span.*<\/span>/)?.[0] || '';
+    return;
+  }
+  const range = end - start;
+  const startTime = performance.now();
+  const unit = el.querySelector('.unit')?.outerHTML || '';
+
+  function update(currentTime) {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const easeOut = 1 - Math.pow(1 - progress, 3);
+    const current = Math.floor(start + range * easeOut);
+    el.innerHTML = formatNum(current) + unit;
+    if (progress < 1) requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
+}
+
+// Update sparkline
+function updateSparkline(id, value) {
+  if (!settings.display.showSparklines) return;
+  if (!sparklineData[id]) sparklineData[id] = [];
+  sparklineData[id].push(value);
+  if (sparklineData[id].length > 20) sparklineData[id].shift();
+
+  const canvas = document.getElementById(`spark-${id}`);
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  const data = sparklineData[id];
+  const w = canvas.width = canvas.offsetWidth * 2;
+  const h = canvas.height = canvas.offsetHeight * 2;
+  ctx.clearRect(0, 0, w, h);
+
+  if (data.length < 2) return;
+
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(0, 212, 255, 0.5)';
+  ctx.lineWidth = 2;
+
+  data.forEach((v, i) => {
+    const x = (i / (data.length - 1)) * w;
+    const y = h - ((v - min) / range) * h * 0.8 - h * 0.1;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+// Glow effect on value change
+function glowCard(id) {
+  const card = document.getElementById(`card-${id}`);
+  if (card) {
+    card.classList.remove('glow');
+    void card.offsetWidth;
+    card.classList.add('glow');
+  }
+}
+
+// WebSocket connection
+function connectWS() {
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${protocol}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    document.getElementById('wsDot').classList.add('connected');
+    document.getElementById('wsStatus').textContent = '실시간 연결됨';
+  };
+
+  ws.onclose = () => {
+    document.getElementById('wsDot').classList.remove('connected');
+    document.getElementById('wsStatus').textContent = '재연결 중...';
+    setTimeout(connectWS, 3000);
+  };
+
+  ws.onmessage = (e) => {
+    if (paused) return;
+    try {
+      const data = JSON.parse(e.data);
+      prevData = lastData;
+      lastData = data;
+      if (page === 'dashboard' || page === 'realtime') {
+        updateRealtimeUI(data);
+      }
+      checkAlerts(data);
+    } catch (err) {}
+  };
+}
+
+// Check alerts
+function checkAlerts(data) {
+  if (!settings.alerts.enabled) return;
+
+  const viewers = data.total?.viewers || 0;
+  const p2pRatio = parseFloat(data.total?.p2pRatio) || 0;
+
+  if (viewers < settings.alerts.viewersMin) {
+    showAlert('warning', '시청자 감소', `현재 시청자 ${formatNum(viewers)}명 (최소 임계치: ${formatNum(settings.alerts.viewersMin)})`);
+  }
+  if (viewers > settings.alerts.viewersMax) {
+    showAlert('critical', '시청자 급증', `현재 시청자 ${formatNum(viewers)}명 (최대 임계치: ${formatNum(settings.alerts.viewersMax)})`);
+  }
+  if (p2pRatio < settings.alerts.p2pRatioMin) {
+    showAlert('warning', 'P2P 효율 저하', `현재 P2P 비율 ${p2pRatio}% (임계치: ${settings.alerts.p2pRatioMin}%)`);
+  }
+}
+
+function showAlert(type, title, msg) {
+  const id = Date.now();
+  const alertsEl = document.getElementById('alerts');
+  const alertEl = document.createElement('div');
+  alertEl.className = `alert ${type}`;
+  alertEl.innerHTML = `
+    <span class="alert-icon">${type === 'critical' ? '🚨' : '⚠️'}</span>
+    <div class="alert-content">
+      <div class="alert-title">${title}</div>
+      <div class="alert-msg">${msg}</div>
+    </div>
+    <button class="alert-close" onclick="this.parentElement.remove()">×</button>
+  `;
+  alertsEl.appendChild(alertEl);
+  setTimeout(() => alertEl.remove(), 10000);
+}
+
+// Update realtime UI
+function updateRealtimeUI(data) {
+  const cards = [
+    { id: 'viewers', val: data.total?.viewers },
+    { id: 'unique', val: data.total?.uniqueUsers },
+    { id: 'p2p', val: parseFloat(data.total?.p2pRatio) },
+    { id: 'peers', val: data.total?.peers },
+    { id: 'swarms', val: data.activeSwarms }
+  ];
+
+  cards.forEach(c => {
+    const el = document.querySelector(`#card-${c.id} .val`);
+    const cardEl = document.getElementById(`card-${c.id}`);
+    if (el && cardEl) {
+      const oldVal = parseInt(cardEl.dataset.value) || 0;
+      if (oldVal !== c.val) {
+        animateValue(el, oldVal, c.val);
+        cardEl.dataset.value = c.val;
+        glowCard(c.id);
+      }
+      updateSparkline(c.id, c.val);
+    }
+  });
+}
+
+// Toggle functions
+function toggleTheme() {
+  theme = theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+  updateThemeIcon();
+}
+
+function updateThemeIcon() {
+  const btn = document.querySelector('.theme-toggle');
+  if (btn) btn.textContent = theme === 'dark' ? '🌙' : '☀️';
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+function togglePause() {
+  paused = !paused;
+  const btn = document.querySelector('.pause-btn');
+  if (btn) {
+    btn.classList.toggle('paused', paused);
+    btn.textContent = paused ? '▶ 재개' : '⏸ 일시정지';
+  }
+}
 
 function toggleSetting(el) {
   el.classList.toggle('on');
 }
 
-function saveSettings() {
-  settings = {
-    dashboard: {
-      interval: parseInt(document.getElementById('set-dashboard-interval').value),
-      cache: document.getElementById('set-dashboard-cache').classList.contains('on')
-    },
-    realtime: {
-      interval: parseInt(document.getElementById('set-realtime-interval').value),
-      cache: document.getElementById('set-realtime-cache').classList.contains('on')
-    },
-    live: {
-      interval: parseInt(document.getElementById('set-live-interval').value),
-      cache: document.getElementById('set-live-cache').classList.contains('on')
-    },
-    cacheTTL: parseInt(document.getElementById('set-cache-ttl').value)
-  };
-  localStorage.setItem('p2p-settings', JSON.stringify(settings));
-  showToast('설정이 저장되었습니다');
+// Export functions
+function exportCSV(data, filename) {
+  const rows = [Object.keys(data[0]).join(',')];
+  data.forEach(row => rows.push(Object.values(row).join(',')));
+  downloadFile(rows.join('\n'), filename + '.csv', 'text/csv');
 }
 
+function exportJSON(data, filename) {
+  downloadFile(JSON.stringify(data, null, 2), filename + '.json', 'application/json');
+}
+
+function downloadFile(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Toast
 function showToast(msg) {
   const t = document.createElement('div');
   t.className = 'toast';
@@ -263,55 +923,58 @@ function showToast(msg) {
   setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 2000);
 }
 
-async function fetchWithCache(endpoint, pageKey) {
-  const now = Date.now();
-  const cacheKey = endpoint.split('?')[0].replace('/api/', '');
-
-  if (settings[pageKey]?.cache && cache[cacheKey] && (now - cache[cacheKey + 'Time']) < settings.cacheTTL) {
-    return cache[cacheKey];
-  }
-
-  const r = await fetch(endpoint);
-  const data = await r.json();
-
-  if (settings[pageKey]?.cache) {
-    cache[cacheKey] = data;
-    cache[cacheKey + 'Time'] = now;
-  }
-
-  return data;
-}
-
-function formatBytes(b) {
-  if (!b) return '0 B';
-  const u = ['B','KB','MB','GB','TB'];
-  const i = Math.floor(Math.log(b) / Math.log(1024));
-  return (b / Math.pow(1024, i)).toFixed(i > 2 ? 2 : 1) + ' ' + u[i];
-}
-
-function card(title, val, unit = '', cls = '') {
-  return `<div class="card ${cls}"><h3>${title}</h3><div class="val">${val}<span class="unit">${unit}</span></div></div>`;
-}
-
-function cacheIndicator(pageKey) {
-  const active = settings[pageKey]?.cache;
-  return `<div class="cache-indicator ${active ? 'active' : ''}">${active ? 'Cache ON' : 'Cache OFF'}</div>`;
-}
-
-function intervalOptions(selected) {
-  return [1000,2000,3000,5000,10000,30000].map(v =>
-    `<option value="${v}" ${selected===v?'selected':''}>${v/1000}초</option>`
-  ).join('');
-}
-
+// Pages
 const pages = {
   dashboard: () => `
-    <div class="header"><h2>Dashboard</h2><div class="header-right">${cacheIndicator('dashboard')}<div id="status" class="status ok">Connected</div></div></div>
-    <div class="stats-grid" id="stats"></div>
-    <div class="panel"><h3>실시간 트래픽</h3><canvas id="chart"></canvas></div>
+    <div class="header">
+      <h2>Dashboard</h2>
+      <div class="header-right">
+        <button class="pause-btn" onclick="togglePause()">⏸ 일시정지</button>
+        <div class="status ok" id="status">● Live</div>
+      </div>
+    </div>
+    <div class="health-bar" id="healthBar">
+      <div class="health-item">
+        <span class="label">CPU</span>
+        <div class="bar"><div class="bar-fill ok" id="cpuBar" style="width:0%"></div></div>
+        <span class="value" id="cpuVal">-</span>
+      </div>
+      <div class="health-item">
+        <span class="label">Memory</span>
+        <div class="bar"><div class="bar-fill ok" id="memBar" style="width:0%"></div></div>
+        <span class="value" id="memVal">-</span>
+      </div>
+      <div class="health-item">
+        <span class="label">Connections</span>
+        <span class="value" id="connVal">-</span>
+      </div>
+      <div class="health-item">
+        <span class="label">Uptime</span>
+        <span class="value" id="uptimeVal">-</span>
+      </div>
+    </div>
+    <div class="stats-grid" id="mainStats"></div>
+    <div class="panel">
+      <div class="panel-header">
+        <h3>실시간 트래픽</h3>
+        <div class="panel-actions">
+          <button class="export-btn" onclick="exportChartData()">📥 Export</button>
+        </div>
+      </div>
+      <canvas id="mainChart"></canvas>
+    </div>
+    <div class="section">P2P 효율</div>
+    <div class="efficiency-panel" id="efficiencyPanel"></div>
   `,
+
   realtime: () => `
-    <div class="header"><h2>실시간 접속자</h2><div class="header-right">${cacheIndicator('realtime')}<div id="status" class="status ok">Connected</div></div></div>
+    <div class="header">
+      <h2>실시간 접속자</h2>
+      <div class="header-right">
+        <button class="pause-btn" onclick="togglePause()">⏸ 일시정지</button>
+        <div class="status ok">● Live</div>
+      </div>
+    </div>
     <div class="stats-grid" id="mainStats"></div>
     <div class="section">디바이스 타입</div>
     <div class="stats-grid" id="deviceStats"></div>
@@ -322,20 +985,45 @@ const pages = {
     <div class="section">유입 경로</div>
     <div class="stats-grid" id="refStats"></div>
   `,
+
   live: () => `
-    <div class="header"><h2>시청 중</h2><div class="header-right">${cacheIndicator('live')}<div id="status" class="status ok">Connected</div></div></div>
+    <div class="header">
+      <h2>시청 중</h2>
+      <div class="header-right">
+        <button class="export-btn" onclick="exportLiveData()">📥 CSV</button>
+      </div>
+    </div>
     <div class="panel">
       <table id="liveTable">
         <thead><tr><th>#</th><th>파일명</th><th>Swarm</th><th>시청자</th><th>HTTP</th><th>P2P</th><th>P2P%</th></tr></thead>
         <tbody></tbody>
       </table>
       <div class="page-nav">
-        <button id="prev">이전</button>
+        <button id="prev">← 이전</button>
         <span id="pageInfo">1 / 1</span>
-        <button id="next">다음</button>
+        <button id="next">다음 →</button>
       </div>
     </div>
   `,
+
+  analytics: () => `
+    <div class="header">
+      <h2>분석</h2>
+    </div>
+    <div class="section">피크 시간대 (최근 7일)</div>
+    <div class="panel">
+      <div class="heatmap" id="heatmap"></div>
+      <div class="heatmap-labels" id="heatmapLabels"></div>
+    </div>
+    <div class="section">인기 콘텐츠 TOP 10</div>
+    <div class="panel">
+      <table id="topContent">
+        <thead><tr><th>#</th><th>파일명</th><th>총 시청자</th><th>HTTP</th><th>P2P</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  `,
+
   history: () => `
     <div class="header">
       <h2>히스토리</h2>
@@ -347,185 +1035,336 @@ const pages = {
           <option value="7d">7일</option>
           <option value="30d">30일</option>
         </select>
+        <button class="export-btn" onclick="exportHistoryData()">📥 Export</button>
       </div>
     </div>
     <div class="panel"><h3>시청자 추이</h3><canvas id="historyChart"></canvas></div>
     <div class="panel"><h3>트래픽 추이 (TB)</h3><canvas id="trafficChart"></canvas></div>
   `,
+
   settings: () => `
     <div class="header"><h2>설정</h2></div>
     <div class="settings-grid">
       <div class="settings-panel">
-        <h3>Dashboard</h3>
+        <h3>알림 설정</h3>
         <div class="setting-row">
-          <div class="setting-label">업데이트 주기</div>
-          <select id="set-dashboard-interval">${intervalOptions(settings.dashboard.interval)}</select>
+          <span class="setting-label">알림 활성화</span>
+          <div class="toggle ${settings.alerts.enabled ? 'on' : ''}" id="alertEnabled" onclick="toggleSetting(this)"></div>
         </div>
         <div class="setting-row">
-          <div class="setting-label">캐싱</div>
-          <div class="toggle ${settings.dashboard.cache?'on':''}" id="set-dashboard-cache" onclick="toggleSetting(this)"></div>
-        </div>
-      </div>
-      <div class="settings-panel">
-        <h3>실시간</h3>
-        <div class="setting-row">
-          <div class="setting-label">업데이트 주기</div>
-          <select id="set-realtime-interval">${intervalOptions(settings.realtime.interval)}</select>
+          <span class="setting-label">시청자 최소 임계치</span>
+          <input type="number" id="viewersMin" value="${settings.alerts.viewersMin}" style="width:100px">
         </div>
         <div class="setting-row">
-          <div class="setting-label">캐싱</div>
-          <div class="toggle ${settings.realtime.cache?'on':''}" id="set-realtime-cache" onclick="toggleSetting(this)"></div>
+          <span class="setting-label">시청자 최대 임계치</span>
+          <input type="number" id="viewersMax" value="${settings.alerts.viewersMax}" style="width:100px">
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">P2P 비율 최소 (%)</span>
+          <input type="number" id="p2pRatioMin" value="${settings.alerts.p2pRatioMin}" style="width:100px">
         </div>
       </div>
       <div class="settings-panel">
-        <h3>시청 중</h3>
+        <h3>디스플레이</h3>
         <div class="setting-row">
-          <div class="setting-label">업데이트 주기</div>
-          <select id="set-live-interval">${intervalOptions(settings.live.interval)}</select>
+          <span class="setting-label">숫자 애니메이션</span>
+          <div class="toggle ${settings.display.animateNumbers ? 'on' : ''}" id="animateNumbers" onclick="toggleSetting(this)"></div>
         </div>
         <div class="setting-row">
-          <div class="setting-label">캐싱</div>
-          <div class="toggle ${settings.live.cache?'on':''}" id="set-live-cache" onclick="toggleSetting(this)"></div>
+          <span class="setting-label">스파크라인 표시</span>
+          <div class="toggle ${settings.display.showSparklines ? 'on' : ''}" id="showSparklines" onclick="toggleSetting(this)"></div>
         </div>
       </div>
       <div class="settings-panel">
-        <h3>캐시</h3>
-        <div class="setting-row">
-          <div class="setting-label">유지 시간</div>
-          <select id="set-cache-ttl">${intervalOptions(settings.cacheTTL)}</select>
-        </div>
+        <h3>키보드 단축키</h3>
+        <div class="setting-row"><span class="setting-label">1~6</span><span>페이지 이동</span></div>
+        <div class="setting-row"><span class="setting-label">R</span><span>새로고침</span></div>
+        <div class="setting-row"><span class="setting-label">T</span><span>테마 전환</span></div>
+        <div class="setting-row"><span class="setting-label">P</span><span>일시정지</span></div>
+        <div class="setting-row"><span class="setting-label">ESC</span><span>사이드바 닫기</span></div>
       </div>
     </div>
     <button class="save-btn" onclick="saveSettings()">저장</button>
   `
 };
 
+// Navigation
 function nav(p) {
   page = p;
   document.querySelectorAll('.menu-item a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + p));
-  app.innerHTML = pages[p]();
+  document.getElementById('app').innerHTML = pages[p]();
+  document.getElementById('sidebar').classList.remove('open');
+
   if (p === 'dashboard') initDashboard();
   else if (p === 'realtime') initRealtime();
   else if (p === 'live') initLive();
+  else if (p === 'analytics') initAnalytics();
   else if (p === 'history') initHistory();
 }
 
+// Dashboard
+let mainChart = null;
+const chartHistory = { labels: [], viewers: [], unique: [], http: [], p2p: [] };
+
 async function initDashboard() {
-  async function update() {
-    try {
-      const d = await fetchWithCache('/api/realtime', 'dashboard');
-      if (d.error) { document.getElementById('status').className = 'status err'; document.getElementById('status').textContent = 'Offline'; return; }
-      document.getElementById('status').className = 'status ok';
-      document.getElementById('status').textContent = 'Connected';
-      document.getElementById('stats').innerHTML = `
-        ${card('고유 유저', d.total?.uniqueUsers || 0, '명')}
-        ${card('연결 수', d.total?.viewers || 0, '개')}
-        ${card('Swarms', d.activeSwarms || 0, '개')}
-        ${card('P2P 효율', d.total?.p2pRatio || '0', '%', 'p2p')}
-        ${card('HTTP', formatBytes(d.total?.httpBytes || 0), '', 'http')}
-        ${card('P2P Down', formatBytes(d.total?.p2pBytes || 0), '', 'p2p')}
-        ${card('P2P Up', formatBytes(d.total?.p2pUpBytes || 0), '', 'p2p')}
-      `;
-      const t = new Date().toLocaleTimeString();
-      history.labels.push(t);
-      history.viewers.push(d.total?.viewers || 0);
-      history.uniqueUsers.push(d.total?.uniqueUsers || 0);
-      history.http.push((d.total?.httpBytes || 0) / 1024 / 1024 / 1024 / 1024);
-      history.p2p.push((d.total?.p2pBytes || 0) / 1024 / 1024 / 1024 / 1024);
-      if (history.labels.length > 30) { history.labels.shift(); history.viewers.shift(); history.uniqueUsers.shift(); history.http.shift(); history.p2p.shift(); }
-      if (chart) chart.update('none');
-    } catch (e) { console.error(e); }
+  loadHealthStats();
+  if (lastData) renderDashboard(lastData);
+  else {
+    const res = await fetch('/api/realtime');
+    lastData = await res.json();
+    renderDashboard(lastData);
   }
-  update();
-  chart = new Chart(document.getElementById('chart'), {
+
+  mainChart = new Chart(document.getElementById('mainChart'), {
     type: 'line',
-    data: { labels: history.labels, datasets: [
-      { label: '고유 유저', data: history.uniqueUsers, borderColor: '#00d4ff', tension: 0.3, yAxisID: 'y1' },
-      { label: 'HTTP', data: history.http, borderColor: '#ff6b6b', tension: 0.3, yAxisID: 'y' },
-      { label: 'P2P Down', data: history.p2p, borderColor: '#00ff88', tension: 0.3, yAxisID: 'y' }
-    ]},
+    data: {
+      labels: chartHistory.labels,
+      datasets: [
+        { label: '고유 유저', data: chartHistory.unique, borderColor: '#00d4ff', tension: 0.3, yAxisID: 'y1' },
+        { label: 'HTTP (TB)', data: chartHistory.http, borderColor: '#ff6b6b', tension: 0.3, yAxisID: 'y' },
+        { label: 'P2P (TB)', data: chartHistory.p2p, borderColor: '#00ff88', tension: 0.3, yAxisID: 'y' }
+      ]
+    },
     options: {
       responsive: true,
       animation: false,
       interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { labels: { color: '#fff' } } },
+      plugins: { legend: { labels: { color: theme === 'dark' ? '#fff' : '#333' } } },
       scales: {
         x: { display: false },
-        y: { type: 'linear', position: 'left', ticks: { color: '#888' }, grid: { color: '#333' }, title: { display: true, text: 'TB', color: '#888' } },
-        y1: { type: 'linear', position: 'right', ticks: { color: '#00d4ff' }, grid: { drawOnChartArea: false }, title: { display: true, text: '유저', color: '#00d4ff' } }
+        y: { position: 'left', ticks: { color: '#888' }, grid: { color: '#333' }, title: { display: true, text: 'TB', color: '#888' } },
+        y1: { position: 'right', ticks: { color: '#00d4ff' }, grid: { drawOnChartArea: false }, title: { display: true, text: '유저', color: '#00d4ff' } }
       }
     }
   });
-  const intv = setInterval(update, settings.dashboard.interval);
-  window.addEventListener('hashchange', () => { if (page !== 'dashboard') clearInterval(intv); }, { once: true });
 }
 
+function renderDashboard(d) {
+  document.getElementById('mainStats').innerHTML = `
+    ${card('viewers', '연결 수', d.total?.viewers || 0)}
+    ${card('unique', '고유 유저', d.total?.uniqueUsers || 0)}
+    ${card('p2p', 'P2P 효율', parseFloat(d.total?.p2pRatio) || 0, '%', 'p2p')}
+    ${card('peers', 'P2P 피어', d.total?.peers || 0)}
+    ${card('swarms', 'Swarms', d.activeSwarms || 0)}
+  `;
+
+  // Animate initial values
+  setTimeout(() => {
+    ['viewers', 'unique', 'p2p', 'peers', 'swarms'].forEach(id => {
+      const cardEl = document.getElementById(`card-${id}`);
+      const valEl = cardEl?.querySelector('.val');
+      if (valEl && cardEl) {
+        animateValue(valEl, 0, parseInt(cardEl.dataset.value) || 0);
+      }
+    });
+  }, 100);
+
+  // Efficiency panel
+  const httpBytes = d.total?.httpBytes || 0;
+  const p2pBytes = d.total?.p2pBytes || 0;
+  const savedBytes = p2pBytes;
+  const costPerTB = 0.05; // $0.05 per TB (example CDN cost)
+  const savedCost = (savedBytes / 1024 / 1024 / 1024 / 1024) * costPerTB;
+
+  document.getElementById('efficiencyPanel').innerHTML = `
+    <div class="efficiency-item">
+      <div class="big-val">${formatBytes(savedBytes)}</div>
+      <div class="label">P2P로 절감된 트래픽</div>
+    </div>
+    <div class="efficiency-item">
+      <div class="big-val">$${savedCost.toFixed(2)}</div>
+      <div class="label">예상 절감 비용</div>
+    </div>
+    <div class="efficiency-item">
+      <div class="big-val">${d.total?.p2pRatio || 0}%</div>
+      <div class="label">P2P 분산율</div>
+    </div>
+  `;
+
+  // Update chart
+  const now = new Date().toLocaleTimeString();
+  chartHistory.labels.push(now);
+  chartHistory.viewers.push(d.total?.viewers || 0);
+  chartHistory.unique.push(d.total?.uniqueUsers || 0);
+  chartHistory.http.push(parseFloat(formatTB(d.total?.httpBytes || 0)));
+  chartHistory.p2p.push(parseFloat(formatTB(d.total?.p2pBytes || 0)));
+
+  if (chartHistory.labels.length > 30) {
+    chartHistory.labels.shift();
+    chartHistory.viewers.shift();
+    chartHistory.unique.shift();
+    chartHistory.http.shift();
+    chartHistory.p2p.shift();
+  }
+
+  if (mainChart) mainChart.update('none');
+}
+
+async function loadHealthStats() {
+  try {
+    const res = await fetch('/api/stats');
+    const d = await res.json();
+
+    const cpu = d.cpu_usage || 0;
+    const mem = d.memory_percent || 0;
+
+    document.getElementById('cpuVal').textContent = cpu.toFixed(1) + '%';
+    document.getElementById('cpuBar').style.width = cpu + '%';
+    document.getElementById('cpuBar').className = 'bar-fill ' + (cpu > 80 ? 'danger' : cpu > 50 ? 'warn' : 'ok');
+
+    document.getElementById('memVal').textContent = mem.toFixed(1) + '%';
+    document.getElementById('memBar').style.width = mem + '%';
+    document.getElementById('memBar').className = 'bar-fill ' + (mem > 80 ? 'danger' : mem > 50 ? 'warn' : 'ok');
+
+    document.getElementById('connVal').textContent = formatNum(d.connections || 0);
+    document.getElementById('uptimeVal').textContent = formatUptime(d.uptime_secs || 0);
+  } catch (e) {}
+}
+
+function formatUptime(secs) {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
+// Realtime
 async function initRealtime() {
-  async function update() {
-    try {
-      const d = await fetchWithCache('/api/realtime', 'realtime');
-      if (d.error) return;
-      document.getElementById('mainStats').innerHTML = `
-        ${card('고유 유저', d.total?.uniqueUsers || 0)}
-        ${card('연결 수', d.total?.viewers || 0)}
-        ${card('플레이어1', d.player1?.viewers || 0)}
-        ${card('플레이어2', d.player2?.viewers || 0)}
-        ${card('P2P 피어', d.total?.peers || 0)}
-        ${card('Swarms', d.activeSwarms || 0)}
-      `;
-      const dev = d.devices || {};
-      const devT = Object.values(dev).reduce((a, b) => a + b, 0) || 1;
-      document.getElementById('deviceStats').innerHTML = `
-        ${card('모바일', dev.mobile || 0, `(${((dev.mobile||0)/devT*100).toFixed(1)}%)`)}
-        ${card('데스크톱', dev.desktop || 0, `(${((dev.desktop||0)/devT*100).toFixed(1)}%)`)}
-        ${card('태블릿', dev.tablet || 0, `(${((dev.tablet||0)/devT*100).toFixed(1)}%)`)}
-        ${card('기타', dev.unknown || 0, `(${((dev.unknown||0)/devT*100).toFixed(1)}%)`)}
-      `;
-      const dn = d.deviceNames || [];
-      document.getElementById('deviceNameStats').innerHTML = dn.length ? dn.map(x => card(x.name, x.count)).join('') : '<div class="card"><h3>-</h3><div class="val">0</div></div>';
-      const br = d.browsers || [];
-      document.getElementById('browserStats').innerHTML = br.length ? br.map(b => card(b.name, b.count)).join('') : '<div class="card"><h3>-</h3><div class="val">0</div></div>';
-      const ref = d.referrers || [];
-      document.getElementById('refStats').innerHTML = ref.length ? ref.map(r => card(r.name.length > 15 ? r.name.slice(0,15)+'...' : r.name, r.count)).join('') : '<div class="card"><h3>direct</h3><div class="val">0</div></div>';
-    } catch (e) { console.error(e); }
+  if (lastData) renderRealtime(lastData);
+  else {
+    const res = await fetch('/api/realtime');
+    lastData = await res.json();
+    renderRealtime(lastData);
   }
-  update();
-  const intv = setInterval(update, settings.realtime.interval);
-  window.addEventListener('hashchange', () => { if (page !== 'realtime') clearInterval(intv); }, { once: true });
 }
 
-function initLive() {
-  let st = { p: 1, size: 20, total: 0 };
-  async function load() {
-    try {
-      const res = await fetchWithCache(`/api/live?limit=${st.size}&offset=${(st.p-1)*st.size}`, 'live');
-      st.total = res.total || 0;
-      const data = res.data || [];
-      document.querySelector('#liveTable tbody').innerHTML = data.map((d, i) => {
-        const idx = (st.p - 1) * st.size + i + 1;
-        const t = (d.http_bytes || 0) + (d.p2p_bytes || 0);
-        const ratio = t > 0 ? ((d.p2p_bytes || 0) / t * 100).toFixed(1) : '0';
-        const sw = d.swarm_id?.length > 20 ? d.swarm_id.slice(0, 12) + '...' + d.swarm_id.slice(-6) : d.swarm_id;
-        const fn = d.filename?.length > 25 ? d.filename.slice(0, 25) + '...' : (d.filename || '-');
-        return `<tr><td>${idx}</td><td title="${d.filename}">${fn}</td><td title="${d.swarm_id}" style="font-size:10px">${sw}</td><td style="color:#ff6b6b"><b>${d.viewers || 0}</b></td><td>${formatBytes(d.http_bytes)}</td><td>${formatBytes(d.p2p_bytes)}</td><td style="color:#00ff88"><b>${ratio}%</b></td></tr>`;
-      }).join('') || '<tr><td colspan="7" style="text-align:center">데이터 없음</td></tr>';
-      const pages = Math.ceil(st.total / st.size) || 1;
-      document.getElementById('pageInfo').textContent = `${st.p} / ${pages}`;
-      document.getElementById('prev').disabled = st.p === 1;
-      document.getElementById('next').disabled = st.p >= pages;
-    } catch (e) { console.error(e); }
-  }
-  document.getElementById('prev').onclick = () => { if (st.p > 1) { st.p--; load(); } };
-  document.getElementById('next').onclick = () => { if (st.p < Math.ceil(st.total / st.size)) { st.p++; load(); } };
-  load();
-  const intv = setInterval(load, settings.live.interval);
-  window.addEventListener('hashchange', () => { if (page !== 'live') clearInterval(intv); }, { once: true });
+function renderRealtime(d) {
+  document.getElementById('mainStats').innerHTML = `
+    ${card('viewers', '연결 수', d.total?.viewers || 0)}
+    ${card('unique', '고유 유저', d.total?.uniqueUsers || 0)}
+    ${card('p1', '플레이어1', d.player1?.viewers || 0)}
+    ${card('p2', '플레이어2', d.player2?.viewers || 0)}
+    ${card('peers', 'P2P 피어', d.total?.peers || 0)}
+    ${card('swarms', 'Swarms', d.activeSwarms || 0)}
+  `;
+
+  const dev = d.devices || {};
+  const devT = Object.values(dev).reduce((a, b) => a + b, 0) || 1;
+  document.getElementById('deviceStats').innerHTML = `
+    ${card('mobile', '모바일', dev.mobile || 0, `(${((dev.mobile||0)/devT*100).toFixed(1)}%)`)}
+    ${card('desktop', '데스크톱', dev.desktop || 0, `(${((dev.desktop||0)/devT*100).toFixed(1)}%)`)}
+    ${card('tablet', '태블릿', dev.tablet || 0, `(${((dev.tablet||0)/devT*100).toFixed(1)}%)`)}
+  `;
+
+  const dn = d.deviceNames || [];
+  document.getElementById('deviceNameStats').innerHTML = dn.length ?
+    dn.map(x => card(x.name, x.name, x.count)).join('') :
+    '<div class="card"><h3>-</h3><div class="val">0</div></div>';
+
+  const br = d.browsers || [];
+  document.getElementById('browserStats').innerHTML = br.length ?
+    br.map(b => card(b.name, b.name, b.count)).join('') : '-';
+
+  const ref = d.referrers || [];
+  document.getElementById('refStats').innerHTML = ref.length ?
+    ref.map(r => card(r.name, r.name.length > 20 ? r.name.slice(0,20)+'...' : r.name, r.count)).join('') : '-';
 }
 
+// Live
+let liveState = { p: 1, size: 20, total: 0, data: [] };
+
+async function initLive() {
+  await loadLive();
+  document.getElementById('prev').onclick = () => { if (liveState.p > 1) { liveState.p--; loadLive(); } };
+  document.getElementById('next').onclick = () => { if (liveState.p < Math.ceil(liveState.total / liveState.size)) { liveState.p++; loadLive(); } };
+}
+
+async function loadLive() {
+  const res = await fetch(`/api/live?limit=${liveState.size}&offset=${(liveState.p-1)*liveState.size}`);
+  const json = await res.json();
+  liveState.total = json.total || 0;
+  liveState.data = json.data || [];
+
+  document.querySelector('#liveTable tbody').innerHTML = liveState.data.map((d, i) => {
+    const idx = (liveState.p - 1) * liveState.size + i + 1;
+    const t = (d.http_bytes || 0) + (d.p2p_bytes || 0);
+    const ratio = t > 0 ? ((d.p2p_bytes || 0) / t * 100).toFixed(1) : '0';
+    return `<tr>
+      <td>${idx}</td>
+      <td title="${d.filename}">${d.filename?.slice(0,30) || '-'}</td>
+      <td style="font-size:10px">${d.swarm_id?.slice(0,12)}...</td>
+      <td style="color:#ff6b6b"><b>${d.viewers || 0}</b></td>
+      <td>${formatBytes(d.http_bytes)}</td>
+      <td>${formatBytes(d.p2p_bytes)}</td>
+      <td style="color:#00ff88"><b>${ratio}%</b></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" style="text-align:center">데이터 없음</td></tr>';
+
+  const pages = Math.ceil(liveState.total / liveState.size) || 1;
+  document.getElementById('pageInfo').textContent = `${liveState.p} / ${pages}`;
+  document.getElementById('prev').disabled = liveState.p === 1;
+  document.getElementById('next').disabled = liveState.p >= pages;
+}
+
+function exportLiveData() {
+  if (liveState.data.length) exportCSV(liveState.data, 'live-data');
+}
+
+// Analytics
+async function initAnalytics() {
+  loadHeatmap();
+  loadTopContent();
+}
+
+async function loadHeatmap() {
+  try {
+    const res = await fetch('/api/history/hourly?days=7');
+    const json = await res.json();
+    const data = json.dataset || [];
+
+    const hourData = new Array(24).fill(0);
+    data.forEach(row => {
+      const hour = row[0];
+      const avg = row[1] || 0;
+      if (hour >= 0 && hour < 24) hourData[hour] = avg;
+    });
+
+    const max = Math.max(...hourData) || 1;
+
+    document.getElementById('heatmap').innerHTML = hourData.map((v, h) => {
+      const intensity = v / max;
+      const color = `rgba(0, 212, 255, ${0.2 + intensity * 0.8})`;
+      return `<div class="heatmap-cell" style="background:${color}" title="${h}시: ${formatNum(v)}명">${h}</div>`;
+    }).join('');
+
+    document.getElementById('heatmapLabels').innerHTML =
+      Array.from({length: 24}, (_, i) => `<span>${i}</span>`).join('');
+  } catch (e) {}
+}
+
+async function loadTopContent() {
+  try {
+    const res = await fetch('/api/history/swarms?period=1d&limit=10');
+    const json = await res.json();
+    const data = json.dataset || [];
+
+    document.querySelector('#topContent tbody').innerHTML = data.map((row, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td title="${row[1]}">${row[1]?.slice(0,40) || '-'}</td>
+        <td><b>${formatNum(row[2])}</b></td>
+        <td>${formatBytes(row[3])}</td>
+        <td>${formatBytes(row[4])}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="5">데이터 없음</td></tr>';
+  } catch (e) {}
+}
+
+// History
 let historyChart = null;
 let trafficChart = null;
+let historyData = [];
 
-function initHistory() {
+async function initHistory() {
   loadHistory();
 }
 
@@ -535,29 +1374,25 @@ async function loadHistory() {
   const sample = sampleMap[period] || '10m';
 
   try {
-    const r = await fetch(`/api/history/stats?period=${period}&sample=${sample}`);
-    const data = await r.json();
+    const res = await fetch(`/api/history/stats?period=${period}&sample=${sample}`);
+    const json = await res.json();
+    historyData = json.dataset || [];
 
-    if (data.error) {
-      console.error('History error:', data.error);
-      return;
-    }
-
-    const rows = data.dataset || [];
-    const labels = rows.map(r => {
+    const labels = historyData.map(r => {
       const d = new Date(r[0]);
       return period === '1h' || period === '6h' ? d.toLocaleTimeString() : d.toLocaleString();
     });
-    const viewers = rows.map(r => r[1] || 0);
-    const uniqueUsers = rows.map(r => r[2] || 0);
-    const httpTB = rows.map(r => (r[3] || 0) / 1024 / 1024 / 1024 / 1024);
-    const p2pTB = rows.map(r => (r[4] || 0) / 1024 / 1024 / 1024 / 1024);
+    const viewers = historyData.map(r => r[1] || 0);
+    const uniqueUsers = historyData.map(r => r[2] || 0);
+    const httpTB = historyData.map(r => parseFloat(formatTB(r[3] || 0)));
+    const p2pTB = historyData.map(r => parseFloat(formatTB(r[4] || 0)));
 
-    // Destroy old charts
     if (historyChart) historyChart.destroy();
     if (trafficChart) trafficChart.destroy();
 
-    // Viewers chart
+    const textColor = theme === 'dark' ? '#fff' : '#333';
+    const gridColor = theme === 'dark' ? '#333' : '#ddd';
+
     historyChart = new Chart(document.getElementById('historyChart'), {
       type: 'line',
       data: {
@@ -569,43 +1404,105 @@ async function loadHistory() {
       },
       options: {
         responsive: true,
-        plugins: { legend: { labels: { color: '#fff' } } },
+        plugins: { legend: { labels: { color: textColor } } },
         scales: {
-          x: { ticks: { color: '#888', maxTicksLimit: 12 }, grid: { color: '#333' } },
-          y: { ticks: { color: '#888' }, grid: { color: '#333' } }
+          x: { ticks: { color: '#888', maxTicksLimit: 10 }, grid: { color: gridColor } },
+          y: { ticks: { color: '#888' }, grid: { color: gridColor } }
         }
       }
     });
 
-    // Traffic chart
     trafficChart = new Chart(document.getElementById('trafficChart'), {
       type: 'line',
       data: {
         labels,
         datasets: [
           { label: 'HTTP', data: httpTB, borderColor: '#ff6b6b', tension: 0.3, fill: false },
-          { label: 'P2P Down', data: p2pTB, borderColor: '#00ff88', tension: 0.3, fill: false }
+          { label: 'P2P', data: p2pTB, borderColor: '#00ff88', tension: 0.3, fill: false }
         ]
       },
       options: {
         responsive: true,
-        plugins: { legend: { labels: { color: '#fff' } } },
+        plugins: { legend: { labels: { color: textColor } } },
         scales: {
-          x: { ticks: { color: '#888', maxTicksLimit: 12 }, grid: { color: '#333' } },
-          y: { ticks: { color: '#888' }, grid: { color: '#333' } }
+          x: { ticks: { color: '#888', maxTicksLimit: 10 }, grid: { color: gridColor } },
+          y: { ticks: { color: '#888' }, grid: { color: gridColor } }
         }
       }
     });
-  } catch (e) {
-    console.error('History fetch error:', e);
+  } catch (e) {}
+}
+
+function exportHistoryData() {
+  if (historyData.length) {
+    const data = historyData.map(r => ({
+      timestamp: r[0],
+      viewers: r[1],
+      unique_users: r[2],
+      http_bytes: r[3],
+      p2p_bytes: r[4]
+    }));
+    exportCSV(data, 'history-data');
   }
 }
 
+function exportChartData() {
+  const data = chartHistory.labels.map((l, i) => ({
+    time: l,
+    viewers: chartHistory.viewers[i],
+    unique: chartHistory.unique[i],
+    http_tb: chartHistory.http[i],
+    p2p_tb: chartHistory.p2p[i]
+  }));
+  if (data.length) exportCSV(data, 'realtime-chart');
+}
+
+// Settings
+function saveSettings() {
+  settings = {
+    alerts: {
+      enabled: document.getElementById('alertEnabled').classList.contains('on'),
+      viewersMin: parseInt(document.getElementById('viewersMin').value) || 0,
+      viewersMax: parseInt(document.getElementById('viewersMax').value) || 500000,
+      p2pRatioMin: parseInt(document.getElementById('p2pRatioMin').value) || 30
+    },
+    display: {
+      animateNumbers: document.getElementById('animateNumbers').classList.contains('on'),
+      showSparklines: document.getElementById('showSparklines').classList.contains('on')
+    }
+  };
+  localStorage.setItem('p2p-settings-v2', JSON.stringify(settings));
+  showToast('설정이 저장되었습니다');
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  switch(e.key) {
+    case '1': nav('dashboard'); break;
+    case '2': nav('realtime'); break;
+    case '3': nav('live'); break;
+    case '4': nav('analytics'); break;
+    case '5': nav('history'); break;
+    case '6': nav('settings'); break;
+    case 'r': case 'R': location.reload(); break;
+    case 't': case 'T': toggleTheme(); break;
+    case 'p': case 'P': togglePause(); break;
+    case 'Escape': document.getElementById('sidebar').classList.remove('open'); break;
+  }
+});
+
+// Init
 document.querySelectorAll('.menu-item a').forEach(a => {
   a.onclick = e => { e.preventDefault(); window.location.hash = a.getAttribute('href').slice(1); };
 });
 window.onhashchange = () => nav(location.hash.slice(1) || 'dashboard');
 nav(location.hash.slice(1) || 'dashboard');
+connectWS();
+
+// Periodic health check
+setInterval(loadHealthStats, 10000);
 </script>
 </body>
 </html>

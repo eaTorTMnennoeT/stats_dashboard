@@ -1,17 +1,30 @@
 use axum::{
-    extract::{Query, Request},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Query, State,
+    },
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
     Router,
 };
+use futures_util::{SinkExt, StreamExt};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast;
 use tower_http::{cors::CorsLayer, services::ServeDir};
 
 const SIMPLE_WS_URL: &str = "https://127.0.0.1:8443";
 const QUESTDB_URL: &str = "http://127.0.0.1:9002";
+
+#[derive(Clone)]
+struct AppState {
+    client: Client,
+    tx: broadcast::Sender<String>,
+}
 
 #[tokio::main]
 async fn main() {
@@ -21,15 +34,41 @@ async fn main() {
         .build()
         .unwrap();
 
+    let (tx, _) = broadcast::channel::<String>(100);
+    let state = AppState {
+        client: client.clone(),
+        tx: tx.clone(),
+    };
+
+    // Background task: poll simple_ws and broadcast to all clients
+    let poll_client = client.clone();
+    let poll_tx = tx.clone();
+    tokio::spawn(async move {
+        loop {
+            if let Ok(resp) = poll_client
+                .get(format!("{}/api/realtime", SIMPLE_WS_URL))
+                .send()
+                .await
+            {
+                if let Ok(body) = resp.text().await {
+                    let _ = poll_tx.send(body);
+                }
+            }
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
+    });
+
     let app = Router::new()
+        .route("/ws", get(ws_handler))
         .route("/api/realtime", get(proxy_realtime))
         .route("/api/live", get(proxy_live))
         .route("/api/stats", get(proxy_stats))
         .route("/api/history/stats", get(history_stats))
         .route("/api/history/swarms", get(history_swarms))
+        .route("/api/history/hourly", get(history_hourly))
         .nest_service("/", ServeDir::new("static"))
         .layer(CorsLayer::permissive())
-        .with_state(client);
+        .with_state(state);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 8080));
     eprintln!("P2P Stats Dashboard listening on http://{}", addr);
@@ -38,28 +77,57 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn proxy_realtime(
-    axum::extract::State(client): axum::extract::State<Client>,
-) -> Response {
-    proxy_get(&client, "/api/realtime", "").await
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_socket(socket, state))
+}
+
+async fn handle_socket(socket: WebSocket, state: AppState) {
+    let (mut sender, mut receiver) = socket.split();
+    let mut rx = state.tx.subscribe();
+
+    let send_task = tokio::spawn(async move {
+        while let Ok(msg) = rx.recv().await {
+            if sender.send(Message::Text(msg.into())).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    let recv_task = tokio::spawn(async move {
+        while let Some(Ok(_)) = receiver.next().await {}
+    });
+
+    tokio::select! {
+        _ = send_task => {},
+        _ = recv_task => {},
+    }
+}
+
+async fn proxy_realtime(State(state): State<AppState>) -> Response {
+    proxy_get(&state.client, "/api/realtime", "").await
 }
 
 async fn proxy_live(
-    axum::extract::State(client): axum::extract::State<Client>,
+    State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Response {
     let query = if params.is_empty() {
         String::new()
     } else {
-        format!("?{}", params.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<_>>().join("&"))
+        format!(
+            "?{}",
+            params
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<_>>()
+                .join("&")
+        )
     };
-    proxy_get(&client, "/api/live", &query).await
+    proxy_get(&state.client, "/api/live", &query).await
 }
 
-async fn proxy_stats(
-    axum::extract::State(client): axum::extract::State<Client>,
-) -> Response {
-    proxy_get(&client, "/stats", "").await
+async fn proxy_stats(State(state): State<AppState>) -> Response {
+    proxy_get(&state.client, "/stats", "").await
 }
 
 async fn proxy_get(client: &Client, path: &str, query: &str) -> Response {
@@ -84,8 +152,6 @@ async fn proxy_get(client: &Client, path: &str, query: &str) -> Response {
     }
 }
 
-// QuestDB history endpoints
-// period in microseconds: 1h=3600000000, 1d=86400000000, 7d=604800000000
 fn period_to_micros(period: &str) -> i64 {
     match period {
         "1h" => 3_600_000_000,
@@ -98,7 +164,7 @@ fn period_to_micros(period: &str) -> i64 {
 }
 
 async fn history_stats(
-    axum::extract::State(client): axum::extract::State<Client>,
+    State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Response {
     let period = params.get("period").map(|s| s.as_str()).unwrap_or("1h");
@@ -115,11 +181,11 @@ async fn history_stats(
         micros, sample
     );
 
-    questdb_query(&client, &query).await
+    questdb_query(&state.client, &query).await
 }
 
 async fn history_swarms(
-    axum::extract::State(client): axum::extract::State<Client>,
+    State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Response {
     let period = params.get("period").map(|s| s.as_str()).unwrap_or("1h");
@@ -137,7 +203,30 @@ async fn history_swarms(
         micros, limit
     );
 
-    questdb_query(&client, &query).await
+    questdb_query(&state.client, &query).await
+}
+
+// 시간대별 히트맵용 API
+async fn history_hourly(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    let days = params
+        .get("days")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(7i64);
+    let micros = days * 86_400_000_000;
+
+    let query = format!(
+        "SELECT hour(ts) as hour, avg(viewers) as avg_viewers \
+         FROM p2p_stats \
+         WHERE ts > systimestamp() - {}L \
+         GROUP BY hour(ts) \
+         ORDER BY hour",
+        micros
+    );
+
+    questdb_query(&state.client, &query).await
 }
 
 async fn questdb_query(client: &Client, query: &str) -> Response {
