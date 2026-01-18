@@ -24,7 +24,7 @@ const MAX_CONNECTIONS: usize = 1_000_000;
 const IDLE_TIMEOUT_SECS: u64 = 60;
 const PING_INTERVAL_SECS: u64 = 30;
 const QUESTDB_ILP_ADDR: &str = "127.0.0.1:9019";
-const QUESTDB_FLUSH_SECS: u64 = 10;
+const QUESTDB_FLUSH_SECS: u64 = 1;
 
 // Global stats
 static TOTAL_CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -35,6 +35,25 @@ static START_TIME: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 lazy_static::lazy_static! {
     static ref P2P_STATS: Arc<RwLock<P2PStats>> = Arc::new(RwLock::new(P2PStats::default()));
     static ref SESSIONS: Arc<RwLock<HashMap<String, Session>>> = Arc::new(RwLock::new(HashMap::new()));
+    static ref VISITOR_LOGS: Arc<Mutex<Vec<VisitorLog>>> = Arc::new(Mutex::new(Vec::new()));
+    static ref IP_TOTALS: Arc<RwLock<HashMap<String, u64>>> = Arc::new(RwLock::new(HashMap::new()));
+}
+
+#[derive(Clone)]
+struct VisitorLog {
+    ip: String,
+    session_id: String,
+    swarm_id: String,
+    filename: String,
+    device: String,
+    device_name: String,
+    browser: String,
+    referrer: String,
+    net_type: String,
+    player_id: u8,
+    http_bytes: u64,
+    p2p_bytes: u64,
+    p2p_up_bytes: u64,
 }
 
 #[derive(Default)]
@@ -44,6 +63,10 @@ struct P2PStats {
     p2p_bytes: u64,
     p2p_up_bytes: u64,
     peers: u64,
+    // Delta values for current interval
+    r_http_bytes: u64,
+    r_p2p_bytes: u64,
+    r_p2p_up_bytes: u64,
     player1: PlayerStats,
     player2: PlayerStats,
     devices: DeviceStats,
@@ -60,6 +83,11 @@ struct PlayerStats {
     viewers: u64,
     http_bytes: u64,
     p2p_bytes: u64,
+    p2p_up_bytes: u64,
+    // Delta values for current interval
+    r_http_bytes: u64,
+    r_p2p_bytes: u64,
+    r_p2p_up_bytes: u64,
 }
 
 #[derive(Default)]
@@ -86,6 +114,11 @@ struct SwarmStats {
     viewers: u64,
     http_bytes: u64,
     p2p_bytes: u64,
+    p2p_up_bytes: u64,
+    // Delta values for current interval
+    r_http_bytes: u64,
+    r_p2p_bytes: u64,
+    r_p2p_up_bytes: u64,
     unique_ips: std::collections::HashSet<String>,
 }
 
@@ -103,6 +136,10 @@ struct Session {
     http_bytes: u64,
     p2p_bytes: u64,
     p2p_up_bytes: u64,
+    // Delta values for current interval (real-time speed)
+    r_http_bytes: u64,
+    r_p2p_bytes: u64,
+    r_p2p_up_bytes: u64,
     peers: u64,
     initialized: bool,
 }
@@ -132,6 +169,13 @@ struct ClientMessage {
     #[serde(rename = "p2pUpBytes")]
     p2p_up_bytes: Option<u64>,
     peers: Option<u64>,
+    // Delta values (new format)
+    #[serde(rename = "rhttpBytes")]
+    r_http_bytes: Option<u64>,
+    #[serde(rename = "rp2pBytes")]
+    r_p2p_bytes: Option<u64>,
+    #[serde(rename = "rp2pUpBytes")]
+    r_p2p_up_bytes: Option<u64>,
 }
 
 fn main() {
@@ -160,6 +204,8 @@ async fn async_main() {
         .route("/stats", get(stats))
         .route("/api/realtime", get(api_realtime))
         .route("/api/live", get(api_live))
+        .route("/api/sessions", get(api_sessions))
+        .route("/api/ip_stats", get(api_ip_stats))
         .layer(CorsLayer::permissive());
 
     let tls_config = RustlsConfig::from_pem_file("certs/cert.pem", "certs/key.pem")
@@ -170,7 +216,7 @@ async fn async_main() {
     eprintln!("WSS server listening on {} (workers: {})", addr, WORKER_THREADS);
 
     let server = axum_server::bind_rustls(addr, tls_config)
-        .serve(app.into_make_service());
+        .serve(app.into_make_service_with_connect_info::<SocketAddr>());
 
     server.await.unwrap();
 }
@@ -197,9 +243,9 @@ async fn flush_to_questdb() -> Result<(), Box<dyn std::error::Error + Send + Syn
         let stats = P2P_STATS.read().unwrap();
         let mut lines = Vec::new();
 
-        // p2p_stats - main aggregate stats
+        // p2p_stats - main aggregate stats (cumulative + delta)
         lines.push(format!(
-            "p2p_stats viewers={}i,unique_users={}i,http_bytes={}i,p2p_bytes={}i,p2p_up_bytes={}i,peers={}i,swarms={}i {}\n",
+            "p2p_stats viewers={}i,unique_users={}i,http_bytes={}i,p2p_bytes={}i,p2p_up_bytes={}i,peers={}i,swarms={}i,r_http_bytes={}i,r_p2p_bytes={}i,r_p2p_up_bytes={}i {}\n",
             stats.viewers,
             stats.unique_ips.len(),
             stats.http_bytes,
@@ -207,6 +253,9 @@ async fn flush_to_questdb() -> Result<(), Box<dyn std::error::Error + Send + Syn
             stats.p2p_up_bytes,
             stats.peers,
             stats.swarms.len(),
+            stats.r_http_bytes,
+            stats.r_p2p_bytes,
+            stats.r_p2p_up_bytes,
             now_ns
         ));
 
@@ -227,6 +276,42 @@ async fn flush_to_questdb() -> Result<(), Box<dyn std::error::Error + Send + Syn
                 now_ns
             ));
         }
+
+        // p2p_servers - 서버별 합계 통계 (cumulative + delta)
+        let mut server_stats: std::collections::HashMap<String, (u64, u64, u64, u64, u64, u64, u64, std::collections::HashSet<String>)> = std::collections::HashMap::new();
+        for (swarm_id, swarm) in stats.swarms.iter() {
+            // swarm_id에서 서버명 추출 (예: "every5.poorcdn.com/..." -> "every5")
+            let server = swarm_id.split('.').next().unwrap_or("unknown").to_string();
+            let entry = server_stats.entry(server).or_insert((0, 0, 0, 0, 0, 0, 0, std::collections::HashSet::new()));
+            entry.0 += swarm.http_bytes;
+            entry.1 += swarm.p2p_bytes;
+            entry.2 += swarm.p2p_up_bytes;
+            entry.3 += swarm.r_http_bytes;
+            entry.4 += swarm.r_p2p_bytes;
+            entry.5 += swarm.r_p2p_up_bytes;
+            entry.6 += swarm.unique_ips.len() as u64;
+            for ip in &swarm.unique_ips {
+                entry.7.insert(ip.clone());
+            }
+        }
+        for (server, (http, p2p, p2p_up, r_http, r_p2p, r_p2p_up, viewers, unique_ips)) in &server_stats {
+            lines.push(format!(
+                "p2p_servers,server={} viewers={}i,unique_ips={}i,http_bytes={}i,p2p_bytes={}i,p2p_up_bytes={}i,r_http_bytes={}i,r_p2p_bytes={}i,r_p2p_up_bytes={}i {}\n",
+                server, viewers, unique_ips.len(), http, p2p, p2p_up, r_http, r_p2p, r_p2p_up, now_ns
+            ));
+        }
+
+        // p2p_players - 플레이어별 통계
+        lines.push(format!(
+            "p2p_players,player=1 viewers={}i,http_bytes={}i,p2p_bytes={}i,p2p_up_bytes={}i,r_http_bytes={}i,r_p2p_bytes={}i,r_p2p_up_bytes={}i {}\n",
+            stats.player1.viewers, stats.player1.http_bytes, stats.player1.p2p_bytes, stats.player1.p2p_up_bytes,
+            stats.player1.r_http_bytes, stats.player1.r_p2p_bytes, stats.player1.r_p2p_up_bytes, now_ns
+        ));
+        lines.push(format!(
+            "p2p_players,player=2 viewers={}i,http_bytes={}i,p2p_bytes={}i,p2p_up_bytes={}i,r_http_bytes={}i,r_p2p_bytes={}i,r_p2p_up_bytes={}i {}\n",
+            stats.player2.viewers, stats.player2.http_bytes, stats.player2.p2p_bytes, stats.player2.p2p_up_bytes,
+            stats.player2.r_http_bytes, stats.player2.r_p2p_bytes, stats.player2.r_p2p_up_bytes, now_ns
+        ));
 
         // p2p_analytics - devices
         let devices = [
@@ -274,12 +359,54 @@ async fn flush_to_questdb() -> Result<(), Box<dyn std::error::Error + Send + Syn
         lines
     }; // Lock released here
 
+    // Collect visitor logs
+    let visitor_lines: Vec<String> = {
+        let mut logs = VISITOR_LOGS.lock().unwrap();
+        let collected: Vec<_> = logs.drain(..).collect();
+        collected.into_iter().map(|log| {
+            let safe_ip = log.ip.replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=");
+            let safe_filename = log.filename.replace("\"", "\\\"").replace("\n", " ");
+            let safe_device = log.device.replace(" ", "\\ ").replace(",", "\\,");
+            let safe_browser = log.browser.replace(" ", "\\ ").replace(",", "\\,");
+            let safe_referrer = log.referrer.replace(" ", "\\ ").replace(",", "\\,");
+            format!(
+                "visitor_logs,ip={} session_id=\"{}\",swarm_id=\"{}\",filename=\"{}\",device=\"{}\",device_name=\"{}\",browser=\"{}\",referrer=\"{}\",net_type=\"{}\",player_id={}i,http_bytes={}i,p2p_bytes={}i,p2p_up_bytes={}i {}\n",
+                safe_ip, log.session_id, log.swarm_id, safe_filename, safe_device, log.device_name, safe_browser, safe_referrer, log.net_type, log.player_id, log.http_bytes, log.p2p_bytes, log.p2p_up_bytes, now_ns
+            )
+        }).collect()
+    };
+
     // Now write to stream without holding the lock
     let mut stream = TcpStream::connect(QUESTDB_ILP_ADDR).await?;
     for line in lines {
         stream.write_all(line.as_bytes()).await?;
     }
+    for line in visitor_lines {
+        stream.write_all(line.as_bytes()).await?;
+    }
     stream.flush().await?;
+
+    // Reset delta values after successful write
+    {
+        let mut stats = P2P_STATS.write().unwrap();
+        stats.r_http_bytes = 0;
+        stats.r_p2p_bytes = 0;
+        stats.r_p2p_up_bytes = 0;
+        // Reset per-swarm delta values
+        for swarm in stats.swarms.values_mut() {
+            swarm.r_http_bytes = 0;
+            swarm.r_p2p_bytes = 0;
+            swarm.r_p2p_up_bytes = 0;
+        }
+        // Reset per-player delta values
+        stats.player1.r_http_bytes = 0;
+        stats.player1.r_p2p_bytes = 0;
+        stats.player1.r_p2p_up_bytes = 0;
+        stats.player2.r_http_bytes = 0;
+        stats.player2.r_p2p_bytes = 0;
+        stats.player2.r_p2p_up_bytes = 0;
+    }
+
     Ok(())
 }
 
@@ -325,8 +452,16 @@ struct PlayerStatsResponse {
     http_bytes: u64,
     #[serde(rename = "p2pBytes")]
     p2p_bytes: u64,
+    #[serde(rename = "p2pUpBytes")]
+    p2p_up_bytes: u64,
     #[serde(rename = "p2pRatio")]
     p2p_ratio: String,
+    #[serde(rename = "rHttpBytes")]
+    r_http_bytes: u64,
+    #[serde(rename = "rP2pBytes")]
+    r_p2p_bytes: u64,
+    #[serde(rename = "rP2pUpBytes")]
+    r_p2p_up_bytes: u64,
 }
 
 #[derive(Serialize)]
@@ -416,13 +551,21 @@ async fn api_realtime() -> Json<RealtimeResponse> {
             viewers: stats.player1.viewers,
             http_bytes: stats.player1.http_bytes,
             p2p_bytes: stats.player1.p2p_bytes,
+            p2p_up_bytes: stats.player1.p2p_up_bytes,
             p2p_ratio: p1_ratio,
+            r_http_bytes: stats.player1.r_http_bytes,
+            r_p2p_bytes: stats.player1.r_p2p_bytes,
+            r_p2p_up_bytes: stats.player1.r_p2p_up_bytes,
         },
         player2: PlayerStatsResponse {
             viewers: stats.player2.viewers,
             http_bytes: stats.player2.http_bytes,
             p2p_bytes: stats.player2.p2p_bytes,
+            p2p_up_bytes: stats.player2.p2p_up_bytes,
             p2p_ratio: p2_ratio,
+            r_http_bytes: stats.player2.r_http_bytes,
+            r_p2p_bytes: stats.player2.r_p2p_bytes,
+            r_p2p_up_bytes: stats.player2.r_p2p_up_bytes,
         },
         active_swarms: stats.swarms.len(),
         devices: DevicesResponse {
@@ -489,6 +632,197 @@ async fn api_live(axum::extract::Query(params): axum::extract::Query<HashMap<Str
     Json(LiveResponse { data, total })
 }
 
+#[derive(Serialize)]
+struct SessionItem {
+    session_id: String,
+    ip: String,
+    filename: String,
+    swarm_id: String,
+    player_id: u8,
+    device: String,
+    device_name: String,
+    browser: String,
+    referrer: String,
+    net_type: String,
+    http_bytes: u64,
+    p2p_bytes: u64,
+    p2p_up_bytes: u64,
+    r_http_bytes: u64,
+    r_p2p_bytes: u64,
+    r_p2p_up_bytes: u64,
+    peers: u64,
+    ip_total: u64,  // 서버시작 후 해당 IP 누적 트래픽
+}
+
+#[derive(Serialize)]
+struct SessionsResponse {
+    data: Vec<SessionItem>,
+    total: usize,
+}
+
+#[derive(Serialize)]
+struct IpStatsItem {
+    ip: String,
+    sessions: u64,
+    http_bytes: u64,
+    p2p_bytes: u64,
+    p2p_up_bytes: u64,
+    total: u64,
+}
+
+#[derive(Serialize)]
+struct IpStatsResponse {
+    data: Vec<IpStatsItem>,
+    total: usize,
+}
+
+async fn api_sessions(axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>) -> Json<SessionsResponse> {
+    let limit: usize = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(50).min(200);
+    let offset: usize = params.get("offset").and_then(|s| s.parse().ok()).unwrap_or(0);
+    let sort_by = params.get("sort").map(|s| s.as_str()).unwrap_or("http_bytes");
+    let search = params.get("search").map(|s| s.to_lowercase());
+
+    let sessions = SESSIONS.read().unwrap();
+    let ip_totals = IP_TOTALS.read().unwrap();
+
+    // 검색 필터가 없으면 빠른 경로
+    let has_search = search.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+
+    // 참조만 수집 (String 복사 없음)
+    let mut refs: Vec<(&String, &Session, i64)> = sessions.iter()
+        .filter(|(_, s)| s.initialized)
+        .filter(|(id, s)| {
+            if !has_search { return true; }
+            let q = search.as_ref().unwrap();
+            s.user_ip.to_lowercase().contains(q) ||
+            s.filename.to_lowercase().contains(q) ||
+            s.browser.to_lowercase().contains(q) ||
+            s.referrer.to_lowercase().contains(q) ||
+            s.device_name.to_lowercase().contains(q) ||
+            id.to_lowercase().contains(q)
+        })
+        .map(|(id, s)| {
+            let ts = id.split('_').next().and_then(|t| t.parse::<i64>().ok()).unwrap_or(0);
+            let key = sort_by.trim_start_matches('-');
+            let sort_key = match key {
+                "p2p_bytes" => s.p2p_bytes as i64,
+                "p2p_up_bytes" => s.p2p_up_bytes as i64,
+                "total" => *ip_totals.get(&s.user_ip).unwrap_or(&0) as i64,
+                "peers" => s.peers as i64,
+                "speed" => (s.r_http_bytes + s.r_p2p_bytes) as i64,
+                "connected" => -ts,  // 오래된 순 (oldest first)
+                "recent" => ts,      // 최근 순 (newest first)
+                _ => s.http_bytes as i64,
+            };
+            (id, s, sort_key)
+        })
+        .collect();
+
+    let total = refs.len();
+
+    // 정렬 (- prefix면 오름차순, 아니면 내림차순)
+    let ascending = sort_by.starts_with('-');
+    if ascending {
+        refs.sort_unstable_by(|a, b| a.2.cmp(&b.2));
+    } else {
+        refs.sort_unstable_by(|a, b| b.2.cmp(&a.2));
+    }
+
+    // 페이지네이션 후 SessionItem 생성
+    let data: Vec<_> = refs.into_iter()
+        .skip(offset)
+        .take(limit)
+        .map(|(id, s, _)| {
+            let ip_total = *ip_totals.get(&s.user_ip).unwrap_or(&0);
+            SessionItem {
+                session_id: id.clone(),
+                ip: s.user_ip.clone(),
+                filename: s.filename.clone(),
+                swarm_id: s.swarm_id.clone(),
+                player_id: s.player_id,
+                device: s.device.clone(),
+                device_name: s.device_name.clone(),
+                browser: s.browser.clone(),
+                referrer: s.referrer.clone(),
+                net_type: s.net_type.clone(),
+                http_bytes: s.http_bytes,
+                p2p_bytes: s.p2p_bytes,
+                p2p_up_bytes: s.p2p_up_bytes,
+                r_http_bytes: s.r_http_bytes,
+                r_p2p_bytes: s.r_p2p_bytes,
+                r_p2p_up_bytes: s.r_p2p_up_bytes,
+                peers: s.peers,
+                ip_total,
+            }
+        })
+        .collect();
+
+    Json(SessionsResponse { data, total })
+}
+
+async fn api_ip_stats(axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>) -> Json<IpStatsResponse> {
+    let limit: usize = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(50).min(200);
+    let offset: usize = params.get("offset").and_then(|s| s.parse().ok()).unwrap_or(0);
+    let sort_by = params.get("sort").map(|s| s.as_str()).unwrap_or("total");
+    let search = params.get("search").map(|s| s.to_lowercase());
+
+    let sessions = SESSIONS.read().unwrap();
+    let ip_totals = IP_TOTALS.read().unwrap();
+
+    // IP별로 그룹핑
+    let mut ip_map: HashMap<String, (u64, u64, u64, u64)> = HashMap::new();
+    for (_, s) in sessions.iter().filter(|(_, s)| s.initialized) {
+        let entry = ip_map.entry(s.user_ip.clone()).or_insert((0, 0, 0, 0));
+        entry.0 += 1;  // session count
+        entry.1 += s.http_bytes;
+        entry.2 += s.p2p_bytes;
+        entry.3 += s.p2p_up_bytes;
+    }
+
+    // 검색 필터 및 정렬
+    let has_search = search.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+    let mut items: Vec<_> = ip_map.into_iter()
+        .filter(|(ip, _)| !has_search || ip.to_lowercase().contains(search.as_ref().unwrap()))
+        .map(|(ip, (sessions, http, p2p, p2p_up))| {
+            let total = *ip_totals.get(&ip).unwrap_or(&0);
+            let key = sort_by.trim_start_matches('-');
+            let sort_key = match key {
+                "sessions" => sessions as i64,
+                "http_bytes" => http as i64,
+                "p2p_bytes" => p2p as i64,
+                "p2p_up_bytes" => p2p_up as i64,
+                _ => total as i64,
+            };
+            (ip, sessions, http, p2p, p2p_up, total, sort_key)
+        })
+        .collect();
+
+    let total_count = items.len();
+
+    // 정렬
+    let ascending = sort_by.starts_with('-');
+    if ascending {
+        items.sort_by(|a, b| a.6.cmp(&b.6));
+    } else {
+        items.sort_by(|a, b| b.6.cmp(&a.6));
+    }
+
+    let data: Vec<_> = items.into_iter()
+        .skip(offset)
+        .take(limit)
+        .map(|(ip, sessions, http, p2p, p2p_up, total, _)| IpStatsItem {
+            ip,
+            sessions,
+            http_bytes: http,
+            p2p_bytes: p2p,
+            p2p_up_bytes: p2p_up,
+            total,
+        })
+        .collect();
+
+    Json(IpStatsResponse { data, total: total_count })
+}
+
 async fn stats() -> Json<serde_json::Value> {
     let start = START_TIME.get_or_init(Instant::now);
     let uptime = start.elapsed().as_secs();
@@ -527,11 +861,22 @@ async fn stats() -> Json<serde_json::Value> {
     }))
 }
 
-async fn ws_handler(ws: WebSocketUpgrade) -> Response {
-    ws.on_upgrade(handle_socket)
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    headers: axum::http::HeaderMap,
+    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
+) -> Response {
+    // CF-Connecting-IP (Cloudflare) 우선, 없으면 소켓 IP
+    let client_ip = headers
+        .get("CF-Connecting-IP")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| addr.ip().to_string());
+
+    ws.on_upgrade(move |socket| handle_socket(socket, client_ip))
 }
 
-async fn handle_socket(socket: WebSocket) {
+async fn handle_socket(socket: WebSocket, client_ip: String) {
     let total = TOTAL_CONNECTIONS.fetch_add(1, Ordering::Relaxed);
     if total >= MAX_CONNECTIONS {
         TOTAL_CONNECTIONS.fetch_sub(1, Ordering::Relaxed);
@@ -542,7 +887,10 @@ async fn handle_socket(socket: WebSocket) {
         .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(),
         rand::random::<u32>());
 
-    SESSIONS.write().unwrap().insert(session_id.clone(), Session::default());
+    // Create session with client IP from socket connection
+    let mut new_session = Session::default();
+    new_session.user_ip = client_ip;
+    SESSIONS.write().unwrap().insert(session_id.clone(), new_session);
 
     let _ = std::panic::AssertUnwindSafe(handle_socket_inner(socket, session_id.clone()))
         .catch_unwind()
@@ -624,6 +972,11 @@ fn cleanup_session(session_id: &str) {
                 }
             }
 
+            // Unique IP
+            if !sess.user_ip.is_empty() {
+                stats.unique_ips.remove(&sess.user_ip);
+            }
+
             // Swarm
             if !sess.swarm_id.is_empty() {
                 if let Some(swarm) = stats.swarms.get_mut(&sess.swarm_id) {
@@ -632,6 +985,27 @@ fn cleanup_session(session_id: &str) {
                         stats.swarms.remove(&sess.swarm_id);
                     }
                 }
+            }
+        }
+
+        // 세션 종료 시 visitor_logs에 트래픽 정보 포함하여 저장
+        if let Ok(mut logs) = VISITOR_LOGS.lock() {
+            if logs.len() < 10000 {
+                logs.push(VisitorLog {
+                    ip: sess.user_ip,
+                    session_id: session_id.to_string(),
+                    swarm_id: sess.swarm_id,
+                    filename: sess.filename,
+                    device: sess.device,
+                    device_name: sess.device_name,
+                    browser: sess.browser,
+                    referrer: sess.referrer,
+                    net_type: sess.net_type,
+                    player_id: sess.player_id,
+                    http_bytes: sess.http_bytes,
+                    p2p_bytes: sess.p2p_bytes,
+                    p2p_up_bytes: sess.p2p_up_bytes,
+                });
             }
         }
     }
@@ -714,7 +1088,7 @@ fn handle_init(session_id: &str, msg: ClientMessage) {
     session.net_type = msg.net_type.unwrap_or_else(|| "unknown".to_string());
     session.browser = msg.browser.unwrap_or_default();
     session.referrer = extract_hostname(&msg.referrer.unwrap_or_default());
-    session.user_ip = msg.user_ip.unwrap_or_default();
+    // user_ip is set from CF-Connecting-IP header at connection time
     session.initialized = true;
 
     drop(sessions);
@@ -787,6 +1161,8 @@ fn handle_init(session_id: &str, msg: ClientMessage) {
             swarm.unique_ips.insert(sess.user_ip.clone());
         }
     }
+
+    // visitor_logs는 세션 종료 시 cleanup_session에서 저장 (트래픽 정보 포함)
 }
 
 fn handle_stats_update(session_id: &str, msg: ClientMessage) {
@@ -800,31 +1176,46 @@ fn handle_stats_update(session_id: &str, msg: ClientMessage) {
         return;
     }
 
-    let new_http = msg.http_bytes.unwrap_or(0);
-    let new_p2p = msg.p2p_bytes.unwrap_or(0);
-    let new_up = msg.p2p_up_bytes.unwrap_or(0);
     let new_peers = msg.peers.unwrap_or(0);
-
-    let http_diff = new_http.saturating_sub(session.http_bytes);
-    let p2p_diff = new_p2p.saturating_sub(session.p2p_bytes);
-    let up_diff = new_up.saturating_sub(session.p2p_up_bytes);
     let peer_diff = new_peers as i64 - session.peers as i64;
-
-    session.http_bytes = new_http;
-    session.p2p_bytes = new_p2p;
-    session.p2p_up_bytes = new_up;
     session.peers = new_peers;
+
+    // r* 필드만 사용 (delta) - 구 클라이언트는 무시됨
+    let http_diff = msg.r_http_bytes.unwrap_or(0);
+    let p2p_diff = msg.r_p2p_bytes.unwrap_or(0);
+    let up_diff = msg.r_p2p_up_bytes.unwrap_or(0);
+
+    // Update session cumulative bytes
+    session.http_bytes += http_diff;
+    session.p2p_bytes += p2p_diff;
+    session.p2p_up_bytes += up_diff;
+    // Update session delta bytes (for real-time speed display)
+    session.r_http_bytes = http_diff;
+    session.r_p2p_bytes = p2p_diff;
+    session.r_p2p_up_bytes = up_diff;
 
     let player_id = session.player_id;
     let swarm_id = session.swarm_id.clone();
+    let user_ip = session.user_ip.clone();
 
     drop(sessions);
+
+    // Update IP totals (서버 시작 후 IP별 누적)
+    let total_diff = http_diff + p2p_diff;
+    if total_diff > 0 {
+        let mut ip_totals = IP_TOTALS.write().unwrap();
+        *ip_totals.entry(user_ip).or_insert(0) += total_diff;
+    }
 
     // Update global stats
     let mut stats = P2P_STATS.write().unwrap();
     stats.http_bytes += http_diff;
     stats.p2p_bytes += p2p_diff;
     stats.p2p_up_bytes += up_diff;
+    // Delta tracking for current interval
+    stats.r_http_bytes += http_diff;
+    stats.r_p2p_bytes += p2p_diff;
+    stats.r_p2p_up_bytes += up_diff;
     if peer_diff > 0 {
         stats.peers += peer_diff as u64;
     } else {
@@ -835,9 +1226,17 @@ fn handle_stats_update(session_id: &str, msg: ClientMessage) {
     if player_id == 1 {
         stats.player1.http_bytes += http_diff;
         stats.player1.p2p_bytes += p2p_diff;
+        stats.player1.p2p_up_bytes += up_diff;
+        stats.player1.r_http_bytes += http_diff;
+        stats.player1.r_p2p_bytes += p2p_diff;
+        stats.player1.r_p2p_up_bytes += up_diff;
     } else if player_id == 2 {
         stats.player2.http_bytes += http_diff;
         stats.player2.p2p_bytes += p2p_diff;
+        stats.player2.p2p_up_bytes += up_diff;
+        stats.player2.r_http_bytes += http_diff;
+        stats.player2.r_p2p_bytes += p2p_diff;
+        stats.player2.r_p2p_up_bytes += up_diff;
     }
 
     // Swarm stats
@@ -845,6 +1244,10 @@ fn handle_stats_update(session_id: &str, msg: ClientMessage) {
         if let Some(swarm) = stats.swarms.get_mut(&swarm_id) {
             swarm.http_bytes += http_diff;
             swarm.p2p_bytes += p2p_diff;
+            swarm.p2p_up_bytes += up_diff;
+            swarm.r_http_bytes += http_diff;
+            swarm.r_p2p_bytes += p2p_diff;
+            swarm.r_p2p_up_bytes += up_diff;
         }
     }
 }

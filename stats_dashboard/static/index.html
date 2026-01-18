@@ -105,6 +105,56 @@
     canvas { max-height: 180px; }
     .section { font-size: 14px; color: #00d4ff; margin: 20px 0 10px; }
 
+    /* Responsive Table - 13 columns */
+    .responsive-table { width: 100%; table-layout: fixed; font-size: 11px; }
+    .responsive-table th, .responsive-table td { padding: 4px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .responsive-table th:nth-child(1) { width: 4%; }    /* 날짜/시간/월 */
+    .responsive-table th:nth-child(2) { width: 8%; }    /* 재생수 */
+    .responsive-table th:nth-child(3) { width: 8%; }    /* 방문자 */
+    .responsive-table th:nth-child(4) { width: 8%; }    /* tvmon */
+    .responsive-table th:nth-child(5) { width: 8%; }    /* tvwiki */
+    .responsive-table th:nth-child(6) { width: 8%; }    /* tvhot */
+    .responsive-table th:nth-child(7) { width: 8%; }    /* Mobile */
+    .responsive-table th:nth-child(8) { width: 7%; }    /* PC */
+    .responsive-table th:nth-child(9) { width: 7%; }    /* HTTP */
+    .responsive-table th:nth-child(10) { width: 7%; }   /* P2P↓ */
+    .responsive-table th:nth-child(11) { width: 6%; }   /* P2P↑ */
+    .responsive-table th:nth-child(12) { width: 8%; }   /* 합계 */
+    .responsive-table th:nth-child(13) { width: 5%; }   /* P2P% */
+    .responsive-table .clickable { cursor: pointer; color: #00d4ff; }
+    .responsive-table .clickable:hover { text-decoration: underline; }
+    @media (max-width: 768px) {
+      .responsive-table { font-size: 11px; }
+      .responsive-table th, .responsive-table td { padding: 4px 3px; }
+      .responsive-table .hide-mobile { display: none; }
+      .responsive-table th:nth-child(1) { width: 10%; }
+      .responsive-table th:nth-child(2) { width: 14%; }
+      .responsive-table th:nth-child(3) { width: 14%; }
+      .responsive-table th:nth-child(4) { width: 10%; }
+      .responsive-table th:nth-child(5) { width: 10%; }
+      .responsive-table th:nth-child(6) { width: 10%; }
+      .responsive-table th:nth-child(9) { width: 12%; }
+      .responsive-table th:nth-child(12) { width: 12%; }
+      .responsive-table th:nth-child(13) { width: 8%; }
+    }
+
+    /* Server Table - 9 columns with % widths */
+    #serverTable { width: 100%; table-layout: fixed; font-size: 12.5px; }
+    #serverTable th, #serverTable td { padding: 10px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+    #serverTable th:nth-child(1), #serverTable td:nth-child(1) { text-align: left; width: 3%; }   /* 서버 */
+    #serverTable th:nth-child(2) { width: 12%; }  /* HTTP */
+    #serverTable th:nth-child(3) { width: 12%; }  /* P2P↓ */
+    #serverTable th:nth-child(4) { width: 12%; }  /* P2P↑ */
+    #serverTable th:nth-child(5) { width: 13%; }  /* HTTP GB/s */
+    #serverTable th:nth-child(6) { width: 13%; }  /* P2P↓ GB/s */
+    #serverTable th:nth-child(7) { width: 13%; }  /* P2P↑ GB/s */
+    #serverTable th:nth-child(8) { width: 10%; }  /* P2P% */
+    #serverTable th:nth-child(9) { width: 12%; }  /* 접속자 */
+    @media (max-width: 768px) {
+      #serverTable { font-size: 12px; }
+      #serverTable th, #serverTable td { padding: 6px 4px; }
+    }
+
     .toggle {
       position: relative;
       width: 44px;
@@ -197,6 +247,368 @@
       z-index: 9999;
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Settings Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9998;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: linear-gradient(135deg, #1a1a3e 0%, #2d2d5a 100%);
+      border-radius: 12px;
+      padding: 24px;
+      min-width: 320px;
+      max-width: 400px;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .modal-header h3 { color: #00d4ff; font-size: 16px; }
+    .modal-close {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+    .modal-close:hover { color: #fff; }
+    .mode-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .mode-tab {
+      flex: 1;
+      padding: 10px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: #888;
+      cursor: pointer;
+      text-align: center;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .mode-tab.active {
+      background: rgba(0,212,255,0.2);
+      border-color: #00d4ff;
+      color: #00d4ff;
+    }
+    .mode-tab:hover:not(.active) { background: rgba(255,255,255,0.1); }
+    .modal-content { margin-bottom: 20px; }
+    .modal-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .modal-row:last-child { border-bottom: none; }
+    .modal-label { font-size: 13px; color: #ccc; }
+    .modal-row select {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: #fff;
+      font-size: 13px;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+    .modal-btn {
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      border: none;
+    }
+    .modal-btn.primary {
+      background: linear-gradient(90deg, #00d4ff, #0088ff);
+      color: #fff;
+    }
+    .modal-btn.secondary {
+      background: rgba(255,255,255,0.1);
+      color: #888;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .settings-icon {
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .settings-icon:hover { color: #00d4ff; background: rgba(0,212,255,0.1); }
+    .settings-icon svg { width: 18px; height: 18px; display: block; }
+
+    /* Premium Realtime Page Styles */
+    .realtime-container {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .realtime-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .realtime-header h2 {
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #fff 0%, #00d4ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .realtime-hero {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .hero-card {
+      background: linear-gradient(145deg, #1e1e4a 0%, #2a2a6a 50%, #1e1e4a 100%);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid rgba(0,212,255,0.2);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+    .hero-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #00d4ff, #00ff88, #00d4ff);
+      background-size: 200% 100%;
+      animation: shimmer 2s infinite linear;
+    }
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    .hero-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0,212,255,0.2);
+      border-color: rgba(0,212,255,0.4);
+    }
+    .hero-card .icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      font-size: 24px;
+    }
+    .hero-card .icon.users { background: linear-gradient(135deg, #00d4ff33, #00d4ff11); color: #00d4ff; }
+    .hero-card .icon.connect { background: linear-gradient(135deg, #00ff8833, #00ff8811); color: #00ff88; }
+    .hero-card .icon.p2p { background: linear-gradient(135deg, #ff6b6b33, #ff6b6b11); color: #ff6b6b; }
+    .hero-card .label {
+      font-size: 12px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    .hero-card .value {
+      font-size: 42px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #fff 0%, #00d4ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+    }
+    .hero-card.green .value {
+      background: linear-gradient(135deg, #fff 0%, #00ff88 100%);
+      -webkit-background-clip: text;
+    }
+    .hero-card.orange .value {
+      background: linear-gradient(135deg, #fff 0%, #ffa502 100%);
+      -webkit-background-clip: text;
+    }
+    .hero-card .sub {
+      font-size: 13px;
+      color: #666;
+      margin-top: 8px;
+    }
+    .realtime-section {
+      background: linear-gradient(135deg, #16163a 0%, #1e1e4a 100%);
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .realtime-section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #00d4ff;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .realtime-section-title::before {
+      content: '';
+      width: 4px;
+      height: 16px;
+      background: linear-gradient(180deg, #00d4ff, #0088ff);
+      border-radius: 2px;
+    }
+    .realtime-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+    }
+    .stat-card {
+      background: rgba(0,0,0,0.3);
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+      transition: all 0.2s ease;
+    }
+    .stat-card:hover {
+      background: rgba(0,212,255,0.08);
+      border-color: rgba(0,212,255,0.2);
+    }
+    .stat-card .stat-label {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .stat-card .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .stat-card .stat-percent {
+      font-size: 12px;
+      color: #00d4ff;
+      margin-top: 4px;
+    }
+    .stat-card.mobile .stat-value { color: #00d4ff; }
+    .stat-card.desktop .stat-value { color: #00ff88; }
+    .stat-card.tablet .stat-value { color: #ffa502; }
+    .stat-card.other .stat-value { color: #888; }
+    .device-bar {
+      display: flex;
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 16px;
+      background: rgba(0,0,0,0.3);
+    }
+    .device-bar .bar-segment {
+      height: 100%;
+      transition: width 0.5s ease;
+    }
+    .device-bar .bar-mobile { background: linear-gradient(90deg, #00d4ff, #0088ff); }
+    .device-bar .bar-desktop { background: linear-gradient(90deg, #00ff88, #00cc6a); }
+    .device-bar .bar-tablet { background: linear-gradient(90deg, #ffa502, #ff6b6b); }
+    .device-bar .bar-other { background: #444; }
+    .player-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .player-card {
+      background: linear-gradient(135deg, rgba(0,212,255,0.1) 0%, rgba(0,136,255,0.05) 100%);
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid rgba(0,212,255,0.15);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .player-card .player-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #00d4ff22, #00d4ff11);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: #00d4ff;
+    }
+    .player-card .player-info .player-name {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 4px;
+    }
+    .player-card .player-info .player-count {
+      font-size: 32px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .player-card.p2 {
+      background: linear-gradient(135deg, rgba(0,255,136,0.1) 0%, rgba(0,204,106,0.05) 100%);
+      border-color: rgba(0,255,136,0.15);
+    }
+    .player-card.p2 .player-icon {
+      background: linear-gradient(135deg, #00ff8822, #00ff8811);
+      color: #00ff88;
+    }
+    .compact-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .compact-item {
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 10px 14px;
+      border: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s;
+    }
+    .compact-item:hover {
+      background: rgba(0,212,255,0.08);
+      border-color: rgba(0,212,255,0.2);
+    }
+    .compact-item .item-name {
+      font-size: 12px;
+      color: #ccc;
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .compact-item .item-count {
+      font-size: 14px;
+      font-weight: 600;
+      color: #00d4ff;
+    }
+    @media (max-width: 900px) {
+      .realtime-hero { grid-template-columns: 1fr; }
+      .player-row { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -204,54 +616,334 @@
     <h1>P2P Stats</h1>
     <ul class="menu">
       <li class="menu-item"><a href="#dashboard" class="active">Dashboard</a></li>
+      <li class="menu-item"><a href="#traffic">트래픽</a></li>
       <li class="menu-item"><a href="#realtime">실시간</a></li>
+      <li class="menu-item"><a href="#sessions">접속자</a></li>
+      <li class="menu-item"><a href="#players">플레이어</a></li>
       <li class="menu-item"><a href="#live">시청 중</a></li>
+      <li class="menu-item"><a href="#popular">인기파일</a></li>
+      <li class="menu-item"><a href="#charts">원형통계</a></li>
+      <li class="menu-item"><a href="#summary">종합통계</a></li>
+      <li class="menu-item"><a href="#analysis">IP분석</a></li>
+      <li class="menu-item"><a href="#visitors">방문자로그</a></li>
       <li class="menu-item"><a href="#history">히스토리</a></li>
-      <li class="menu-item"><a href="#settings">설정</a></li>
     </ul>
+    <div id="serverTimeDisplay" style="padding:12px 14px;border-top:1px solid rgba(255,255,255,0.1);font-size:11px;color:#888">
+      <div style="color:#666;margin-bottom:4px">서버시간 (KST)</div>
+      <div id="serverTimeClock" style="color:#00d4ff;font-size:14px;font-weight:bold">--:--:--</div>
+      <div id="serverTimeDate" style="color:#aaa;margin-top:2px">----.--.--</div>
+    </div>
   </aside>
 
   <main class="main" id="app"></main>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalTitle">페이지 설정</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="mode-tabs">
+        <div class="mode-tab active" data-mode="realtime" onclick="selectMode('realtime')">실시간</div>
+        <div class="mode-tab" data-mode="cache" onclick="selectMode('cache')">캐싱</div>
+      </div>
+      <div class="modal-content" id="modalContent"></div>
+      <div class="modal-actions">
+        <button class="modal-btn secondary" onclick="closeModal()">취소</button>
+        <button class="modal-btn primary" onclick="saveModalSettings()">저장</button>
+      </div>
+    </div>
+  </div>
 
 <script>
 const app = document.getElementById('app');
 let page = 'dashboard';
 let chart = null;
 const history = { labels: [], viewers: [], uniqueUsers: [], http: [], p2p: [] };
+let activeInterval = null; // 현재 활성 인터벌 트래킹
+
+// ============================================
+// 서버시간 (KST) 공통 유틸리티
+// ============================================
+let serverTimeOffset = 9 * 60; // KST offset in minutes (UTC+9)
+let serverTimeDiff = 0; // 서버시간과 클라이언트시간 차이 (ms)
+
+// 서버시간 동기화
+async function syncServerTime() {
+  try {
+    const res = await fetch('/api/server-time');
+    const data = await res.json();
+    const serverTs = data.timestamp;
+    const clientTs = Date.now();
+    serverTimeDiff = serverTs - clientTs;
+    serverTimeOffset = data.offset * 60; // 분 단위
+    console.log('[ServerTime] Synced, diff:', serverTimeDiff, 'ms');
+  } catch (e) {
+    console.error('[ServerTime] Sync failed:', e);
+  }
+}
+
+// 현재 서버시간 가져오기
+function getServerTime() {
+  return new Date(Date.now() + serverTimeDiff);
+}
+
+// UTC 타임스탬프를 서버시간(KST)으로 변환
+function toServerTime(utcString) {
+  const d = new Date(utcString);
+  // UTC를 KST로 변환 (UTC + 9시간)
+  return new Date(d.getTime() + serverTimeOffset * 60 * 1000);
+}
+
+// 서버시간 기준 날짜 포맷 (월/일)
+function formatServerDate(utcString) {
+  const d = toServerTime(utcString);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+}
+
+// 서버시간 기준 시간 포맷 (HH:mm)
+function formatServerTime(utcString) {
+  const d = toServerTime(utcString);
+  return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+}
+
+// 서버시간 기준 날짜+시간 포맷
+function formatServerDateTime(utcString) {
+  const d = toServerTime(utcString);
+  return `${d.getUTCMonth()+1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+}
+
+// 서버시간 기준 날짜만 포맷 (7d/30d용)
+function formatServerDate(utcString) {
+  const d = toServerTime(utcString);
+  return `${d.getUTCMonth()+1}/${d.getUTCDate()}`;
+}
+
+// 서버시간 기준 월/일/시 추출
+function getServerDateParts(utcString) {
+  const d = toServerTime(utcString);
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+    day: d.getUTCDate(),
+    hour: d.getUTCHours(),
+    minute: d.getUTCMinutes()
+  };
+}
+
+// 서버시간 시계 업데이트 (KST = UTC+9)
+function updateServerTimeClock() {
+  // UTC 기준으로 KST 계산
+  const now = new Date(Date.now() + serverTimeDiff);
+  const kst = new Date(now.getTime() + serverTimeOffset * 60 * 1000);
+
+  const h = String(kst.getUTCHours()).padStart(2, '0');
+  const m = String(kst.getUTCMinutes()).padStart(2, '0');
+  const s = String(kst.getUTCSeconds()).padStart(2, '0');
+  const y = kst.getUTCFullYear();
+  const mon = String(kst.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(kst.getUTCDate()).padStart(2, '0');
+
+  const clockEl = document.getElementById('serverTimeClock');
+  const dateEl = document.getElementById('serverTimeDate');
+  if (clockEl) clockEl.textContent = `${h}:${m}:${s}`;
+  if (dateEl) dateEl.textContent = `${y}.${mon}.${d}`;
+}
+
+// 서버시간 초기화
+syncServerTime().then(() => updateServerTimeClock());
+setInterval(syncServerTime, 60000); // 1분마다 동기화
+setInterval(updateServerTimeClock, 1000); // 1초마다 시계 업데이트
+
+function clearActiveInterval() {
+  if (activeInterval) {
+    clearInterval(activeInterval);
+    activeInterval = null;
+  }
+}
+
+function setActiveInterval(fn, ms) {
+  clearActiveInterval();
+  console.log(`[Interval] Setting interval: ${ms}ms for page: ${page}`);
+  if (ms > 0) activeInterval = setInterval(fn, ms);
+}
 
 // Settings & Cache
 const defaultSettings = {
-  dashboard: { interval: 3000, cache: false },
-  realtime: { interval: 3000, cache: false },
-  live: { interval: 3000, cache: false },
-  cacheTTL: 3000
+  dashboard: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
+  traffic: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 5 },
+  realtime: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
+  sessions: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 5 },
+  players: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
+  live: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
+  charts: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 10 },
+  popular: { mode: 'realtime', realtimeInterval: 10000, cacheMinutes: 10 },
+  summary: { mode: 'realtime', realtimeInterval: 30000, cacheMinutes: 10 },
+  visitors: { mode: 'realtime', realtimeInterval: 10000, cacheMinutes: 5 },
+  history: { mode: 'cache', realtimeInterval: 30000, cacheMinutes: 10 }
 };
 
-let settings = JSON.parse(localStorage.getItem('p2p-settings')) || defaultSettings;
-const cache = { realtime: null, live: null, realtimeTime: 0, liveTime: 0 };
-
-function toggleSetting(el) {
-  el.classList.toggle('on');
+// Merge stored settings with defaults (deep merge per page)
+const storedSettings = JSON.parse(localStorage.getItem('p2p-settings-v3') || '{}');
+let settings = {};
+for (const page in defaultSettings) {
+  settings[page] = { ...defaultSettings[page], ...storedSettings[page] };
 }
 
-function saveSettings() {
-  settings = {
-    dashboard: {
-      interval: parseInt(document.getElementById('set-dashboard-interval').value),
-      cache: document.getElementById('set-dashboard-cache').classList.contains('on')
-    },
-    realtime: {
-      interval: parseInt(document.getElementById('set-realtime-interval').value),
-      cache: document.getElementById('set-realtime-cache').classList.contains('on')
-    },
-    live: {
-      interval: parseInt(document.getElementById('set-live-interval').value),
-      cache: document.getElementById('set-live-cache').classList.contains('on')
-    },
-    cacheTTL: parseInt(document.getElementById('set-cache-ttl').value)
-  };
-  localStorage.setItem('p2p-settings', JSON.stringify(settings));
+// Modal functions
+let currentModalPage = null;
+
+function openModal(pageName) {
+  currentModalPage = pageName;
+  const pageSettings = settings[pageName] || defaultSettings[pageName] || { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 };
+
+  document.getElementById('modalTitle').textContent = getPageTitle(pageName) + ' 설정';
+
+  // Set mode tabs
+  document.querySelectorAll('.mode-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.mode === pageSettings.mode);
+  });
+
+  // Set content based on mode
+  updateModalContent(pageSettings);
+
+  document.getElementById('settingsModal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('settingsModal').classList.remove('show');
+  currentModalPage = null;
+}
+
+function selectMode(mode) {
+  document.querySelectorAll('.mode-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.mode === mode);
+  });
+
+  const pageSettings = settings[currentModalPage] || defaultSettings[currentModalPage];
+  const tempSettings = { ...pageSettings, mode };
+  updateModalContent(tempSettings);
+}
+
+function updateModalContent(pageSettings) {
+  const modal = document.getElementById('modalContent');
+  if (pageSettings.mode === 'realtime') {
+    modal.innerHTML = `
+      <div class="modal-row">
+        <span class="modal-label">갱신 주기</span>
+        <select id="modalInterval">
+          <option value="1000" ${pageSettings.realtimeInterval===1000?'selected':''}>1초</option>
+          <option value="2000" ${pageSettings.realtimeInterval===2000?'selected':''}>2초</option>
+          <option value="3000" ${pageSettings.realtimeInterval===3000?'selected':''}>3초</option>
+          <option value="5000" ${pageSettings.realtimeInterval===5000?'selected':''}>5초</option>
+          <option value="10000" ${pageSettings.realtimeInterval===10000?'selected':''}>10초</option>
+          <option value="30000" ${pageSettings.realtimeInterval===30000?'selected':''}>30초</option>
+        </select>
+      </div>`;
+  } else {
+    modal.innerHTML = `
+      <div class="modal-row">
+        <span class="modal-label">캐시 유지 시간</span>
+        <select id="modalCacheMinutes">
+          <option value="1" ${pageSettings.cacheMinutes===1?'selected':''}>1분</option>
+          <option value="3" ${pageSettings.cacheMinutes===3?'selected':''}>3분</option>
+          <option value="5" ${pageSettings.cacheMinutes===5?'selected':''}>5분</option>
+          <option value="10" ${pageSettings.cacheMinutes===10?'selected':''}>10분</option>
+          <option value="30" ${pageSettings.cacheMinutes===30?'selected':''}>30분</option>
+          <option value="60" ${pageSettings.cacheMinutes===60?'selected':''}>1시간</option>
+        </select>
+      </div>
+      <div style="font-size:11px;color:#888;margin-top:8px">캐시된 데이터를 유지하는 시간입니다. 수동 새로고침 시에만 데이터가 갱신됩니다.</div>`;
+  }
+}
+
+function saveModalSettings() {
+  if (!currentModalPage) return;
+
+  const mode = document.querySelector('.mode-tab.active').dataset.mode;
+
+  if (!settings[currentModalPage]) {
+    settings[currentModalPage] = { ...defaultSettings[currentModalPage] };
+  }
+
+  settings[currentModalPage].mode = mode;
+  if (mode === 'realtime') {
+    const interval = parseInt(document.getElementById('modalInterval').value);
+    settings[currentModalPage].realtimeInterval = interval;
+  } else {
+    const cacheMinutes = parseInt(document.getElementById('modalCacheMinutes').value);
+    settings[currentModalPage].cacheMinutes = cacheMinutes;
+  }
+
+  localStorage.setItem('p2p-settings-v3', JSON.stringify(settings));
   showToast('설정이 저장되었습니다');
+  closeModal();
+
+  // Reload current page to apply settings
+  nav(page);
+}
+
+function getPageTitle(p) {
+  const titles = {
+    dashboard: 'Dashboard',
+    realtime: '실시간',
+    sessions: '접속자',
+    players: '플레이어',
+    live: '시청 중',
+    charts: '원형통계',
+    analysis: 'IP분석',
+    history: '히스토리'
+  };
+  return titles[p] || p;
+}
+
+function getPageInterval(pageName) {
+  const ps = settings[pageName] || defaultSettings[pageName];
+  if (!ps) return 3000;
+  // Cache mode: return 0 (no auto-refresh)
+  const interval = ps.mode === 'realtime' ? ps.realtimeInterval : 0;
+  console.log(`[getPageInterval] ${pageName}: mode=${ps.mode}, interval=${interval}ms`);
+  return interval;
+}
+
+function isPageCaching(pageName) {
+  const ps = settings[pageName] || defaultSettings[pageName];
+  return ps?.mode === 'cache';
+}
+
+// Settings button SVG
+const settingsIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+
+function settingsBtn(pageName) {
+  return `<button class="settings-icon" onclick="openModal('${pageName}')" title="설정">${settingsIconSvg}</button>`;
+}
+
+// 페이지별 캐시 상태 저장
+const cacheStatus = {};
+
+function modeIndicator(pageName) {
+  const ps = settings[pageName] || defaultSettings[pageName];
+  const mode = ps?.mode || 'realtime';
+  const color = mode === 'realtime' ? '#00ff88' : '#ffa502';
+  if (mode === 'realtime') {
+    const interval = ps?.realtimeInterval || 3000;
+    return `<span style="font-size:11px;color:${color};padding:4px 8px;background:rgba(255,255,255,0.05);border-radius:4px">실시간 ${interval/1000}초</span>`;
+  } else {
+    const minutes = ps?.cacheMinutes || 5;
+    return `<span style="font-size:11px;color:${color};padding:4px 8px;background:rgba(255,255,255,0.05);border-radius:4px">캐싱 ${minutes}분</span><span id="cacheInfo" style="font-size:11px;margin-left:8px;padding:4px 8px;background:rgba(255,255,255,0.05);border-radius:4px"></span>`;
+  }
+}
+
+function updateCacheInfo(pageName, isHit, time) {
+  cacheStatus[pageName] = { isHit, time };
+  const el = document.getElementById('cacheInfo');
+  if (el) {
+    const hitColor = isHit ? '#00ff88' : '#ff6b6b';
+    const hitText = isHit ? 'HIT' : 'MISS';
+    const timeStr = time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    el.innerHTML = `<span style="color:${hitColor}">${hitText}</span> <span style="color:#888">${timeStr}</span>`;
+  }
 }
 
 function showToast(msg) {
@@ -263,29 +955,81 @@ function showToast(msg) {
   setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 2000);
 }
 
-async function fetchWithCache(endpoint, pageKey) {
-  const now = Date.now();
-  const cacheKey = endpoint.split('?')[0].replace('/api/', '');
+// 클라이언트 캐시 (페이지 즉시 표시용)
+const clientCache = {};
 
-  if (settings[pageKey]?.cache && cache[cacheKey] && (now - cache[cacheKey + 'Time']) < settings.cacheTTL) {
-    return cache[cacheKey];
+function getClientCache(cacheKey) {
+  const cached = clientCache[cacheKey];
+  if (!cached) return null;
+  const ps = settings[page] || defaultSettings[page];
+  const ttlMs = (ps?.cacheMinutes || 5) * 60 * 1000;
+  if (Date.now() - cached.time > ttlMs) return null;
+  return cached.data;
+}
+
+function setClientCache(cacheKey, data) {
+  clientCache[cacheKey] = { data, time: Date.now() };
+}
+
+async function fetchWithCache(endpoint, pageKey) {
+  const ps = settings[pageKey] || defaultSettings[pageKey];
+  const useCache = ps?.mode === 'cache';
+  const cacheMinutes = ps?.cacheMinutes || 5;
+  const cacheKey = `${pageKey}:${endpoint}`;
+
+  // 캐싱 모드면 서버에 cache 파라미터 전달, 실시간이면 브라우저 캐시 방지
+  let url = endpoint;
+  const sep = endpoint.includes('?') ? '&' : '?';
+  if (useCache) {
+    url = `${endpoint}${sep}cache=${cacheMinutes}`;
+  } else {
+    url = `${endpoint}${sep}_t=${Date.now()}`;
   }
 
-  const r = await fetch(endpoint);
+  const r = await fetch(url);
+
+  // 캐시 상태 업데이트
+  if (useCache) {
+    const xCache = r.headers.get('x-cache');
+    const isHit = xCache === 'HIT';
+    updateCacheInfo(pageKey, isHit, new Date());
+  }
+
   const data = await r.json();
 
-  if (settings[pageKey]?.cache) {
-    cache[cacheKey] = data;
-    cache[cacheKey + 'Time'] = now;
+  // 클라이언트 캐시 저장
+  if (useCache) {
+    setClientCache(cacheKey, data);
   }
 
   return data;
 }
 
+// 캐시된 데이터로 즉시 렌더링 (있으면)
+function getCachedData(endpoint, pageKey) {
+  const ps = settings[pageKey] || defaultSettings[pageKey];
+  if (ps?.mode !== 'cache') return null;
+  return getClientCache(`${pageKey}:${endpoint}`);
+}
+
+// 공통 로드 함수: 캐시 있으면 즉시 렌더, 없으면 fetch
+async function loadWithCache(endpoint, pageKey, renderFn) {
+  const cached = getCachedData(endpoint, pageKey);
+  if (cached) {
+    renderFn(cached);
+    updateCacheInfo(pageKey, true, new Date());
+    return cached;
+  }
+  const data = await fetchWithCache(endpoint, pageKey);
+  renderFn(data);
+  return data;
+}
+
 function formatBytes(b) {
-  if (!b) return '0 B';
-  const u = ['B','KB','MB','GB','TB'];
-  const i = Math.floor(Math.log(b) / Math.log(1024));
+  if (!b || b < 0) return '0 B';
+  const u = ['B','KB','MB','GB','TB','PB','EB'];
+  let i = Math.floor(Math.log(b) / Math.log(1024));
+  if (i >= u.length) i = u.length - 1;
   return (b / Math.pow(1024, i)).toFixed(i > 2 ? 2 : 1) + ' ' + u[i];
 }
 
@@ -293,37 +1037,179 @@ function card(title, val, unit = '', cls = '') {
   return `<div class="card ${cls}"><h3>${title}</h3><div class="val">${val}<span class="unit">${unit}</span></div></div>`;
 }
 
-function cacheIndicator(pageKey) {
-  const active = settings[pageKey]?.cache;
-  return `<div class="cache-indicator ${active ? 'active' : ''}">${active ? 'Cache ON' : 'Cache OFF'}</div>`;
-}
-
-function intervalOptions(selected) {
-  return [1000,2000,3000,5000,10000,30000].map(v =>
-    `<option value="${v}" ${selected===v?'selected':''}>${v/1000}초</option>`
-  ).join('');
-}
-
 const pages = {
   dashboard: () => `
-    <div class="header"><h2>Dashboard</h2><div class="header-right">${cacheIndicator('dashboard')}<div id="status" class="status ok">Connected</div></div></div>
+    <div class="header"><h2>Dashboard</h2><div class="header-right">${modeIndicator('dashboard')}${settingsBtn('dashboard')}<div id="status" class="status ok">Connected</div></div></div>
     <div class="stats-grid" id="stats"></div>
     <div class="panel"><h3>실시간 트래픽</h3><canvas id="chart"></canvas></div>
   `,
+  traffic: () => `
+    <div class="header">
+      <h2>트래픽 분석</h2>
+      <div class="header-right">
+        <div style="display:flex;gap:8px;margin-right:15px">
+          <button class="period-btn" data-period="realtime" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">⚡실시간</button>
+          <button class="period-btn" data-period="1h" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">1시간</button>
+          <button class="period-btn" data-period="6h" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">6시간</button>
+          <button class="period-btn active" data-period="24h" style="padding:6px 12px;background:#00d4ff;border:1px solid #00d4ff;border-radius:4px;color:#fff;cursor:pointer;font-size:12px">24시간</button>
+          <button class="period-btn" data-period="7d" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">7일</button>
+          <button class="period-btn" data-period="30d" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">30일</button>
+        </div>
+        ${modeIndicator('traffic')}${settingsBtn('traffic')}
+      </div>
+    </div>
+    <div class="stats-grid" id="trafficSummary"></div>
+    <div class="panel" style="background:linear-gradient(135deg,rgba(0,212,255,.08),rgba(0,255,136,.05));border:1px solid rgba(0,212,255,.3)">
+      <h3 style="color:#00d4ff;margin-bottom:15px">트래픽 추이</h3>
+      <canvas id="trafficChart" height="280"></canvas>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px">
+      <div class="panel" style="background:linear-gradient(135deg,rgba(255,107,107,.08),rgba(0,255,136,.05));border:1px solid rgba(255,107,107,.3)">
+        <h3 style="color:#ff6b6b;margin-bottom:15px">트래픽 비율</h3>
+        <canvas id="trafficPieChart" height="220"></canvas>
+      </div>
+      <div class="panel" style="background:linear-gradient(135deg,rgba(138,43,226,.08),rgba(255,165,0,.05));border:1px solid rgba(138,43,226,.3)">
+        <h3 style="color:#8a2be2;margin-bottom:15px">CDN 서버별 접속자</h3>
+        <canvas id="serverChart" height="220"></canvas>
+      </div>
+    </div>
+    <div id="serverTrafficPanel" class="panel" style="margin-top:20px;background:linear-gradient(135deg,rgba(0,255,136,.08),rgba(0,212,255,.05));border:1px solid rgba(0,255,136,.3)">
+      <h3 style="color:#00ff88;margin-bottom:15px">서버별 트래픽</h3>
+      <canvas id="serverTrafficChart" height="280"></canvas>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;margin-top:20px">
+      <div class="panel" style="text-align:center;padding:20px"><div style="font-size:11px;color:#888;margin-bottom:8px">피크 시청자</div><div id="peakViewers" style="font-size:26px;font-weight:bold;color:#00d4ff">-</div></div>
+      <div class="panel" style="text-align:center;padding:20px"><div style="font-size:11px;color:#888;margin-bottom:8px">피크 유저</div><div id="peakUsers" style="font-size:26px;font-weight:bold;color:#00ff88">-</div></div>
+      <div class="panel" style="text-align:center;padding:20px"><div style="font-size:11px;color:#888;margin-bottom:8px">피크 피어</div><div id="peakPeers" style="font-size:26px;font-weight:bold;color:#ffa500">-</div></div>
+      <div class="panel" style="text-align:center;padding:20px"><div style="font-size:11px;color:#888;margin-bottom:8px">활성 스웜</div><div id="peakSwarms" style="font-size:26px;font-weight:bold;color:#8a2be2">-</div></div>
+    </div>
+    <div class="panel" style="margin-top:20px">
+      <h3 style="margin-bottom:15px">서버별 상세</h3>
+      <table id="serverTable"><thead><tr><th>서버</th><th>HTTP</th><th>P2P↓</th><th>P2P↑</th><th>HTTP GB/s</th><th>P2P↓ GB/s</th><th>P2P↑ GB/s</th><th>P2P%</th><th>접속자</th></tr></thead><tbody></tbody></table>
+    </div>
+  `,
   realtime: () => `
-    <div class="header"><h2>실시간 접속자</h2><div class="header-right">${cacheIndicator('realtime')}<div id="status" class="status ok">Connected</div></div></div>
-    <div class="stats-grid" id="mainStats"></div>
-    <div class="section">디바이스 타입</div>
-    <div class="stats-grid" id="deviceStats"></div>
-    <div class="section">기기</div>
-    <div class="stats-grid" id="deviceNameStats"></div>
-    <div class="section">브라우저</div>
-    <div class="stats-grid" id="browserStats"></div>
-    <div class="section">유입 경로</div>
-    <div class="stats-grid" id="refStats"></div>
+    <div class="realtime-container">
+      <div class="realtime-header">
+        <h2>실시간 접속자</h2>
+        <div class="header-right">${modeIndicator('realtime')}${settingsBtn('realtime')}<div id="status" class="status ok">Connected</div></div>
+      </div>
+      <div class="realtime-hero" id="heroStats"></div>
+      <div class="player-row" id="playerStats"></div>
+      <div class="realtime-section">
+        <div class="realtime-section-title">디바이스 분포</div>
+        <div class="realtime-grid" id="deviceStats"></div>
+        <div class="device-bar" id="deviceBar"></div>
+      </div>
+      <div class="realtime-section">
+        <div class="realtime-section-title">기기 정보</div>
+        <div class="compact-list" id="deviceNameStats"></div>
+      </div>
+      <div class="realtime-section">
+        <div class="realtime-section-title">브라우저</div>
+        <div class="compact-list" id="browserStats"></div>
+      </div>
+      <div class="realtime-section">
+        <div class="realtime-section-title">유입 경로</div>
+        <div class="compact-list" id="refStats"></div>
+      </div>
+    </div>
+  `,
+  sessions: () => `
+    <div class="header"><h2>접속자 목록</h2><div class="header-right">${modeIndicator('sessions')}${settingsBtn('sessions')}</div></div>
+    <div class="panel">
+      <div style="margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="sessionSearch" placeholder="IP, 파일명, 브라우저 검색..." style="flex:1;min-width:200px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:8px 12px;color:#fff;font-size:13px">
+        <button id="searchBtn" style="padding:8px 16px;background:#00d4ff;border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:13px">검색</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table id="sessionsTable" style="width:100%;font-size:11px;table-layout:fixed;border-collapse:collapse">
+          <thead id="sessHead"><tr>
+            <th id="thRecent" style="width:5%;cursor:pointer;text-align:center;white-space:nowrap">접속 ▼</th>
+            <th id="thConnected" style="width:4%;cursor:pointer;text-align:center;white-space:nowrap">유지</th>
+            <th style="width:9%">IP</th>
+            <th style="width:4%;text-align:center;white-space:nowrap">기기</th>
+            <th style="width:4%;text-align:center;white-space:nowrap">서버</th>
+            <th style="width:20%">파일명</th>
+            <th id="thSpeed" style="width:11%;cursor:pointer">속도</th>
+            <th id="thHttp" style="width:6%;cursor:pointer;text-align:right;padding-right:4px;white-space:nowrap">HTTP</th>
+            <th id="thP2p" style="width:6%;cursor:pointer;text-align:right;padding-right:4px;white-space:nowrap">P2P↓</th>
+            <th id="thP2pUp" style="width:6%;cursor:pointer;text-align:right;padding-right:4px;white-space:nowrap">P2P↑</th>
+            <th id="thTotal" style="width:7%;cursor:pointer;text-align:right;padding-right:4px;white-space:nowrap">총합</th>
+            <th id="thPeers" style="width:4%;cursor:pointer;text-align:center;white-space:nowrap">피어</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="page-nav">
+        <button id="prev">이전</button>
+        <span id="pageInfo">1 / 1</span>
+        <button id="next">다음</button>
+      </div>
+    </div>
+  `,
+  players: () => `
+    <div class="header"><h2>플레이어 비교</h2><div class="header-right">${modeIndicator('players')}${settingsBtn('players')}<div id="status" class="status ok">Connected</div></div></div>
+
+    <!-- 실시간 속도 비교 차트 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="panel">
+        <h3 style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+          <span style="color:#00d4ff">실시간 속도 비교</span>
+          <span style="font-size:11px;color:#666">(GB/s)</span>
+        </h3>
+        <canvas id="speedCompareChart" height="160"></canvas>
+      </div>
+      <div class="panel">
+        <h3 style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+          <span style="color:#00ff88">트래픽 점유율</span>
+        </h3>
+        <canvas id="trafficShareChart" height="160"></canvas>
+      </div>
+    </div>
+
+    <!-- 플레이어별 트래픽 비율 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="panel" style="border-top:3px solid #00d4ff">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3 style="color:#00d4ff;margin:0">Player 1</h3>
+          <span id="p1Viewers" style="font-size:20px;font-weight:bold;color:#fff">0</span>
+        </div>
+        <div style="display:flex;gap:20px;align-items:center">
+          <div style="flex:0 0 120px"><canvas id="player1Pie" height="120"></canvas></div>
+          <div id="p1Legend" style="flex:1;font-size:12px;color:#aaa"></div>
+        </div>
+      </div>
+      <div class="panel" style="border-top:3px solid #ff6b6b">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3 style="color:#ff6b6b;margin:0">Player 2</h3>
+          <span id="p2Viewers" style="font-size:20px;font-weight:bold;color:#fff">0</span>
+        </div>
+        <div style="display:flex;gap:20px;align-items:center">
+          <div style="flex:0 0 120px"><canvas id="player2Pie" height="120"></canvas></div>
+          <div id="p2Legend" style="flex:1;font-size:12px;color:#aaa"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 상세 통계 테이블 -->
+    <div class="panel">
+      <h3 style="margin-bottom:15px">상세 통계</h3>
+      <table id="playerStatsTable" style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="border-bottom:2px solid #333">
+            <th style="text-align:left;padding:10px 8px;color:#888">항목</th>
+            <th style="text-align:right;padding:10px 8px;color:#00d4ff;width:25%">Player 1</th>
+            <th style="text-align:right;padding:10px 8px;color:#ff6b6b;width:25%">Player 2</th>
+            <th style="text-align:right;padding:10px 8px;color:#888;width:20%">비율</th>
+          </tr>
+        </thead>
+        <tbody id="playerStatsBody"></tbody>
+      </table>
+    </div>
   `,
   live: () => `
-    <div class="header"><h2>시청 중</h2><div class="header-right">${cacheIndicator('live')}<div id="status" class="status ok">Connected</div></div></div>
+    <div class="header"><h2>시청 중</h2><div class="header-right">${modeIndicator('live')}${settingsBtn('live')}<div id="status" class="status ok">Connected</div></div></div>
     <div class="panel">
       <table id="liveTable">
         <thead><tr><th>#</th><th>파일명</th><th>Swarm</th><th>시청자</th><th>HTTP</th><th>P2P</th><th>P2P%</th></tr></thead>
@@ -336,10 +1222,193 @@ const pages = {
       </div>
     </div>
   `,
+  popular: () => `
+    <div class="header"><h2>인기 파일</h2><div class="header-right">${modeIndicator('popular')}${settingsBtn('popular')}</div></div>
+    <div class="panel">
+      <div style="margin-bottom:15px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="period-btn" data-period="daily" style="padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:#888;cursor:pointer">일간</button>
+        <button class="period-btn" data-period="weekly" style="padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:#888;cursor:pointer">주간</button>
+        <button class="period-btn" data-period="monthly" style="padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:#888;cursor:pointer">월간</button>
+        <button class="period-btn active" data-period="all" style="padding:8px 16px;background:#00d4ff;border:1px solid #00d4ff;border-radius:6px;color:#fff;cursor:pointer">전체</button>
+      </div>
+      <table id="popularTable">
+        <thead><tr><th>#</th><th>파일명</th><th>조회수</th><th>HTTP</th><th>P2P</th><th>P2P%</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="page-nav">
+        <button id="prev">이전</button>
+        <span id="pageInfo">1 / 1</span>
+        <button id="next">다음</button>
+      </div>
+    </div>
+  `,
+  charts: () => `
+    <div class="header"><h2>통계 차트</h2><div class="header-right">${modeIndicator('charts')}${settingsBtn('charts')}</div></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px">
+      <div class="panel" style="background:linear-gradient(135deg,rgba(0,212,255,0.1),rgba(0,0,0,0.3));border:1px solid rgba(0,212,255,0.3)">
+        <h3 style="color:#00d4ff;display:flex;align-items:center;gap:8px"><span style="font-size:20px">📊</span> 트래픽 비율</h3>
+        <canvas id="trafficPie" height="220"></canvas>
+        <div id="trafficLegend" style="display:flex;justify-content:center;gap:20px;margin-top:12px;font-size:12px"></div>
+      </div>
+      <div class="panel" style="background:linear-gradient(135deg,rgba(0,255,136,0.1),rgba(0,0,0,0.3));border:1px solid rgba(0,255,136,0.3)">
+        <h3 style="color:#00ff88;display:flex;align-items:center;gap:8px"><span style="font-size:20px">📱</span> 디바이스</h3>
+        <canvas id="devicePie" height="220"></canvas>
+      </div>
+      <div class="panel" style="background:linear-gradient(135deg,rgba(255,107,107,0.1),rgba(0,0,0,0.3));border:1px solid rgba(255,107,107,0.3)">
+        <h3 style="color:#ff6b6b;display:flex;align-items:center;gap:8px"><span style="font-size:20px">🎮</span> 플레이어별 시청자</h3>
+        <canvas id="playerPie" height="220"></canvas>
+      </div>
+      <div class="panel" style="background:linear-gradient(135deg,rgba(255,165,2,0.1),rgba(0,0,0,0.3));border:1px solid rgba(255,165,2,0.3)">
+        <h3 style="color:#ffa502;display:flex;align-items:center;gap:8px"><span style="font-size:20px">🌐</span> 브라우저</h3>
+        <canvas id="browserPie" height="220"></canvas>
+      </div>
+      <div class="panel" style="background:linear-gradient(135deg,rgba(165,94,234,0.1),rgba(0,0,0,0.3));border:1px solid rgba(165,94,234,0.3)">
+        <h3 style="color:#a55eea;display:flex;align-items:center;gap:8px"><span style="font-size:20px">🔗</span> 유입 경로</h3>
+        <canvas id="referrerPie" height="220"></canvas>
+      </div>
+      <div class="panel" style="background:linear-gradient(135deg,rgba(38,222,129,0.1),rgba(0,0,0,0.3));border:1px solid rgba(38,222,129,0.3)">
+        <h3 style="color:#26de81;display:flex;align-items:center;gap:8px"><span style="font-size:20px">📲</span> 기기명 Top 5</h3>
+        <canvas id="deviceNameBar" height="220"></canvas>
+      </div>
+    </div>
+  `,
+  summary: () => `
+    <div class="header">
+      <h2>종합 통계</h2>
+      <div class="header-right">
+        <div style="display:flex;gap:6px;margin-right:12px">
+          <button class="summary-period-btn active" data-view="daily" style="padding:5px 10px;background:#00d4ff;border:1px solid #00d4ff;border-radius:4px;color:#fff;cursor:pointer;font-size:11px">일별</button>
+          <button class="summary-period-btn" data-view="monthly" style="padding:5px 10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:11px">월별</button>
+        </div>
+        ${modeIndicator('summary')}${settingsBtn('summary')}
+      </div>
+    </div>
+
+    <!-- 브레드크럼 -->
+    <div id="breadcrumb" style="margin-bottom:12px;font-size:12px;color:#888"></div>
+
+    <!-- 고급 요약 카드 패널 -->
+    <div class="panel" style="margin-bottom:16px;padding:0;overflow:hidden;background:linear-gradient(135deg,#1a1a3e 0%,#0d0d1f 100%)">
+      <!-- 탭 헤더 -->
+      <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.1)">
+        <button class="summary-tab active" data-tab="today" style="flex:1;padding:14px 20px;background:transparent;border:none;color:#00d4ff;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid #00d4ff;transition:all .2s">
+          <span style="font-size:16px;margin-right:6px">📅</span>오늘
+        </button>
+        <button class="summary-tab" data-tab="week" style="flex:1;padding:14px 20px;background:transparent;border:none;color:#666;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:all .2s">
+          <span style="font-size:16px;margin-right:6px">📊</span>주간
+        </button>
+        <button class="summary-tab" data-tab="month" style="flex:1;padding:14px 20px;background:transparent;border:none;color:#666;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:all .2s">
+          <span style="font-size:16px;margin-right:6px">📈</span>월간
+        </button>
+      </div>
+      <!-- 카드 컨텐츠 -->
+      <div id="summaryCards" style="padding:20px">
+        <div style="text-align:center;color:#666;padding:40px">로딩 중...</div>
+      </div>
+    </div>
+
+    <!-- 테이블 -->
+    <div class="panel">
+      <h3 style="color:#00d4ff;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+        <span id="tableTitle">일별 통계</span>
+        <span id="tablePeriod" style="font-size:11px;color:#888;font-weight:normal"></span>
+      </h3>
+      <div style="overflow-x:auto">
+        <table id="summaryTable" class="responsive-table" style="font-size:12px">
+          <thead id="summaryTableHead"></thead>
+          <tbody><tr><td colspan="13" style="text-align:center;color:#888">로딩 중...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  `,
+  analysis: () => `
+    <div class="header">
+      <h2>IP별 사용량 분석</h2>
+    </div>
+    <!-- 기간 버튼 -->
+    <div id="analysisPeriodBtns" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
+      <button class="analysis-period-btn active" data-period="realtime" style="padding:6px 12px;background:#00d4ff;border:1px solid #00d4ff;border-radius:4px;color:#fff;cursor:pointer;font-size:12px">실시간</button>
+      <button class="analysis-period-btn" data-period="1h" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">1시간</button>
+      <button class="analysis-period-btn" data-period="6h" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">6시간</button>
+      <button class="analysis-period-btn" data-period="today" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">오늘</button>
+      <button class="analysis-period-btn" data-period="yesterday" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">어제</button>
+      <button class="analysis-period-btn" data-period="7d" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">7일</button>
+      <button class="analysis-period-btn" data-period="this_week" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">이번주</button>
+      <button class="analysis-period-btn" data-period="last_week" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">지난주</button>
+      <button class="analysis-period-btn" data-period="30d" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">30일</button>
+      <button class="analysis-period-btn" data-period="this_month" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">이번달</button>
+      <button class="analysis-period-btn" data-period="last_month" style="padding:6px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#888;cursor:pointer;font-size:12px">지난달</button>
+    </div>
+    <!-- 요약 카드 -->
+    <div id="analysisCards" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
+      <div class="card" style="background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(0,0,0,0.3));border:1px solid rgba(0,212,255,0.3)">
+        <div class="label">고유 IP</div>
+        <div class="val" id="analysisUniqueIps">-</div>
+      </div>
+      <div class="card" style="background:linear-gradient(135deg,rgba(253,150,68,0.15),rgba(0,0,0,0.3));border:1px solid rgba(253,150,68,0.3)">
+        <div class="label">세션수</div>
+        <div class="val" id="analysisTotalSessions" style="background:linear-gradient(90deg,#fd9644,#ffa502);-webkit-background-clip:text">-</div>
+      </div>
+      <div class="card realtime-only" style="background:linear-gradient(135deg,rgba(255,107,107,0.15),rgba(0,0,0,0.3));border:1px solid rgba(255,107,107,0.3)">
+        <div class="label">HTTP</div>
+        <div class="val" id="analysisTotalHttp" style="background:linear-gradient(90deg,#ff6b6b,#ee5a5a);-webkit-background-clip:text">-</div>
+      </div>
+      <div class="card realtime-only" style="background:linear-gradient(135deg,rgba(0,255,136,0.15),rgba(0,0,0,0.3));border:1px solid rgba(0,255,136,0.3)">
+        <div class="label">P2P Down</div>
+        <div class="val" id="analysisTotalP2p" style="background:linear-gradient(90deg,#00ff88,#26de81);-webkit-background-clip:text">-</div>
+      </div>
+      <div class="card realtime-only" style="background:linear-gradient(135deg,rgba(38,222,129,0.15),rgba(0,0,0,0.3));border:1px solid rgba(38,222,129,0.3)">
+        <div class="label">P2P Up</div>
+        <div class="val" id="analysisTotalP2pUp" style="background:linear-gradient(90deg,#26de81,#20bf6b);-webkit-background-clip:text">-</div>
+      </div>
+    </div>
+    <!-- IP 테이블 -->
+    <div class="panel">
+      <h3 style="color:#00d4ff;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+        <span>IP별 트래픽</span>
+        <span id="analysisCount" style="font-size:11px;color:#888;font-weight:normal"></span>
+      </h3>
+      <div style="overflow-x:auto">
+        <table id="analysisTable" style="width:100%;font-size:12px">
+          <thead id="analysisTableHead"></thead>
+          <tbody><tr><td colspan="8" style="text-align:center;color:#888">로딩 중...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  `,
+  visitors: () => `
+    <div class="header"><h2>방문자 로그</h2>
+      <div class="header-right">
+        <select id="visitorPeriod">
+          <option value="1h">1시간</option>
+          <option value="6h">6시간</option>
+          <option value="1d" selected>24시간</option>
+          <option value="7d">7일</option>
+        </select>
+        ${modeIndicator('visitors')}${settingsBtn('visitors')}
+      </div>
+    </div>
+    <div class="panel">
+      <div style="margin-bottom:12px;display:flex;gap:10px;align-items:center">
+        <input type="text" id="ipSearch" placeholder="IP 검색..." style="flex:1;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:8px 12px;color:#fff;font-size:13px">
+        <button id="searchBtn" style="padding:8px 16px;background:#00d4ff;border:none;border-radius:6px;color:#fff;cursor:pointer">검색</button>
+      </div>
+      <table id="visitorsTable">
+        <thead><tr><th style="width:50px">#</th><th style="width:150px">시간</th><th style="width:120px">IP</th><th style="width:25%">파일명</th><th>디바이스</th><th>브라우저</th><th>유입경로</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="page-nav">
+        <button id="prev">이전</button>
+        <span id="pageInfo">1 페이지</span>
+        <button id="next">다음</button>
+      </div>
+    </div>
+  `,
   history: () => `
     <div class="header">
       <h2>히스토리</h2>
       <div class="header-right">
+        ${modeIndicator('history')}${settingsBtn('history')}
         <select id="historyPeriod" onchange="loadHistory()">
           <option value="1h">1시간</option>
           <option value="6h">6시간</option>
@@ -350,90 +1419,80 @@ const pages = {
       </div>
     </div>
     <div class="panel"><h3>시청자 추이</h3><canvas id="historyChart"></canvas></div>
-    <div class="panel"><h3>트래픽 추이 (TB)</h3><canvas id="trafficChart"></canvas></div>
-  `,
-  settings: () => `
-    <div class="header"><h2>설정</h2></div>
-    <div class="settings-grid">
-      <div class="settings-panel">
-        <h3>Dashboard</h3>
-        <div class="setting-row">
-          <div class="setting-label">업데이트 주기</div>
-          <select id="set-dashboard-interval">${intervalOptions(settings.dashboard.interval)}</select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">캐싱</div>
-          <div class="toggle ${settings.dashboard.cache?'on':''}" id="set-dashboard-cache" onclick="toggleSetting(this)"></div>
-        </div>
-      </div>
-      <div class="settings-panel">
-        <h3>실시간</h3>
-        <div class="setting-row">
-          <div class="setting-label">업데이트 주기</div>
-          <select id="set-realtime-interval">${intervalOptions(settings.realtime.interval)}</select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">캐싱</div>
-          <div class="toggle ${settings.realtime.cache?'on':''}" id="set-realtime-cache" onclick="toggleSetting(this)"></div>
-        </div>
-      </div>
-      <div class="settings-panel">
-        <h3>시청 중</h3>
-        <div class="setting-row">
-          <div class="setting-label">업데이트 주기</div>
-          <select id="set-live-interval">${intervalOptions(settings.live.interval)}</select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">캐싱</div>
-          <div class="toggle ${settings.live.cache?'on':''}" id="set-live-cache" onclick="toggleSetting(this)"></div>
-        </div>
-      </div>
-      <div class="settings-panel">
-        <h3>캐시</h3>
-        <div class="setting-row">
-          <div class="setting-label">유지 시간</div>
-          <select id="set-cache-ttl">${intervalOptions(settings.cacheTTL)}</select>
-        </div>
-      </div>
-    </div>
-    <button class="save-btn" onclick="saveSettings()">저장</button>
+    <div class="panel"><h3>트래픽 추이 (TB)</h3><canvas id="historyTrafficChart"></canvas></div>
   `
 };
 
 function nav(p) {
+  console.log('[nav] Navigating to:', p);
+  clearActiveInterval(); // 페이지 전환 시 인터벌 정리
   page = p;
   document.querySelectorAll('.menu-item a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + p));
-  app.innerHTML = pages[p]();
+  if (!pages[p]) {
+    console.error('[nav] Page not found:', p);
+    p = 'dashboard';
+  }
+  try {
+    app.innerHTML = pages[p]();
+  } catch(e) {
+    console.error('[nav] Error rendering page:', e);
+    return;
+  }
   if (p === 'dashboard') initDashboard();
+  else if (p === 'traffic') initTraffic();
   else if (p === 'realtime') initRealtime();
+  else if (p === 'sessions') initSessions();
+  else if (p === 'players') initPlayers();
   else if (p === 'live') initLive();
+  else if (p === 'popular') initPopular();
+  else if (p === 'charts') initCharts();
+  else if (p === 'summary') initSummary();
+  else if (p === 'analysis') initAnalysis();
+  else if (p === 'visitors') initVisitors();
   else if (p === 'history') initHistory();
 }
 
 async function initDashboard() {
+  let speedData = { httpGbps: '0', p2pGbps: '0', p2pUpGbps: '0' };
+  function render(d) {
+    if (d.error) { document.getElementById('status').className = 'status err'; document.getElementById('status').textContent = 'Offline'; return; }
+    document.getElementById('status').className = 'status ok';
+    document.getElementById('status').textContent = 'Connected';
+    document.getElementById('stats').innerHTML = `
+      ${card('고유 유저', d.total?.uniqueUsers || 0, '명')}
+      ${card('연결 수', d.total?.viewers || 0, '개')}
+      ${card('Swarms', d.activeSwarms || 0, '개')}
+      ${card('P2P 효율', d.total?.p2pRatio || '0', '%', 'p2p')}
+      ${card('HTTP', formatBytes(d.total?.httpBytes || 0), '', 'http')}
+      ${card('P2P↓', formatBytes(d.total?.p2pBytes || 0), '', 'p2p')}
+      ${card('P2P↑', formatBytes(d.total?.p2pUpBytes || 0), '', 'p2p')}
+      ${card('HTTP 속도', speedData.httpGbps, ' GB/s', 'http')}
+      ${card('P2P↓ 속도', speedData.p2pGbps, ' GB/s', 'p2p')}
+      ${card('P2P↑ 속도', speedData.p2pUpGbps, ' GB/s', 'p2p')}
+    `;
+    // 서버시간(KST) 기준
+    const now = getServerTime();
+    const kst = new Date(now.getTime() + serverTimeOffset * 60 * 1000);
+    const t = String(kst.getUTCHours()).padStart(2,'0') + ':' + String(kst.getUTCMinutes()).padStart(2,'0') + ':' + String(kst.getUTCSeconds()).padStart(2,'0');
+    history.labels.push(t);
+    history.viewers.push(d.total?.viewers || 0);
+    history.uniqueUsers.push(d.total?.uniqueUsers || 0);
+    history.http.push((d.total?.httpBytes || 0) / 1024 / 1024 / 1024 / 1024);
+    history.p2p.push((d.total?.p2pBytes || 0) / 1024 / 1024 / 1024 / 1024);
+    if (history.labels.length > 30) { history.labels.shift(); history.viewers.shift(); history.uniqueUsers.shift(); history.http.shift(); history.p2p.shift(); }
+    if (chart) chart.update('none');
+  }
   async function update() {
     try {
-      const d = await fetchWithCache('/api/realtime', 'dashboard');
-      if (d.error) { document.getElementById('status').className = 'status err'; document.getElementById('status').textContent = 'Offline'; return; }
-      document.getElementById('status').className = 'status ok';
-      document.getElementById('status').textContent = 'Connected';
-      document.getElementById('stats').innerHTML = `
-        ${card('고유 유저', d.total?.uniqueUsers || 0, '명')}
-        ${card('연결 수', d.total?.viewers || 0, '개')}
-        ${card('Swarms', d.activeSwarms || 0, '개')}
-        ${card('P2P 효율', d.total?.p2pRatio || '0', '%', 'p2p')}
-        ${card('HTTP', formatBytes(d.total?.httpBytes || 0), '', 'http')}
-        ${card('P2P Down', formatBytes(d.total?.p2pBytes || 0), '', 'p2p')}
-        ${card('P2P Up', formatBytes(d.total?.p2pUpBytes || 0), '', 'p2p')}
-      `;
-      const t = new Date().toLocaleTimeString();
-      history.labels.push(t);
-      history.viewers.push(d.total?.viewers || 0);
-      history.uniqueUsers.push(d.total?.uniqueUsers || 0);
-      history.http.push((d.total?.httpBytes || 0) / 1024 / 1024 / 1024 / 1024);
-      history.p2p.push((d.total?.p2pBytes || 0) / 1024 / 1024 / 1024 / 1024);
-      if (history.labels.length > 30) { history.labels.shift(); history.viewers.shift(); history.uniqueUsers.shift(); history.http.shift(); history.p2p.shift(); }
-      if (chart) chart.update('none');
+      // 속도 데이터 가져오기
+      const trafficResp = await fetch('/api/traffic?period=realtime');
+      const trafficData = await trafficResp.json();
+      if (trafficData.totals) {
+        speedData.httpGbps = trafficData.totals.httpGbps || '0';
+        speedData.p2pGbps = trafficData.totals.p2pGbps || '0';
+        speedData.p2pUpGbps = trafficData.totals.p2pUpGbps || '0';
+      }
+      await loadWithCache('/api/realtime', 'dashboard', render);
     } catch (e) { console.error(e); }
   }
   update();
@@ -456,74 +1515,1604 @@ async function initDashboard() {
       }
     }
   });
-  const intv = setInterval(update, settings.dashboard.interval);
-  window.addEventListener('hashchange', () => { if (page !== 'dashboard') clearInterval(intv); }, { once: true });
+  setActiveInterval(update, getPageInterval('dashboard'));
+}
+
+// 트래픽 페이지 차트 인스턴스
+let trafficLineChart = null, trafficRatioPie = null, serverBarChart = null, serverTrafficChart = null;
+
+function initTraffic() {
+  let currentPeriod = '24h';
+
+  // 페이지 전환 시 이전 차트 인스턴스 정리
+  if (trafficLineChart) { trafficLineChart.destroy(); trafficLineChart = null; }
+  if (trafficRatioPie) { trafficRatioPie.destroy(); trafficRatioPie = null; }
+  if (serverBarChart) { serverBarChart.destroy(); serverBarChart = null; }
+  if (serverTrafficChart) { serverTrafficChart.destroy(); serverTrafficChart = null; }
+
+  function render(data, realtimeData = null) {
+    const timeline = data.timeline || [];
+    const totals = data.totals || {};
+    const servers = data.servers || [];
+    const isRealtime = currentPeriod === 'realtime';
+
+    // 요약 카드 - 실시간이면 현재 상태, 아니면 기간 총합
+    if (isRealtime && realtimeData) {
+      const rt = realtimeData;
+      const httpBytes = (rt.player1?.httpBytes || 0) + (rt.player2?.httpBytes || 0);
+      const p2pBytes = (rt.player1?.p2pBytes || 0) + (rt.player2?.p2pBytes || 0);
+      const p2pUpBytes = (rt.player1?.p2pUpBytes || 0) + (rt.player2?.p2pUpBytes || 0);
+      const totalTraffic = httpBytes + p2pBytes;
+      const p2pRatio = totalTraffic > 0 ? ((p2pBytes / totalTraffic) * 100).toFixed(1) : '0';
+      const httpGbps = totals.httpGbps || '0';
+      const p2pGbps = totals.p2pGbps || '0';
+      const p2pUpGbps = totals.p2pUpGbps || '0';
+
+      document.getElementById('trafficSummary').innerHTML = `
+        ${card('현재 시청자', (rt.total?.viewers || 0).toLocaleString(), '명', 'http')}
+        ${card('현재 피어', (rt.total?.peers || 0).toLocaleString(), '개', 'p2p')}
+        ${card('활성 스웜', (rt.activeSwarms || 0).toLocaleString(), '개', 'p2p')}
+        ${card('P2P 비율', p2pRatio, '%', 'p2p')}
+        ${card('HTTP 속도', httpGbps, ' GB/s', 'http')}
+        ${card('P2P↓ 속도', p2pGbps, ' GB/s', 'p2p')}
+        ${card('P2P↑ 속도', p2pUpGbps, ' GB/s', 'p2p')}
+      `;
+
+      // 피크 대신 현재 값
+      document.getElementById('peakViewers').textContent = (rt.total?.viewers || 0).toLocaleString();
+      document.getElementById('peakUsers').textContent = (rt.total?.uniqueUsers || 0).toLocaleString();
+      document.getElementById('peakPeers').textContent = (rt.total?.peers || 0).toLocaleString();
+      document.getElementById('peakSwarms').textContent = (rt.activeSwarms || 0).toLocaleString();
+    } else {
+      const totalHttp = totals.totalHttp || 0;
+      const totalP2p = totals.totalP2p || 0;
+      const totalP2pUp = totals.totalP2pUp || 0;
+      const totalTraffic = totalHttp + totalP2p;
+      const p2pRatio = totalTraffic > 0 ? ((totalP2p / totalTraffic) * 100).toFixed(1) : '0';
+
+      const httpGbps = totals.httpGbps || '0';
+      const p2pGbps = totals.p2pGbps || '0';
+      const p2pUpGbps = totals.p2pUpGbps || '0';
+      document.getElementById('trafficSummary').innerHTML = `
+        ${card('HTTP 트래픽', formatBytes(totalHttp), '', 'http')}
+        ${card('P2P 다운로드', formatBytes(totalP2p), '', 'p2p')}
+        ${card('P2P 업로드', formatBytes(totalP2pUp), '', 'p2p')}
+        ${card('P2P 비율', p2pRatio, '%', 'p2p')}
+        ${card('HTTP 속도', httpGbps, ' GB/s', 'http')}
+        ${card('P2P↓ 속도', p2pGbps, ' GB/s', 'p2p')}
+        ${card('P2P↑ 속도', p2pUpGbps, ' GB/s', 'p2p')}
+      `;
+
+      // 피크 지표
+      document.getElementById('peakViewers').textContent = (totals.peakViewers || 0).toLocaleString();
+      document.getElementById('peakUsers').textContent = (totals.peakUsers || 0).toLocaleString();
+      document.getElementById('peakPeers').textContent = (totals.peakPeers || 0).toLocaleString();
+      document.getElementById('peakSwarms').textContent = (totals.peakSwarms || 0).toLocaleString();
+    }
+
+    // 트래픽 추이 차트 (서버시간 KST) - 7d/30d는 날짜, 나머지는 시간
+    const isDailyPeriod = ['7d', '30d'].includes(currentPeriod);
+    const labels = timeline.map(t => isDailyPeriod ? formatServerDate(t.ts) : formatServerTime(t.ts));
+    const httpData = timeline.map(t => (t.httpBytes || 0) / 1024 / 1024 / 1024 / 1024); // TB
+    const p2pData = timeline.map(t => (t.p2pBytes || 0) / 1024 / 1024 / 1024 / 1024);
+    const viewersData = timeline.map(t => t.viewers || 0);
+
+    if (!trafficLineChart) {
+      trafficLineChart = new Chart(document.getElementById('trafficChart'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'HTTP (TB)', data: httpData, borderColor: '#ff6b6b', backgroundColor: 'rgba(255,107,107,.1)', fill: true, tension: 0.4, yAxisID: 'y' },
+            { label: 'P2P (TB)', data: p2pData, borderColor: '#00ff88', backgroundColor: 'rgba(0,255,136,.1)', fill: true, tension: 0.4, yAxisID: 'y' },
+            { label: '시청자', data: viewersData, borderColor: '#00d4ff', borderDash: [5,5], fill: false, tension: 0.4, yAxisID: 'y1' }
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { labels: { color: '#fff' } } },
+          scales: {
+            x: { ticks: { color: '#888', maxRotation: 0 }, grid: { color: '#333' } },
+            y: { type: 'linear', position: 'left', ticks: { color: '#888' }, grid: { color: '#333' }, title: { display: true, text: 'TB', color: '#888' } },
+            y1: { type: 'linear', position: 'right', ticks: { color: '#00d4ff' }, grid: { drawOnChartArea: false }, title: { display: true, text: '시청자', color: '#00d4ff' } }
+          }
+        }
+      });
+    } else {
+      trafficLineChart.data.labels = labels;
+      trafficLineChart.data.datasets[0].data = httpData;
+      trafficLineChart.data.datasets[1].data = p2pData;
+      trafficLineChart.data.datasets[2].data = viewersData;
+      trafficLineChart.update('none');
+    }
+
+    // 트래픽 비율 파이 차트 - 실시간이면 현재 트래픽 비율
+    let pieHttp, pieP2p, pieP2pUp;
+    if (isRealtime && realtimeData) {
+      pieHttp = (realtimeData.player1?.httpBytes || 0) + (realtimeData.player2?.httpBytes || 0);
+      pieP2p = (realtimeData.player1?.p2pBytes || 0) + (realtimeData.player2?.p2pBytes || 0);
+      pieP2pUp = (realtimeData.player1?.p2pUpBytes || 0) + (realtimeData.player2?.p2pUpBytes || 0);
+    } else {
+      pieHttp = totals.totalHttp || 0;
+      pieP2p = totals.totalP2p || 0;
+      pieP2pUp = totals.totalP2pUp || 0;
+    }
+
+    if (!trafficRatioPie) {
+      trafficRatioPie = new Chart(document.getElementById('trafficPieChart'), {
+        type: 'doughnut',
+        data: {
+          labels: ['HTTP', 'P2P 다운', 'P2P 업로드'],
+          datasets: [{ data: [pieHttp, pieP2p, pieP2pUp], backgroundColor: ['#ff6b6b', '#00ff88', '#00d4ff'] }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#fff', padding: 15 } } } }
+      });
+    } else {
+      trafficRatioPie.data.datasets[0].data = [pieHttp, pieP2p, pieP2pUp];
+      trafficRatioPie.update('none');
+    }
+
+    // 서버별 바 차트 - 실시간이면 현재 플레이어 시청자
+    let barLabels, barData;
+    if (isRealtime && realtimeData) {
+      barLabels = ['Player 1', 'Player 2'];
+      barData = [
+        (realtimeData.player1?.viewers || 0) / 1000,
+        (realtimeData.player2?.viewers || 0) / 1000
+      ];
+    } else {
+      const cdnServers = servers.filter(s => s.visitors);
+      barLabels = cdnServers.map(s => s.server.replace(/^every/, ''));
+      barData = cdnServers.map(s => (s.visitors || 0) / 1000);
+    }
+
+    if (!serverBarChart) {
+      serverBarChart = new Chart(document.getElementById('serverChart'), {
+        type: 'bar',
+        data: {
+          labels: barLabels,
+          datasets: [
+            { label: '접속자 (천명)', data: barData, backgroundColor: ['#ff6b6b','#00ff88','#00d4ff','#ffa500','#8a2be2','#ff69b4','#32cd32','#ff4500','#1e90ff'] }
+          ]
+        },
+        options: {
+          responsive: true,
+          indexAxis: 'y',
+          plugins: { legend: { display: false } },
+          scales: { x: { ticks: { color: '#888' }, grid: { color: '#333' } }, y: { ticks: { color: '#fff' }, grid: { display: false } } }
+        }
+      });
+    } else {
+      serverBarChart.data.labels = barLabels;
+      serverBarChart.data.datasets[0].data = barData;
+      serverBarChart.update('none');
+    }
+
+    // 서버별 테이블 - 모든 기간에서 servers 데이터 사용
+    let totalHttp = 0, totalP2p = 0, totalP2pUp = 0, totalViewers = 0;
+    let totalHttpGbps = 0, totalP2pGbps = 0, totalP2pUpGbps = 0;
+    const rows = servers.map(s => {
+      const isPlayer = s.server.startsWith('Player');
+      const displayName = s.server.replace(/^every/, '');
+      const http = s.http || 0, p2p = s.p2p || 0, p2pUp = s.p2pUp || 0;
+      const httpGbps = parseFloat(s.httpGbps) || 0, p2pGbps = parseFloat(s.p2pGbps) || 0, p2pUpGbps = parseFloat(s.p2pUpGbps) || 0;
+      const total = http + p2p;
+      const hasTraffic = total > 0;
+      const p2pRatio = hasTraffic ? (p2p / total * 100).toFixed(1) : 0;
+      const color = isPlayer ? '#ffa500' : '#8a2be2';
+      const viewers = s.viewers || s.visitors || 0;
+      totalHttp += http; totalP2p += p2p; totalP2pUp += p2pUp; totalViewers += viewers;
+      totalHttpGbps += httpGbps; totalP2pGbps += p2pGbps; totalP2pUpGbps += p2pUpGbps;
+      return `<tr><td><b style="color:${color}">${displayName}</b></td><td style="color:#ff6b6b">${hasTraffic ? formatBytes(http) : '-'}</td><td style="color:#00ff88">${hasTraffic ? formatBytes(p2p) : '-'}</td><td style="color:#88ff00">${p2pUp > 0 ? formatBytes(p2pUp) : '-'}</td><td style="color:#ff6b6b">${httpGbps.toFixed(2)} GB/s</td><td style="color:#00ff88">${p2pGbps.toFixed(2)} GB/s</td><td style="color:#88ff00">${p2pUpGbps.toFixed(2)} GB/s</td><td style="color:#00ff88;font-weight:bold">${hasTraffic ? p2pRatio + '%' : '-'}</td><td style="color:#00d4ff">${viewers.toLocaleString()}</td></tr>`;
+    }).join('');
+    const totalP2pRatio = (totalHttp + totalP2p) > 0 ? (totalP2p / (totalHttp + totalP2p) * 100).toFixed(1) : 0;
+    const totalRow = servers.length > 0 ? `<tr style="background:rgba(0,212,255,0.1);font-weight:bold;border-top:2px solid rgba(255,255,255,0.3)"><td>합계</td><td style="color:#ff6b6b">${formatBytes(totalHttp)}</td><td style="color:#00ff88">${formatBytes(totalP2p)}</td><td style="color:#88ff00">${formatBytes(totalP2pUp)}</td><td style="color:#ff6b6b">${totalHttpGbps.toFixed(2)} GB/s</td><td style="color:#00ff88">${totalP2pGbps.toFixed(2)} GB/s</td><td style="color:#88ff00">${totalP2pUpGbps.toFixed(2)} GB/s</td><td style="color:#00ff88">${totalP2pRatio}%</td><td style="color:#00d4ff">${totalViewers.toLocaleString()}</td></tr>` : '';
+    document.querySelector('#serverTable tbody').innerHTML = (rows + totalRow) || '<tr><td colspan="9" style="text-align:center">데이터 없음</td></tr>';
+  }
+
+  async function load() {
+    try {
+      const isRealtime = currentPeriod === 'realtime';
+      const [trafficResp, realtimeResp] = await Promise.all([
+        fetch(`/api/traffic?period=${currentPeriod}`),
+        isRealtime ? fetch('/api/realtime') : Promise.resolve(null)
+      ]);
+      const data = await trafficResp.json();
+      const realtimeData = isRealtime && realtimeResp ? await realtimeResp.json() : null;
+      render(data, realtimeData);
+    } catch (e) { console.error(e); }
+  }
+
+  // 서버별 트래픽 차트 (기간 연동)
+  async function loadServerTraffic() {
+    try {
+      const panel = document.getElementById('serverTrafficPanel');
+      if (panel) panel.style.display = 'block';
+
+      const resp = await fetch(`/api/servers/realtime?period=${currentPeriod}`);
+      const data = await resp.json();
+      if (!data || !data.servers || Object.keys(data.servers).length === 0) return;
+
+      const colors = ['#ff6b6b','#00ff88','#00d4ff','#ffa500','#8a2be2','#ff69b4','#32cd32','#ff4500','#1e90ff','#ffff00','#ff1493'];
+      const datasets = [];
+      let idx = 0;
+
+      // 모든 서버의 타임스탬프 통합
+      const allTimestamps = new Set();
+      for (const serverData of Object.values(data.servers)) {
+        for (const point of serverData) {
+          if (point.ts) allTimestamps.add(point.ts);
+        }
+      }
+      const sortedTs = Array.from(allTimestamps).sort();
+
+      // 기간에 따른 시간 포맷 (서버시간 KST)
+      const isLongPeriod = ['7d', '30d'].includes(currentPeriod);
+      const labels = sortedTs.map(ts => {
+        if (isLongPeriod) {
+          return formatServerDateTime(ts);
+        }
+        return formatServerTime(ts);
+      });
+
+      // 서버명 정렬 (숫자순)
+      const serverNames = Object.keys(data.servers).sort((a, b) => {
+        const numA = parseInt(a.replace(/\D/g, '')) || 0;
+        const numB = parseInt(b.replace(/\D/g, '')) || 0;
+        return numA - numB;
+      });
+
+      for (const server of serverNames) {
+        const serverData = data.servers[server];
+        // "every" 제거하고 숫자만 표시
+        const displayName = server.replace(/^every/, '');
+
+        // 타임스탬프 기준으로 데이터 매핑
+        const tsMap = {};
+        for (const point of serverData) {
+          tsMap[point.ts] = point.http || 0;
+        }
+        const httpData = sortedTs.map(ts => (tsMap[ts] || 0) / 1024 / 1024); // MB로 변환
+
+        datasets.push({
+          label: displayName,
+          data: httpData,
+          borderColor: colors[idx % colors.length],
+          backgroundColor: colors[idx % colors.length] + '20',
+          fill: false,
+          tension: 0.4,
+          pointRadius: currentPeriod === 'realtime' ? 2 : 1
+        });
+        idx++;
+      }
+
+      if (!serverTrafficChart) {
+        serverTrafficChart = new Chart(document.getElementById('serverTrafficChart'), {
+          type: 'line',
+          data: { labels, datasets },
+          options: {
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { position: 'top', labels: { color: '#fff', boxWidth: 15, padding: 10 } },
+              tooltip: { callbacks: { label: ctx => {
+                const v = ctx.parsed.y;
+                const formatted = v >= 1000 ? (v/1000).toFixed(2) + ' GB' : v.toFixed(2) + ' MB';
+                return `${ctx.dataset.label}: ${formatted}`;
+              } } }
+            },
+            scales: {
+              x: { ticks: { color: '#888', maxRotation: 0, maxTicksLimit: 12 }, grid: { color: '#333' } },
+              y: {
+                type: 'logarithmic',
+                ticks: {
+                  color: '#888',
+                  callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'GB' : v.toFixed(0) + 'MB'
+                },
+                grid: { color: '#333' },
+                title: { display: true, text: '트래픽 (로그 스케일)', color: '#888' }
+              }
+            }
+          }
+        });
+      } else {
+        serverTrafficChart.data.labels = labels;
+        serverTrafficChart.data.datasets = datasets;
+        serverTrafficChart.update('none');
+      }
+    } catch (e) { console.error('serverTraffic error:', e); }
+  }
+
+  // 기간 버튼 이벤트
+  document.querySelectorAll('.period-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.period-btn').forEach(b => { b.style.background = 'rgba(255,255,255,.05)'; b.style.borderColor = 'rgba(255,255,255,.2)'; b.style.color = '#888'; });
+      btn.style.background = '#00d4ff'; btn.style.borderColor = '#00d4ff'; btn.style.color = '#fff';
+      currentPeriod = btn.dataset.period;
+      load();
+      loadServerTraffic();
+
+      // 실시간일 때는 1초 갱신, 아니면 기본 주기
+      const interval = currentPeriod === 'realtime' ? 1000 : getPageInterval('traffic');
+      setActiveInterval(() => { load(); loadServerTraffic(); }, interval);
+    };
+  });
+
+  load();
+  loadServerTraffic();
+  setActiveInterval(() => { load(); loadServerTraffic(); }, getPageInterval('traffic'));
 }
 
 async function initRealtime() {
+  function heroCard(icon, iconClass, label, value, colorClass = '') {
+    return `<div class="hero-card ${colorClass}">
+      <div class="icon ${iconClass}">${icon}</div>
+      <div class="label">${label}</div>
+      <div class="value">${value}</div>
+    </div>`;
+  }
+  function playerCard(name, count, cls = '') {
+    const icon = cls === 'p2' ? '▶' : '▷';
+    return `<div class="player-card ${cls}">
+      <div class="player-icon">${icon}</div>
+      <div class="player-info"><div class="player-name">${name}</div><div class="player-count">${count}</div></div>
+    </div>`;
+  }
+  function statCard(label, value, percent, cls = '') {
+    return `<div class="stat-card ${cls}">
+      <div class="stat-label">${label}</div>
+      <div class="stat-value">${value}</div>
+      ${percent ? `<div class="stat-percent">${percent}</div>` : ''}
+    </div>`;
+  }
+  function compactItem(name, count) {
+    return `<div class="compact-item"><span class="item-name" title="${name}">${name}</span><span class="item-count">${count}</span></div>`;
+  }
+  function render(d) {
+    if (d.error) return;
+    const uniqueUsers = d.total?.uniqueUsers || 0;
+    const viewers = d.total?.viewers || 0;
+    const peers = d.total?.peers || 0;
+    const swarms = d.activeSwarms || 0;
+    document.getElementById('heroStats').innerHTML = `
+      ${heroCard('👤', 'users', '고유 유저', uniqueUsers)}
+      ${heroCard('🔗', 'connect', '연결 수', viewers, 'green')}
+      ${heroCard('🌐', 'p2p', 'P2P 피어 / Swarms', `${peers} / ${swarms}`, 'orange')}
+    `;
+    const p1 = d.player1?.viewers || 0;
+    const p2 = d.player2?.viewers || 0;
+    document.getElementById('playerStats').innerHTML = `
+      ${playerCard('플레이어 1', p1)}
+      ${playerCard('플레이어 2', p2, 'p2')}
+    `;
+    const dev = d.devices || {};
+    const devT = Object.values(dev).reduce((a, b) => a + b, 0) || 1;
+    const mPct = ((dev.mobile||0)/devT*100).toFixed(1);
+    const dPct = ((dev.desktop||0)/devT*100).toFixed(1);
+    const tPct = ((dev.tablet||0)/devT*100).toFixed(1);
+    const oPct = ((dev.unknown||0)/devT*100).toFixed(1);
+    document.getElementById('deviceStats').innerHTML = `
+      ${statCard('모바일', dev.mobile || 0, mPct + '%', 'mobile')}
+      ${statCard('데스크톱', dev.desktop || 0, dPct + '%', 'desktop')}
+      ${statCard('태블릿', dev.tablet || 0, tPct + '%', 'tablet')}
+      ${statCard('기타', dev.unknown || 0, oPct + '%', 'other')}
+    `;
+    document.getElementById('deviceBar').innerHTML = `
+      <div class="bar-segment bar-mobile" style="width:${mPct}%"></div>
+      <div class="bar-segment bar-desktop" style="width:${dPct}%"></div>
+      <div class="bar-segment bar-tablet" style="width:${tPct}%"></div>
+      <div class="bar-segment bar-other" style="width:${oPct}%"></div>
+    `;
+    const dn = d.deviceNames || [];
+    document.getElementById('deviceNameStats').innerHTML = dn.length ? dn.map(x => compactItem(x.name, x.count)).join('') : compactItem('-', 0);
+    const br = d.browsers || [];
+    document.getElementById('browserStats').innerHTML = br.length ? br.map(b => compactItem(b.name, b.count)).join('') : compactItem('-', 0);
+    const ref = d.referrers || [];
+    document.getElementById('refStats').innerHTML = ref.length ? ref.map(r => compactItem(r.name.length > 20 ? r.name.slice(0,20)+'...' : r.name, r.count)).join('') : compactItem('direct', 0);
+  }
+  async function update() {
+    try { await loadWithCache('/api/realtime', 'realtime', render); } catch (e) { console.error(e); }
+  }
+  update();
+  setActiveInterval(update, getPageInterval('realtime'));
+}
+
+function initSessions() {
+  const st = { p: 1, size: 50, total: 0, sort: 'recent', desc: true, search: '' };
+  const sortLabels = { recent: '접속', connected: '유지', speed: '속도', http_bytes: 'HTTP', p2p_bytes: 'P2P↓', p2p_up_bytes: 'P2P↑', total: '총합', peers: '피어' };
+
+  function formatDuration(ms) {
+    if (!ms || ms < 0) return '-';
+    const secs = Math.floor(ms / 1000);
+    if (secs < 60) return `${secs}초`;
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return `${mins}분`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}시${mins % 60}분`;
+    return `${Math.floor(hours / 24)}일`;
+  }
+
+  function formatTime(ts) {
+    if (!ts) return '-';
+    const d = new Date(ts + serverTimeOffset * 60 * 1000);
+    const now = new Date(Date.now() + serverTimeOffset * 60 * 1000);
+    const isToday = d.getUTCDate() === now.getUTCDate() && d.getUTCMonth() === now.getUTCMonth() && d.getUTCFullYear() === now.getUTCFullYear();
+    const time = `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+    return isToday ? time : `${d.getUTCMonth()+1}/${d.getUTCDate()} ${time}`;
+  }
+
+  const thMap = {
+    thRecent: 'recent', thConnected: 'connected', thSpeed: 'speed',
+    thHttp: 'http_bytes', thP2p: 'p2p_bytes', thP2pUp: 'p2p_up_bytes', thTotal: 'total', thPeers: 'peers'
+  };
+
+  function updateSortIndicator() {
+    Object.entries(thMap).forEach(([id, sort]) => {
+      const th = document.getElementById(id);
+      if (th) {
+        const label = sortLabels[sort] || sort;
+        const arrow = st.desc ? '▼' : '▲';
+        th.textContent = sort === st.sort ? `${label} ${arrow}` : label;
+        th.style.color = sort === st.sort ? '#00d4ff' : '';
+      }
+    });
+  }
+
+  function render(data) {
+    st.total = data.total || 0;
+    const list = data.data || [];
+    const now = Date.now();
+
+    document.querySelector('#sessionsTable tbody').innerHTML = list.map((s) => {
+      const ip = s.ip || '-';
+      const fn = s.filename?.length > 25 ? s.filename.slice(0, 25) + '...' : (s.filename || '-');
+      const connectedAt = parseInt(s.session_id?.split('_')[0]) || 0;
+      const connTime = formatTime(connectedAt);
+      const duration = connectedAt ? formatDuration(now - connectedAt) : '-';
+
+      // 실시간 트래픽 (r_* 값 = 현재 속도)
+      const rHttp = s.r_http_bytes || 0;
+      const rP2p = s.r_p2p_bytes || 0;
+      const rTotal = rHttp + rP2p;
+      const rP2pPct = rTotal > 0 ? Math.round(rP2p / rTotal * 100) : 0;
+      const rHttpPct = 100 - rP2pPct;
+
+      // 속도 바
+      const speedBar = rTotal > 0 ? `
+        <div style="display:flex;align-items:center;gap:3px">
+          <div style="flex:1;max-width:50px;height:8px;background:#333;border-radius:2px;overflow:hidden;display:flex">
+            <div style="width:${rHttpPct}%;background:#ff6b6b"></div>
+            <div style="width:${rP2pPct}%;background:#00ff88"></div>
+          </div>
+          <span style="font-size:9px;color:#888;white-space:nowrap">${formatBytes(rTotal)}/s</span>
+        </div>
+      ` : '<span style="color:#444">-</span>';
+
+      // 기기 (PC/M)
+      const device = (s.device || '').toLowerCase().includes('mobile') ? 'M' : 'PC';
+
+      // 서버 추출 (every5 -> 5)
+      const serverRaw = (s.swarm_id || '').split('.')[0] || '';
+      const server = serverRaw.replace(/^every/i, '') || '-';
+
+      // 누적 트래픽
+      const httpTotal = s.http_bytes || 0;
+      const p2pTotal = s.p2p_bytes || 0;
+      const p2pUpTotal = s.p2p_up_bytes || 0;
+
+      return `<tr>
+        <td style="color:#aaa;text-align:center;white-space:nowrap">${connTime}</td>
+        <td style="color:#00d4ff;text-align:center">${duration}</td>
+        <td style="text-align:left;cursor:pointer;color:#00d4ff" onclick="navigator.clipboard.writeText('${ip}').then(()=>{this.style.color='#0f0';setTimeout(()=>this.style.color='#00d4ff',500)})" title="클릭하여 복사">${ip}</td>
+        <td style="text-align:center;color:${device === 'M' ? '#ffa500' : '#888'}">${device}</td>
+        <td style="text-align:center;color:#888">${server}</td>
+        <td title="${s.filename || ''}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fn}</td>
+        <td style="padding:2px 4px">${speedBar}</td>
+        <td style="color:#ff6b6b;text-align:right;padding-right:6px">${formatBytes(httpTotal)}</td>
+        <td style="color:#00ff88;text-align:right;padding-right:6px">${formatBytes(p2pTotal)}</td>
+        <td style="color:#00d4ff;text-align:right;padding-right:6px">${formatBytes(p2pUpTotal)}</td>
+        <td style="color:#fff;text-align:right;padding-right:6px;font-weight:bold">${formatBytes(s.ip_total || 0)}</td>
+        <td style="color:#888;text-align:center">${s.peers || 0}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="12" style="text-align:center;padding:20px;color:#666">데이터 없음</td></tr>';
+
+    updateSortIndicator();
+    const pages = Math.ceil(st.total / st.size) || 1;
+    document.getElementById('pageInfo').textContent = `${st.p} / ${pages} (총 ${st.total.toLocaleString()}명)`;
+    document.getElementById('prev').disabled = st.p === 1;
+    document.getElementById('next').disabled = st.p >= pages;
+  }
+
+  function getEndpoint() {
+    const sortParam = st.desc ? st.sort : `-${st.sort}`;
+    let url = `/api/sessions?limit=${st.size}&offset=${(st.p-1)*st.size}&sort=${sortParam}`;
+    if (st.search) url += `&search=${encodeURIComponent(st.search)}`;
+    return url;
+  }
+
+  async function load() {
+    try {
+      const res = await fetch(getEndpoint());
+      const data = await res.json();
+      render(data);
+    } catch (e) { console.error(e); }
+  }
+  load();
+
+  function doSearch() {
+    st.search = document.getElementById('sessionSearch').value.trim();
+    st.p = 1;
+    load();
+  }
+  document.getElementById('searchBtn').onclick = doSearch;
+  document.getElementById('sessionSearch').onkeypress = (e) => { if (e.key === 'Enter') doSearch(); };
+  document.getElementById('prev').onclick = () => { if (st.p > 1) { st.p--; load(); } };
+  document.getElementById('next').onclick = () => { if (st.p < Math.ceil(st.total / st.size)) { st.p++; load(); } };
+
+  // 헤더 클릭 정렬 - 각 th에 직접 onclick 할당
+  Object.entries(thMap).forEach(([id, sort]) => {
+    const th = document.getElementById(id);
+    if (th) {
+      th.onclick = () => {
+        if (st.sort === sort) {
+          st.desc = !st.desc;  // 같은 컬럼 클릭 시 정렬 방향 토글
+        } else {
+          st.sort = sort;
+          st.desc = true;  // 새 컬럼은 내림차순부터
+        }
+        st.p = 1;
+        load();
+      };
+    }
+  });
+
+  // 2초마다 실시간 갱신
+  setActiveInterval(load, 2000);
+}
+
+let player1Pie = null, player2Pie = null, speedCompareChart = null, trafficShareChart = null;
+function initPlayers() {
+  let playerSpeeds = { player1: {}, player2: {} };
+
+  function render(d) {
+    const p1 = d.player1 || {}, p2 = d.player2 || {};
+    const p1Speed = playerSpeeds.player1 || {};
+    const p2Speed = playerSpeeds.player2 || {};
+
+    // 시청자 수 업데이트
+    document.getElementById('p1Viewers').textContent = (p1.viewers || 0).toLocaleString() + ' 시청자';
+    document.getElementById('p2Viewers').textContent = (p2.viewers || 0).toLocaleString() + ' 시청자';
+
+    // 속도 데이터
+    const p1HttpGbps = parseFloat(p1Speed.httpGbps) || 0;
+    const p1P2pGbps = parseFloat(p1Speed.p2pGbps) || 0;
+    const p1UpGbps = parseFloat(p1Speed.p2pUpGbps) || 0;
+    const p2HttpGbps = parseFloat(p2Speed.httpGbps) || 0;
+    const p2P2pGbps = parseFloat(p2Speed.p2pGbps) || 0;
+    const p2UpGbps = parseFloat(p2Speed.p2pUpGbps) || 0;
+
+    // 트래픽 데이터
+    const p1Http = p1.httpBytes || 0, p1P2p = p1.p2pBytes || 0, p1Up = p1.p2pUpBytes || 0;
+    const p2Http = p2.httpBytes || 0, p2P2p = p2.p2pBytes || 0, p2Up = p2.p2pUpBytes || 0;
+    const totalTraffic = p1Http + p1P2p + p2Http + p2P2p;
+
+    // P2P 비율 범례
+    const p1Total = p1Http + p1P2p;
+    const p2Total = p2Http + p2P2p;
+    const p1HttpPct = p1Total > 0 ? (p1Http / p1Total * 100).toFixed(1) : 0;
+    const p1P2pPct = p1Total > 0 ? (p1P2p / p1Total * 100).toFixed(1) : 0;
+    const p2HttpPct = p2Total > 0 ? (p2Http / p2Total * 100).toFixed(1) : 0;
+    const p2P2pPct = p2Total > 0 ? (p2P2p / p2Total * 100).toFixed(1) : 0;
+
+    document.getElementById('p1Legend').innerHTML = `
+      <div style="margin-bottom:8px"><span style="color:#ff6b6b">●</span> HTTP: ${formatBytes(p1Http)} <span style="color:#666">(${p1HttpPct}%)</span></div>
+      <div style="margin-bottom:8px"><span style="color:#00ff88">●</span> P2P↓: ${formatBytes(p1P2p)} <span style="color:#666">(${p1P2pPct}%)</span></div>
+      <div><span style="color:#00d4ff">●</span> P2P↑: ${formatBytes(p1Up)}</div>
+    `;
+    document.getElementById('p2Legend').innerHTML = `
+      <div style="margin-bottom:8px"><span style="color:#ff6b6b">●</span> HTTP: ${formatBytes(p2Http)} <span style="color:#666">(${p2HttpPct}%)</span></div>
+      <div style="margin-bottom:8px"><span style="color:#00ff88">●</span> P2P↓: ${formatBytes(p2P2p)} <span style="color:#666">(${p2P2pPct}%)</span></div>
+      <div><span style="color:#00d4ff">●</span> P2P↑: ${formatBytes(p2Up)}</div>
+    `;
+
+    // 상세 통계 테이블
+    const rows = [
+      { label: '시청자', p1: (p1.viewers || 0).toLocaleString(), p2: (p2.viewers || 0).toLocaleString(), ratio: ((p1.viewers || 0) + (p2.viewers || 0)) > 0 ? ((p1.viewers || 0) / ((p1.viewers || 0) + (p2.viewers || 0)) * 100).toFixed(1) + '%' : '-' },
+      { label: 'HTTP 트래픽', p1: formatBytes(p1Http), p2: formatBytes(p2Http), ratio: (p1Http + p2Http) > 0 ? (p1Http / (p1Http + p2Http) * 100).toFixed(1) + '%' : '-', color: 'http' },
+      { label: 'P2P 다운로드', p1: formatBytes(p1P2p), p2: formatBytes(p2P2p), ratio: (p1P2p + p2P2p) > 0 ? (p1P2p / (p1P2p + p2P2p) * 100).toFixed(1) + '%' : '-', color: 'p2p' },
+      { label: 'P2P 업로드', p1: formatBytes(p1Up), p2: formatBytes(p2Up), ratio: (p1Up + p2Up) > 0 ? (p1Up / (p1Up + p2Up) * 100).toFixed(1) + '%' : '-', color: 'p2p' },
+      { label: 'P2P 비율', p1: p1.p2pRatio + '%', p2: p2.p2pRatio + '%', ratio: '-', color: 'p2p' },
+      { label: 'HTTP 속도', p1: p1HttpGbps.toFixed(2) + ' GB/s', p2: p2HttpGbps.toFixed(2) + ' GB/s', ratio: '-', color: 'http' },
+      { label: 'P2P↓ 속도', p1: p1P2pGbps.toFixed(2) + ' GB/s', p2: p2P2pGbps.toFixed(2) + ' GB/s', ratio: '-', color: 'p2p' },
+      { label: 'P2P↑ 속도', p1: p1UpGbps.toFixed(2) + ' GB/s', p2: p2UpGbps.toFixed(2) + ' GB/s', ratio: '-', color: 'p2p' },
+    ];
+    document.getElementById('playerStatsBody').innerHTML = rows.map(r => `
+      <tr style="border-bottom:1px solid #222">
+        <td style="padding:10px 8px;color:#aaa">${r.label}</td>
+        <td style="padding:10px 8px;text-align:right;font-weight:500;color:${r.color === 'http' ? '#ff6b6b' : r.color === 'p2p' ? '#00ff88' : '#fff'}">${r.p1}</td>
+        <td style="padding:10px 8px;text-align:right;font-weight:500;color:${r.color === 'http' ? '#ff6b6b' : r.color === 'p2p' ? '#00ff88' : '#fff'}">${r.p2}</td>
+        <td style="padding:10px 8px;text-align:right;color:#666">${r.ratio}</td>
+      </tr>
+    `).join('');
+
+    // 속도 비교 차트
+    if (!speedCompareChart) {
+      speedCompareChart = new Chart(document.getElementById('speedCompareChart'), {
+        type: 'bar',
+        data: {
+          labels: ['HTTP', 'P2P↓', 'P2P↑'],
+          datasets: [
+            { label: 'Player 1', data: [p1HttpGbps, p1P2pGbps, p1UpGbps], backgroundColor: '#00d4ff', borderRadius: 4 },
+            { label: 'Player 2', data: [p2HttpGbps, p2P2pGbps, p2UpGbps], backgroundColor: '#ff6b6b', borderRadius: 4 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { color: '#aaa', padding: 15, usePointStyle: true } } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#888' } },
+            y: { grid: { color: '#333' }, ticks: { color: '#888', callback: v => v + ' GB/s' } }
+          }
+        }
+      });
+    } else {
+      speedCompareChart.data.datasets[0].data = [p1HttpGbps, p1P2pGbps, p1UpGbps];
+      speedCompareChart.data.datasets[1].data = [p2HttpGbps, p2P2pGbps, p2UpGbps];
+      speedCompareChart.update('none');
+    }
+
+    // 트래픽 점유율 차트
+    if (!trafficShareChart) {
+      trafficShareChart = new Chart(document.getElementById('trafficShareChart'), {
+        type: 'bar',
+        data: {
+          labels: ['HTTP', 'P2P↓', 'P2P↑'],
+          datasets: [
+            { label: 'Player 1', data: [p1Http, p1P2p, p1Up], backgroundColor: '#00d4ff', borderRadius: 4 },
+            { label: 'Player 2', data: [p2Http, p2P2p, p2Up], backgroundColor: '#ff6b6b', borderRadius: 4 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: 'y',
+          plugins: { legend: { position: 'top', labels: { color: '#aaa', padding: 15, usePointStyle: true } } },
+          scales: {
+            x: { stacked: true, grid: { color: '#333' }, ticks: { color: '#888', callback: v => formatBytes(v) } },
+            y: { stacked: true, grid: { display: false }, ticks: { color: '#888' } }
+          }
+        }
+      });
+    } else {
+      trafficShareChart.data.datasets[0].data = [p1Http, p1P2p, p1Up];
+      trafficShareChart.data.datasets[1].data = [p2Http, p2P2p, p2Up];
+      trafficShareChart.update('none');
+    }
+
+    // 플레이어별 파이차트
+    if (!player1Pie) {
+      const pieOpts = { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { display: false } } };
+      player1Pie = new Chart(document.getElementById('player1Pie'), {
+        type: 'doughnut',
+        data: { labels: ['HTTP', 'P2P'], datasets: [{ data: [p1Http, p1P2p], backgroundColor: ['#ff6b6b', '#00ff88'], borderWidth: 0 }] },
+        options: pieOpts
+      });
+      player2Pie = new Chart(document.getElementById('player2Pie'), {
+        type: 'doughnut',
+        data: { labels: ['HTTP', 'P2P'], datasets: [{ data: [p2Http, p2P2p], backgroundColor: ['#ff6b6b', '#00ff88'], borderWidth: 0 }] },
+        options: pieOpts
+      });
+    } else {
+      player1Pie.data.datasets[0].data = [p1Http, p1P2p]; player1Pie.update('none');
+      player2Pie.data.datasets[0].data = [p2Http, p2P2p]; player2Pie.update('none');
+    }
+  }
+
   async function update() {
     try {
-      const d = await fetchWithCache('/api/realtime', 'realtime');
-      if (d.error) return;
-      document.getElementById('mainStats').innerHTML = `
-        ${card('고유 유저', d.total?.uniqueUsers || 0)}
-        ${card('연결 수', d.total?.viewers || 0)}
-        ${card('플레이어1', d.player1?.viewers || 0)}
-        ${card('플레이어2', d.player2?.viewers || 0)}
-        ${card('P2P 피어', d.total?.peers || 0)}
-        ${card('Swarms', d.activeSwarms || 0)}
-      `;
-      const dev = d.devices || {};
-      const devT = Object.values(dev).reduce((a, b) => a + b, 0) || 1;
-      document.getElementById('deviceStats').innerHTML = `
-        ${card('모바일', dev.mobile || 0, `(${((dev.mobile||0)/devT*100).toFixed(1)}%)`)}
-        ${card('데스크톱', dev.desktop || 0, `(${((dev.desktop||0)/devT*100).toFixed(1)}%)`)}
-        ${card('태블릿', dev.tablet || 0, `(${((dev.tablet||0)/devT*100).toFixed(1)}%)`)}
-        ${card('기타', dev.unknown || 0, `(${((dev.unknown||0)/devT*100).toFixed(1)}%)`)}
-      `;
-      const dn = d.deviceNames || [];
-      document.getElementById('deviceNameStats').innerHTML = dn.length ? dn.map(x => card(x.name, x.count)).join('') : '<div class="card"><h3>-</h3><div class="val">0</div></div>';
-      const br = d.browsers || [];
-      document.getElementById('browserStats').innerHTML = br.length ? br.map(b => card(b.name, b.count)).join('') : '<div class="card"><h3>-</h3><div class="val">0</div></div>';
-      const ref = d.referrers || [];
-      document.getElementById('refStats').innerHTML = ref.length ? ref.map(r => card(r.name.length > 15 ? r.name.slice(0,15)+'...' : r.name, r.count)).join('') : '<div class="card"><h3>direct</h3><div class="val">0</div></div>';
+      const [realtimeRes, trafficRes] = await Promise.all([
+        fetch('/api/realtime').then(r => r.json()),
+        fetch('/api/traffic?period=realtime').then(r => r.json())
+      ]);
+      playerSpeeds = trafficRes.playerSpeeds || { player1: {}, player2: {} };
+      render(realtimeRes);
     } catch (e) { console.error(e); }
   }
   update();
-  const intv = setInterval(update, settings.realtime.interval);
-  window.addEventListener('hashchange', () => { if (page !== 'realtime') clearInterval(intv); }, { once: true });
+  setActiveInterval(update, getPageInterval('players'));
+  window.addEventListener('hashchange', () => { player1Pie = null; player2Pie = null; speedCompareChart = null; trafficShareChart = null; }, { once: true });
 }
 
 function initLive() {
   let st = { p: 1, size: 20, total: 0 };
-  async function load() {
-    try {
-      const res = await fetchWithCache(`/api/live?limit=${st.size}&offset=${(st.p-1)*st.size}`, 'live');
-      st.total = res.total || 0;
-      const data = res.data || [];
-      document.querySelector('#liveTable tbody').innerHTML = data.map((d, i) => {
-        const idx = (st.p - 1) * st.size + i + 1;
-        const t = (d.http_bytes || 0) + (d.p2p_bytes || 0);
-        const ratio = t > 0 ? ((d.p2p_bytes || 0) / t * 100).toFixed(1) : '0';
-        const sw = d.swarm_id?.length > 20 ? d.swarm_id.slice(0, 12) + '...' + d.swarm_id.slice(-6) : d.swarm_id;
-        const fn = d.filename?.length > 25 ? d.filename.slice(0, 25) + '...' : (d.filename || '-');
-        return `<tr><td>${idx}</td><td title="${d.filename}">${fn}</td><td title="${d.swarm_id}" style="font-size:10px">${sw}</td><td style="color:#ff6b6b"><b>${d.viewers || 0}</b></td><td>${formatBytes(d.http_bytes)}</td><td>${formatBytes(d.p2p_bytes)}</td><td style="color:#00ff88"><b>${ratio}%</b></td></tr>`;
-      }).join('') || '<tr><td colspan="7" style="text-align:center">데이터 없음</td></tr>';
-      const pages = Math.ceil(st.total / st.size) || 1;
-      document.getElementById('pageInfo').textContent = `${st.p} / ${pages}`;
-      document.getElementById('prev').disabled = st.p === 1;
-      document.getElementById('next').disabled = st.p >= pages;
-    } catch (e) { console.error(e); }
+
+  function render(res) {
+    st.total = res.total || 0;
+    const data = res.data || [];
+    document.querySelector('#liveTable tbody').innerHTML = data.map((d, i) => {
+      const idx = (st.p - 1) * st.size + i + 1;
+      const t = (d.http_bytes || 0) + (d.p2p_bytes || 0);
+      const ratio = t > 0 ? ((d.p2p_bytes || 0) / t * 100).toFixed(1) : '0';
+      const sw = d.swarm_id?.length > 20 ? d.swarm_id.slice(0, 12) + '...' + d.swarm_id.slice(-6) : d.swarm_id;
+      const fn = d.filename?.length > 25 ? d.filename.slice(0, 25) + '...' : (d.filename || '-');
+      return `<tr><td>${idx}</td><td title="${d.filename}">${fn}</td><td title="${d.swarm_id}" style="font-size:10px">${sw}</td><td style="color:#ff6b6b"><b>${d.viewers || 0}</b></td><td>${formatBytes(d.http_bytes)}</td><td>${formatBytes(d.p2p_bytes)}</td><td style="color:#00ff88"><b>${ratio}%</b></td></tr>`;
+    }).join('') || '<tr><td colspan="7" style="text-align:center">데이터 없음</td></tr>';
+    const pages = Math.ceil(st.total / st.size) || 1;
+    document.getElementById('pageInfo').textContent = `${st.p} / ${pages}`;
+    document.getElementById('prev').disabled = st.p === 1;
+    document.getElementById('next').disabled = st.p >= pages;
   }
+
+  function getEndpoint() {
+    return `/api/live?limit=${st.size}&offset=${(st.p-1)*st.size}`;
+  }
+
+  async function load() {
+    try { await loadWithCache(getEndpoint(), 'live', render); } catch (e) { console.error(e); }
+  }
+  load();
+
   document.getElementById('prev').onclick = () => { if (st.p > 1) { st.p--; load(); } };
   document.getElementById('next').onclick = () => { if (st.p < Math.ceil(st.total / st.size)) { st.p++; load(); } };
+
+  setActiveInterval(load, getPageInterval('live'));
+}
+
+function initPopular() {
+  let st = { p: 1, size: 20, period: 'all' };
+  function render(data) {
+    const rows = data.dataset || [];
+    document.querySelector('#popularTable tbody').innerHTML = rows.map((r, i) => {
+      const idx = (st.p - 1) * st.size + i + 1;
+      const fn = r[1]?.length > 30 ? r[1].slice(0, 30) + '...' : (r[1] || '-');
+      const views = r[2] || 0;
+      const http = r[3] || 0, p2p = r[4] || 0;
+      const total = http + p2p;
+      const ratio = total > 0 ? ((p2p / total) * 100).toFixed(1) : '0';
+      return `<tr><td>${idx}</td><td title="${r[1]}">${fn}</td><td style="color:#ff6b6b"><b>${views}</b></td><td>${formatBytes(http)}</td><td>${formatBytes(p2p)}</td><td style="color:#00ff88"><b>${ratio}%</b></td></tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center">데이터 없음</td></tr>';
+    document.getElementById('pageInfo').textContent = `${st.p} 페이지`;
+    document.getElementById('prev').disabled = st.p === 1;
+    document.getElementById('next').disabled = rows.length < st.size;
+  }
+  function getEndpoint() { return `/api/popular?period=${st.period}&limit=${st.size}&offset=${(st.p-1)*st.size}`; }
+  async function load() {
+    try { await loadWithCache(getEndpoint(), 'popular', render); } catch (e) { console.error(e); }
+  }
+  document.querySelectorAll('.period-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.period-btn').forEach(b => { b.style.background = 'rgba(255,255,255,.05)'; b.style.borderColor = 'rgba(255,255,255,.2)'; b.style.color = '#888'; });
+      btn.style.background = '#00d4ff'; btn.style.borderColor = '#00d4ff'; btn.style.color = '#fff';
+      st.period = btn.dataset.period; st.p = 1; load();
+    };
+  });
+  document.getElementById('prev').onclick = () => { if (st.p > 1) { st.p--; load(); } };
+  document.getElementById('next').onclick = () => { st.p++; load(); };
   load();
-  const intv = setInterval(load, settings.live.interval);
-  window.addEventListener('hashchange', () => { if (page !== 'live') clearInterval(intv); }, { once: true });
+}
+
+let trafficPie = null, devicePie = null, playerPie = null, browserPie = null, referrerPie = null, deviceNameBar = null;
+function initCharts() {
+  const chartOpts = { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#fff', padding: 15, font: { size: 11 } } } } };
+  const barOpts = { responsive: true, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#888' }, grid: { color: '#333' } }, y: { ticks: { color: '#fff' }, grid: { display: false } } } };
+
+  function render(d) {
+    const httpBytes = d.total?.httpBytes || 0;
+    const p2pBytes = d.total?.p2pBytes || 0;
+    const p2pUpBytes = d.total?.p2pUpBytes || 0;
+    const dev = d.devices || {};
+    const p1 = d.player1?.viewers || 0, p2 = d.player2?.viewers || 0;
+    const br = (d.browsers || []).slice(0, 5);
+    const ref = (d.referrers || []).slice(0, 5);
+    const dn = (d.deviceNames || []).slice(0, 5);
+
+    // 트래픽 비율 범례
+    const total = httpBytes + p2pBytes + p2pUpBytes;
+    const httpPct = total > 0 ? (httpBytes / total * 100).toFixed(1) : 0;
+    const p2pPct = total > 0 ? (p2pBytes / total * 100).toFixed(1) : 0;
+    const upPct = total > 0 ? (p2pUpBytes / total * 100).toFixed(1) : 0;
+    document.getElementById('trafficLegend').innerHTML = `
+      <span><span style="color:#ff6b6b">●</span> HTTP ${httpPct}%</span>
+      <span><span style="color:#00ff88">●</span> P2P Down ${p2pPct}%</span>
+      <span><span style="color:#00d4ff">●</span> P2P Up ${upPct}%</span>
+    `;
+
+    if (!trafficPie) {
+      trafficPie = new Chart(document.getElementById('trafficPie'), {
+        type: 'doughnut', data: { labels: ['HTTP', 'P2P Down', 'P2P Up'], datasets: [{ data: [httpBytes, p2pBytes, p2pUpBytes], backgroundColor: ['#ff6b6b', '#00ff88', '#00d4ff'], borderWidth: 0 }] },
+        options: { ...chartOpts, cutout: '65%', plugins: { ...chartOpts.plugins, legend: { display: false } } }
+      });
+      devicePie = new Chart(document.getElementById('devicePie'), {
+        type: 'doughnut', data: { labels: ['모바일', '데스크톱', '태블릿', '기타'], datasets: [{ data: [dev.mobile||0, dev.desktop||0, dev.tablet||0, dev.unknown||0], backgroundColor: ['#00ff88', '#00d4ff', '#ffa502', '#778ca3'], borderWidth: 0 }] },
+        options: { ...chartOpts, cutout: '60%' }
+      });
+      playerPie = new Chart(document.getElementById('playerPie'), {
+        type: 'doughnut', data: { labels: ['Player 1', 'Player 2'], datasets: [{ data: [p1, p2], backgroundColor: ['#ff6b6b', '#a55eea'], borderWidth: 0 }] },
+        options: { ...chartOpts, cutout: '60%' }
+      });
+      browserPie = new Chart(document.getElementById('browserPie'), {
+        type: 'doughnut', data: { labels: br.map(x => x.name), datasets: [{ data: br.map(x => x.count), backgroundColor: ['#ffa502', '#ff6b6b', '#00d4ff', '#00ff88', '#a55eea'], borderWidth: 0 }] },
+        options: { ...chartOpts, cutout: '60%' }
+      });
+      referrerPie = new Chart(document.getElementById('referrerPie'), {
+        type: 'doughnut', data: { labels: ref.map(x => x.name || 'direct'), datasets: [{ data: ref.map(x => x.count), backgroundColor: ['#a55eea', '#26de81', '#fd9644', '#00d4ff', '#ff6b6b'], borderWidth: 0 }] },
+        options: { ...chartOpts, cutout: '60%' }
+      });
+      deviceNameBar = new Chart(document.getElementById('deviceNameBar'), {
+        type: 'bar', data: { labels: dn.map(x => x.name?.slice(0,15) || '-'), datasets: [{ data: dn.map(x => x.count), backgroundColor: '#26de81', borderRadius: 4 }] },
+        options: barOpts
+      });
+    } else {
+      trafficPie.data.datasets[0].data = [httpBytes, p2pBytes, p2pUpBytes]; trafficPie.update('none');
+      devicePie.data.datasets[0].data = [dev.mobile||0, dev.desktop||0, dev.tablet||0, dev.unknown||0]; devicePie.update('none');
+      playerPie.data.datasets[0].data = [p1, p2]; playerPie.update('none');
+      browserPie.data.labels = br.map(x => x.name); browserPie.data.datasets[0].data = br.map(x => x.count); browserPie.update('none');
+      referrerPie.data.labels = ref.map(x => x.name || 'direct'); referrerPie.data.datasets[0].data = ref.map(x => x.count); referrerPie.update('none');
+      deviceNameBar.data.labels = dn.map(x => x.name?.slice(0,15) || '-'); deviceNameBar.data.datasets[0].data = dn.map(x => x.count); deviceNameBar.update('none');
+    }
+  }
+  async function update() {
+    try { await loadWithCache('/api/realtime', 'charts', render); } catch (e) { console.error(e); }
+  }
+  update();
+  setActiveInterval(update, getPageInterval('charts'));
+  window.addEventListener('hashchange', () => { trafficPie = devicePie = playerPie = browserPie = referrerPie = deviceNameBar = null; }, { once: true });
+}
+
+function initSummary() {
+  // 상태: view (daily/monthly), drillMonth/drillDay (특정 날짜 드릴다운), cardTab (today/week/month)
+  let st = { view: 'daily', drillMonth: null, drillDay: null, allData: [], cardTab: 'today' };
+
+  // 서버시간(KST) 기준 연/월/일 가져오기
+  function getServerYearMonth() {
+    const now = getServerTime();
+    const kst = new Date(now.getTime() + serverTimeOffset * 60 * 1000);
+    return { year: kst.getUTCFullYear(), month: kst.getUTCMonth() + 1, day: kst.getUTCDate() };
+  }
+
+  function renderBreadcrumb() {
+    const bc = document.getElementById('breadcrumb');
+    const { year } = getServerYearMonth();
+    if (st.drillMonth && st.drillDay) {
+      bc.innerHTML = `<span class="clickable" onclick="window.summaryBack()" style="cursor:pointer;color:#00d4ff">← ${year}년 ${st.drillMonth}월</span> &gt; <span>${st.drillDay}일 상세</span>`;
+    } else if (st.view === 'daily') {
+      bc.innerHTML = `<span>${year}년 일별 통계</span>`;
+    } else {
+      bc.innerHTML = `<span>${year}년</span>`;
+    }
+  }
+
+  // 기간별 통계 계산 함수
+  function calcStats(rows) {
+    let plays = 0, visitors = 0, maxUsers = 0, tvmon = 0, tvwiki = 0, tvhot = 0, mobile = 0, pc = 0;
+    let firstHttp = null, lastHttp = 0, firstP2p = null, lastP2p = 0, firstP2pUp = null, lastP2pUp = 0;
+    rows.forEach(r => {
+      plays += r[8] || 0;
+      visitors += r[9] || 0;
+      tvmon += r[10] || 0;
+      tvwiki += r[11] || 0;
+      tvhot += r[12] || 0;
+      mobile += r[13] || 0;
+      pc += r[14] || 0;
+      if ((r[1] || 0) > maxUsers) maxUsers = r[1] || 0;
+      if (firstHttp === null) firstHttp = r[3] || 0;
+      lastHttp = r[3] || 0;
+      if (firstP2p === null) firstP2p = r[4] || 0;
+      lastP2p = r[4] || 0;
+      if (firstP2pUp === null) firstP2pUp = r[5] || 0;
+      lastP2pUp = r[5] || 0;
+    });
+    const http = lastHttp >= firstHttp ? lastHttp - firstHttp : lastHttp;
+    const p2p = lastP2p >= firstP2p ? lastP2p - firstP2p : lastP2p;
+    const p2pUp = lastP2pUp >= firstP2pUp ? lastP2pUp - firstP2pUp : lastP2pUp;
+    const total = http + p2p;
+    const ratio = total > 0 ? ((p2p / total) * 100).toFixed(1) : '0';
+    return { plays, visitors, maxUsers, tvmon, tvwiki, tvhot, mobile, pc, http, p2p, p2pUp, total, ratio };
+  }
+
+  // 고급 카드 렌더링
+  function renderCards(rows) {
+    const { year, month, day } = getServerYearMonth();
+
+    // 오늘 데이터 필터
+    const todayRows = rows.filter(r => {
+      const p = getServerDateParts(r[0]);
+      return p.month === month && p.day === day;
+    });
+
+    // 주간 데이터 (최근 7일)
+    const weekRows = rows.filter(r => {
+      const p = getServerDateParts(r[0]);
+      const rowDate = new Date(year, p.month - 1, p.day);
+      const today = new Date(year, month - 1, day);
+      const diffDays = Math.floor((today - rowDate) / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && diffDays < 7;
+    });
+
+    // 월간 데이터 (이번달)
+    const monthRows = rows.filter(r => {
+      const p = getServerDateParts(r[0]);
+      return p.month === month;
+    });
+
+    const stats = {
+      today: calcStats(todayRows),
+      week: calcStats(weekRows),
+      month: calcStats(monthRows)
+    };
+
+    const current = stats[st.cardTab];
+    const tabLabel = st.cardTab === 'today' ? `${month}/${day} 오늘` : st.cardTab === 'week' ? '최근 7일' : `${month}월`;
+
+    document.getElementById('summaryCards').innerHTML = `
+      <!-- 메인 지표 -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px">
+        <div style="background:linear-gradient(135deg,rgba(253,150,68,.15),rgba(253,150,68,.05));border:1px solid rgba(253,150,68,.3);border-radius:12px;padding:16px;text-align:center">
+          <div style="font-size:11px;color:#fd9644;text-transform:uppercase;margin-bottom:8px;font-weight:600">재생수</div>
+          <div style="font-size:28px;font-weight:700;color:#fd9644">${current.plays.toLocaleString()}</div>
+        </div>
+        <div style="background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(0,212,255,.05));border:1px solid rgba(0,212,255,.3);border-radius:12px;padding:16px;text-align:center">
+          <div style="font-size:11px;color:#00d4ff;text-transform:uppercase;margin-bottom:8px;font-weight:600">방문자</div>
+          <div style="font-size:28px;font-weight:700;color:#00d4ff">${current.visitors.toLocaleString()}</div>
+        </div>
+        <div style="background:linear-gradient(135deg,rgba(0,255,136,.15),rgba(0,255,136,.05));border:1px solid rgba(0,255,136,.3);border-radius:12px;padding:16px;text-align:center">
+          <div style="font-size:11px;color:#00ff88;text-transform:uppercase;margin-bottom:8px;font-weight:600">총 트래픽</div>
+          <div style="font-size:28px;font-weight:700;color:#00ff88">${formatBytes(current.total)}</div>
+        </div>
+        <div style="background:linear-gradient(135deg,rgba(165,94,234,.15),rgba(165,94,234,.05));border:1px solid rgba(165,94,234,.3);border-radius:12px;padding:16px;text-align:center">
+          <div style="font-size:11px;color:#a55eea;text-transform:uppercase;margin-bottom:8px;font-weight:600">P2P 비율</div>
+          <div style="font-size:28px;font-weight:700;color:#a55eea">${current.ratio}%</div>
+        </div>
+      </div>
+
+      <!-- 트래픽 상세 -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+        <div style="background:rgba(255,107,107,.1);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:10px;color:#888;margin-bottom:4px">HTTP</div>
+            <div style="font-size:18px;font-weight:600;color:#ff6b6b">${formatBytes(current.http)}</div>
+          </div>
+          <div style="width:40px;height:40px;background:rgba(255,107,107,.2);border-radius:50%;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:18px">🌐</span>
+          </div>
+        </div>
+        <div style="background:rgba(0,255,136,.1);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:10px;color:#888;margin-bottom:4px">P2P↓</div>
+            <div style="font-size:18px;font-weight:600;color:#00ff88">${formatBytes(current.p2p)}</div>
+          </div>
+          <div style="width:40px;height:40px;background:rgba(0,255,136,.2);border-radius:50%;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:18px">⬇️</span>
+          </div>
+        </div>
+        <div style="background:rgba(38,222,129,.1);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:10px;color:#888;margin-bottom:4px">P2P↑</div>
+            <div style="font-size:18px;font-weight:600;color:#26de81">${formatBytes(current.p2pUp)}</div>
+          </div>
+          <div style="width:40px;height:40px;background:rgba(38,222,129,.2);border-radius:50%;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:18px">⬆️</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 유입 경로 & 디바이스 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <!-- 유입 경로 -->
+        <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:14px">
+          <div style="font-size:11px;color:#888;margin-bottom:12px;font-weight:600">유입 경로별 방문자</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;background:#ff6b81;border-radius:50%"></span><span style="color:#ccc;font-size:12px">tvmon</span></div>
+              <span style="color:#ff6b81;font-weight:600">${current.tvmon.toLocaleString()}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;background:#7bed9f;border-radius:50%"></span><span style="color:#ccc;font-size:12px">tvwiki</span></div>
+              <span style="color:#7bed9f;font-weight:600">${current.tvwiki.toLocaleString()}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;background:#70a1ff;border-radius:50%"></span><span style="color:#ccc;font-size:12px">tvhot</span></div>
+              <span style="color:#70a1ff;font-weight:600">${current.tvhot.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+        <!-- 디바이스 -->
+        <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:14px">
+          <div style="font-size:11px;color:#888;margin-bottom:12px;font-weight:600">디바이스별 방문자</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px">📱</span><span style="color:#ccc;font-size:12px">Mobile</span></div>
+              <span style="color:#ffa502;font-weight:600">${current.mobile.toLocaleString()}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px">💻</span><span style="color:#ccc;font-size:12px">PC</span></div>
+              <span style="color:#a55eea;font-weight:600">${current.pc.toLocaleString()}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px;border-top:1px solid rgba(255,255,255,.1)">
+              <span style="color:#888;font-size:12px">최대 동시접속</span>
+              <span style="color:#00d4ff;font-weight:600">${current.maxUsers.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // 탭 이벤트 등록
+    document.querySelectorAll('.summary-tab').forEach(tab => {
+      tab.onclick = () => {
+        document.querySelectorAll('.summary-tab').forEach(t => {
+          t.style.color = '#666';
+          t.style.borderBottomColor = 'transparent';
+        });
+        tab.style.color = '#00d4ff';
+        tab.style.borderBottomColor = '#00d4ff';
+        st.cardTab = tab.dataset.tab;
+        renderCards(st.allData);
+      };
+    });
+  }
+
+  function renderTotals(rows) {
+    // 제거됨
+  }
+
+  function renderDailyTable(rows) {
+    const { year, month } = getServerYearMonth();
+    document.getElementById('tableTitle').textContent = '일별 통계 (서버시간 KST)';
+    document.getElementById('tablePeriod').textContent = `${year}년 ${month}월`;
+    document.getElementById('summaryTableHead').innerHTML = `
+      <tr>
+        <th>날짜</th>
+        <th style="text-align:right">재생수</th>
+        <th style="text-align:right">방문자</th>
+        <th style="text-align:right;color:#ff6b81">tvmon</th>
+        <th style="text-align:right;color:#7bed9f">tvwiki</th>
+        <th style="text-align:right;color:#70a1ff">tvhot</th>
+        <th style="text-align:right;color:#ffa502" class="hide-mobile">Mobile</th>
+        <th style="text-align:right;color:#a55eea" class="hide-mobile">PC</th>
+        <th style="text-align:right">HTTP</th>
+        <th style="text-align:right" class="hide-mobile">P2P↓</th>
+        <th style="text-align:right" class="hide-mobile">P2P↑</th>
+        <th style="text-align:right">합계</th>
+        <th style="text-align:right">P2P%</th>
+      </tr>
+    `;
+
+    // 날짜별로 그룹핑 (서버시간 KST 기준)
+    // r[10]=tvmon, r[11]=tvwiki, r[12]=tvhot (리퍼러별 재생수)
+    // r[13]=mobile, r[14]=pc (디바이스별 재생수)
+    // http_bytes, p2p_bytes는 누적값이므로 first/last 차이로 델타 계산
+    const byDay = {};
+    rows.forEach(r => {
+      const p = getServerDateParts(r[0]);
+      const key = `${p.month}-${p.day}`;
+      if (!byDay[key]) byDay[key] = { month: p.month, day: p.day, plays: 0, visitors: 0, users: 0, peers: 0, firstHttp: null, lastHttp: 0, firstP2p: null, lastP2p: 0, firstP2pUp: null, lastP2pUp: 0, tvmon: 0, tvwiki: 0, tvhot: 0, mobile: 0, pc: 0 };
+      byDay[key].plays += r[8] || 0;
+      byDay[key].visitors += r[9] || 0;
+      byDay[key].tvmon += r[10] || 0;
+      byDay[key].tvwiki += r[11] || 0;
+      byDay[key].tvhot += r[12] || 0;
+      byDay[key].mobile += r[13] || 0;
+      byDay[key].pc += r[14] || 0;
+      if ((r[1] || 0) > byDay[key].users) byDay[key].users = r[1] || 0;
+      if ((r[6] || 0) > byDay[key].peers) byDay[key].peers = r[6] || 0;
+      // 누적값에서 델타 계산을 위해 first/last 저장
+      if (byDay[key].firstHttp === null) byDay[key].firstHttp = r[3] || 0;
+      byDay[key].lastHttp = r[3] || 0;
+      if (byDay[key].firstP2p === null) byDay[key].firstP2p = r[4] || 0;
+      byDay[key].lastP2p = r[4] || 0;
+      if (byDay[key].firstP2pUp === null) byDay[key].firstP2pUp = r[5] || 0;
+      byDay[key].lastP2pUp = r[5] || 0;
+    });
+    // 델타 계산 (last - first), 리셋 감지 시 last 값만 사용
+    Object.values(byDay).forEach(d => {
+      d.http = d.lastHttp >= d.firstHttp ? d.lastHttp - d.firstHttp : d.lastHttp;
+      d.p2p = d.lastP2p >= d.firstP2p ? d.lastP2p - d.firstP2p : d.lastP2p;
+      d.p2pUp = d.lastP2pUp >= d.firstP2pUp ? d.lastP2pUp - d.firstP2pUp : d.lastP2pUp;
+    });
+
+    // 날짜 내림차순 정렬 (최신순)
+    const keys = Object.keys(byDay).sort((a, b) => {
+      const [am, ad] = a.split('-').map(Number);
+      const [bm, bd] = b.split('-').map(Number);
+      return (bm * 100 + bd) - (am * 100 + ad);
+    });
+    // 합계 계산
+    let sumPlays = 0, sumVisitors = 0, sumTvmon = 0, sumTvwiki = 0, sumTvhot = 0, sumMobile = 0, sumPc = 0, sumHttp = 0, sumP2p = 0, sumP2pUp = 0;
+    keys.forEach(key => {
+      const r = byDay[key];
+      sumPlays += r.plays; sumVisitors += r.visitors;
+      sumTvmon += r.tvmon; sumTvwiki += r.tvwiki; sumTvhot += r.tvhot;
+      sumMobile += r.mobile; sumPc += r.pc;
+      sumHttp += r.http; sumP2p += r.p2p; sumP2pUp += r.p2pUp;
+    });
+    const sumTotal = sumHttp + sumP2p;
+    const sumRatio = sumTotal > 0 ? ((sumP2p / sumTotal) * 100).toFixed(1) : '0';
+
+    const dataRows = keys.map(key => {
+      const r = byDay[key];
+      const total = r.http + r.p2p;
+      const ratio = total > 0 ? ((r.p2p / total) * 100).toFixed(1) : '0';
+      return `<tr>
+        <td class="clickable" onclick="window.summaryDrill(${r.month}, ${r.day})">${r.month}/${r.day}</td>
+        <td style="text-align:right;color:#fd9644;font-weight:bold">${r.plays.toLocaleString()}</td>
+        <td style="text-align:right;color:#00d4ff">${r.visitors.toLocaleString()}</td>
+        <td style="text-align:right;color:#ff6b81">${r.tvmon.toLocaleString()}</td>
+        <td style="text-align:right;color:#7bed9f">${r.tvwiki.toLocaleString()}</td>
+        <td style="text-align:right;color:#70a1ff">${r.tvhot.toLocaleString()}</td>
+        <td style="text-align:right;color:#ffa502" class="hide-mobile">${r.mobile.toLocaleString()}</td>
+        <td style="text-align:right;color:#a55eea" class="hide-mobile">${r.pc.toLocaleString()}</td>
+        <td style="text-align:right;color:#ff6b6b">${formatBytes(r.http)}</td>
+        <td style="text-align:right;color:#00ff88" class="hide-mobile">${formatBytes(r.p2p)}</td>
+        <td style="text-align:right;color:#26de81" class="hide-mobile">${formatBytes(r.p2pUp)}</td>
+        <td style="text-align:right;color:#fff;font-weight:bold">${formatBytes(total)}</td>
+        <td style="text-align:right;color:#ffa502">${ratio}%</td>
+      </tr>`;
+    }).join('');
+
+    const cnt = keys.length || 1;
+    const sumRow = keys.length > 0 ? `<tr style="background:#1a1a2e;font-weight:bold;border-top:2px solid #444">
+      <td>합계</td>
+      <td style="text-align:right;color:#fd9644">${sumPlays.toLocaleString()}</td>
+      <td style="text-align:right;color:#00d4ff">${sumVisitors.toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b81">${sumTvmon.toLocaleString()}</td>
+      <td style="text-align:right;color:#7bed9f">${sumTvwiki.toLocaleString()}</td>
+      <td style="text-align:right;color:#70a1ff">${sumTvhot.toLocaleString()}</td>
+      <td style="text-align:right;color:#ffa502" class="hide-mobile">${sumMobile.toLocaleString()}</td>
+      <td style="text-align:right;color:#a55eea" class="hide-mobile">${sumPc.toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b6b">${formatBytes(sumHttp)}</td>
+      <td style="text-align:right;color:#00ff88" class="hide-mobile">${formatBytes(sumP2p)}</td>
+      <td style="text-align:right;color:#26de81" class="hide-mobile">${formatBytes(sumP2pUp)}</td>
+      <td style="text-align:right;color:#fff">${formatBytes(sumTotal)}</td>
+      <td style="text-align:right;color:#ffa502">${sumRatio}%</td>
+    </tr>
+    <tr style="background:#0d0d1f;color:#888;border-top:1px solid #333">
+      <td>평균</td>
+      <td style="text-align:right;color:#fd9644">${Math.round(sumPlays/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#00d4ff">${Math.round(sumVisitors/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b81">${Math.round(sumTvmon/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#7bed9f">${Math.round(sumTvwiki/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#70a1ff">${Math.round(sumTvhot/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#ffa502" class="hide-mobile">${Math.round(sumMobile/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#a55eea" class="hide-mobile">${Math.round(sumPc/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b6b">${formatBytes(sumHttp/cnt)}</td>
+      <td style="text-align:right;color:#00ff88" class="hide-mobile">${formatBytes(sumP2p/cnt)}</td>
+      <td style="text-align:right;color:#26de81" class="hide-mobile">${formatBytes(sumP2pUp/cnt)}</td>
+      <td style="text-align:right;color:#fff">${formatBytes(sumTotal/cnt)}</td>
+      <td style="text-align:right;color:#ffa502">${sumRatio}%</td>
+    </tr>` : '';
+
+    document.querySelector('#summaryTable tbody').innerHTML = (dataRows + sumRow) || '<tr><td colspan="13" style="text-align:center;color:#888">데이터 없음</td></tr>';
+  }
+
+  function renderHourlyTable(rows, targetMonth, day) {
+    document.getElementById('tableTitle').innerHTML = `<span onclick="window.summaryBack()" style="cursor:pointer;color:#00d4ff;margin-right:8px;">&larr;</span>${targetMonth}월 ${day}일 시간별 통계 (KST)`;
+    document.getElementById('tablePeriod').textContent = '';
+    document.getElementById('summaryTableHead').innerHTML = `
+      <tr>
+        <th>시간</th>
+        <th style="text-align:right">재생수</th>
+        <th style="text-align:right">방문자</th>
+        <th style="text-align:right;color:#ff6b81">tvmon</th>
+        <th style="text-align:right;color:#7bed9f">tvwiki</th>
+        <th style="text-align:right;color:#70a1ff">tvhot</th>
+        <th style="text-align:right;color:#ffa502" class="hide-mobile">Mobile</th>
+        <th style="text-align:right;color:#a55eea" class="hide-mobile">PC</th>
+        <th style="text-align:right">HTTP</th>
+        <th style="text-align:right" class="hide-mobile">P2P↓</th>
+        <th style="text-align:right" class="hide-mobile">P2P↑</th>
+        <th style="text-align:right">합계</th>
+        <th style="text-align:right">P2P%</th>
+      </tr>
+    `;
+
+    // 해당 날짜 데이터만 필터 (서버시간 KST 기준)
+    const dayRows = rows.filter(r => {
+      const p = getServerDateParts(r[0]);
+      return p.month === targetMonth && p.day === day;
+    });
+    // 시간별 델타 계산 (이전 시간대와의 차이)
+    let prevHttp = 0, prevP2p = 0, prevP2pUp = 0;
+    const processedRows = dayRows.map((r, idx) => {
+      const http = r[3] || 0, p2p = r[4] || 0, p2pUp = r[5] || 0;
+      const deltaHttp = idx === 0 ? 0 : (http >= prevHttp ? http - prevHttp : http);
+      const deltaP2p = idx === 0 ? 0 : (p2p >= prevP2p ? p2p - prevP2p : p2p);
+      const deltaP2pUp = idx === 0 ? 0 : (p2pUp >= prevP2pUp ? p2pUp - prevP2pUp : p2pUp);
+      prevHttp = http; prevP2p = p2p; prevP2pUp = p2pUp;
+      return { r, deltaHttp, deltaP2p, deltaP2pUp };
+    });
+    // 합계 계산
+    let sumPlays = 0, sumVisitors = 0, sumTvmon = 0, sumTvwiki = 0, sumTvhot = 0, sumMobile = 0, sumPc = 0, sumHttp = 0, sumP2p = 0, sumP2pUp = 0;
+    processedRows.forEach(({ r, deltaHttp, deltaP2p, deltaP2pUp }) => {
+      sumPlays += r[8] || 0; sumVisitors += r[9] || 0;
+      sumTvmon += r[10] || 0; sumTvwiki += r[11] || 0; sumTvhot += r[12] || 0;
+      sumMobile += r[13] || 0; sumPc += r[14] || 0;
+      sumHttp += deltaHttp; sumP2p += deltaP2p; sumP2pUp += deltaP2pUp;
+    });
+    const sumTotal = sumHttp + sumP2p;
+    const sumRatio = sumTotal > 0 ? ((sumP2p / sumTotal) * 100).toFixed(1) : '0';
+    const cnt = processedRows.length || 1;
+
+    const dataRows = processedRows.map(({ r, deltaHttp, deltaP2p, deltaP2pUp }) => {
+      const p = getServerDateParts(r[0]);
+      const hour = p.hour;
+      const plays = r[8] || 0;
+      const visitors = r[9] || 0;
+      const tvmon = r[10] || 0, tvwiki = r[11] || 0, tvhot = r[12] || 0;
+      const mobile = r[13] || 0, pc = r[14] || 0;
+      const total = deltaHttp + deltaP2p;
+      const ratio = total > 0 ? ((deltaP2p / total) * 100).toFixed(1) : '0';
+      return `<tr>
+        <td style="color:#aaa">${hour}시</td>
+        <td style="text-align:right;color:#fd9644;font-weight:bold">${plays.toLocaleString()}</td>
+        <td style="text-align:right;color:#00d4ff">${visitors.toLocaleString()}</td>
+        <td style="text-align:right;color:#ff6b81">${tvmon.toLocaleString()}</td>
+        <td style="text-align:right;color:#7bed9f">${tvwiki.toLocaleString()}</td>
+        <td style="text-align:right;color:#70a1ff">${tvhot.toLocaleString()}</td>
+        <td style="text-align:right;color:#ffa502" class="hide-mobile">${mobile.toLocaleString()}</td>
+        <td style="text-align:right;color:#a55eea" class="hide-mobile">${pc.toLocaleString()}</td>
+        <td style="text-align:right;color:#ff6b6b">${formatBytes(deltaHttp)}</td>
+        <td style="text-align:right;color:#00ff88" class="hide-mobile">${formatBytes(deltaP2p)}</td>
+        <td style="text-align:right;color:#26de81" class="hide-mobile">${formatBytes(deltaP2pUp)}</td>
+        <td style="text-align:right;color:#fff;font-weight:bold">${formatBytes(total)}</td>
+        <td style="text-align:right;color:#ffa502">${ratio}%</td>
+      </tr>`;
+    }).join('');
+
+    const sumRow = processedRows.length > 0 ? `<tr style="background:#1a1a2e;font-weight:bold;border-top:2px solid #444">
+      <td>합계</td>
+      <td style="text-align:right;color:#fd9644">${sumPlays.toLocaleString()}</td>
+      <td style="text-align:right;color:#00d4ff">${sumVisitors.toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b81">${sumTvmon.toLocaleString()}</td>
+      <td style="text-align:right;color:#7bed9f">${sumTvwiki.toLocaleString()}</td>
+      <td style="text-align:right;color:#70a1ff">${sumTvhot.toLocaleString()}</td>
+      <td style="text-align:right;color:#ffa502" class="hide-mobile">${sumMobile.toLocaleString()}</td>
+      <td style="text-align:right;color:#a55eea" class="hide-mobile">${sumPc.toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b6b">${formatBytes(sumHttp)}</td>
+      <td style="text-align:right;color:#00ff88" class="hide-mobile">${formatBytes(sumP2p)}</td>
+      <td style="text-align:right;color:#26de81" class="hide-mobile">${formatBytes(sumP2pUp)}</td>
+      <td style="text-align:right;color:#fff">${formatBytes(sumTotal)}</td>
+      <td style="text-align:right;color:#ffa502">${sumRatio}%</td>
+    </tr>
+    <tr style="background:#0d0d1f;color:#888;border-top:1px solid #333">
+      <td>평균</td>
+      <td style="text-align:right;color:#fd9644">${Math.round(sumPlays/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#00d4ff">${Math.round(sumVisitors/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b81">${Math.round(sumTvmon/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#7bed9f">${Math.round(sumTvwiki/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#70a1ff">${Math.round(sumTvhot/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#ffa502" class="hide-mobile">${Math.round(sumMobile/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#a55eea" class="hide-mobile">${Math.round(sumPc/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b6b">${formatBytes(sumHttp/cnt)}</td>
+      <td style="text-align:right;color:#00ff88" class="hide-mobile">${formatBytes(sumP2p/cnt)}</td>
+      <td style="text-align:right;color:#26de81" class="hide-mobile">${formatBytes(sumP2pUp/cnt)}</td>
+      <td style="text-align:right;color:#fff">${formatBytes(sumTotal/cnt)}</td>
+      <td style="text-align:right;color:#ffa502">${sumRatio}%</td>
+    </tr>` : '';
+
+    document.querySelector('#summaryTable tbody').innerHTML = (dataRows + sumRow) || '<tr><td colspan="13" style="text-align:center;color:#888">데이터 없음</td></tr>';
+
+    // 해당 날짜 합계만
+    renderTotals(dayRows);
+    renderCards(dayRows);
+  }
+
+  function renderMonthlyTable(rows) {
+    const now = getServerTime();
+    const kst = new Date(now.getTime() + serverTimeOffset * 60 * 1000);
+    const year = kst.getUTCFullYear();
+    document.getElementById('tableTitle').textContent = '월별 통계 (서버시간 KST)';
+    document.getElementById('tablePeriod').textContent = `${year}년`;
+    document.getElementById('summaryTableHead').innerHTML = `
+      <tr>
+        <th>월</th>
+        <th style="text-align:right">재생수</th>
+        <th style="text-align:right">방문자</th>
+        <th style="text-align:right;color:#ff6b81">tvmon</th>
+        <th style="text-align:right;color:#7bed9f">tvwiki</th>
+        <th style="text-align:right;color:#70a1ff">tvhot</th>
+        <th style="text-align:right;color:#ffa502" class="hide-mobile">Mobile</th>
+        <th style="text-align:right;color:#a55eea" class="hide-mobile">PC</th>
+        <th style="text-align:right">HTTP</th>
+        <th style="text-align:right" class="hide-mobile">P2P↓</th>
+        <th style="text-align:right" class="hide-mobile">P2P↑</th>
+        <th style="text-align:right">합계</th>
+        <th style="text-align:right">P2P%</th>
+      </tr>
+    `;
+
+    // 월별 그룹핑 (서버시간 KST 기준)
+    // r[10]=tvmon, r[11]=tvwiki, r[12]=tvhot (리퍼러별 재생수)
+    // r[13]=mobile, r[14]=pc (디바이스별 재생수)
+    // http_bytes, p2p_bytes는 누적값이므로 first/last 차이로 델타 계산
+    const byMonth = {};
+    rows.forEach(r => {
+      const p = getServerDateParts(r[0]);
+      const m = p.month;
+      if (!byMonth[m]) byMonth[m] = { plays: 0, visitors: 0, users: 0, peers: 0, firstHttp: null, lastHttp: 0, firstP2p: null, lastP2p: 0, firstP2pUp: null, lastP2pUp: 0, tvmon: 0, tvwiki: 0, tvhot: 0, mobile: 0, pc: 0 };
+      byMonth[m].plays += r[8] || 0;
+      byMonth[m].visitors += r[9] || 0;
+      byMonth[m].tvmon += r[10] || 0;
+      byMonth[m].tvwiki += r[11] || 0;
+      byMonth[m].tvhot += r[12] || 0;
+      byMonth[m].mobile += r[13] || 0;
+      byMonth[m].pc += r[14] || 0;
+      if ((r[1] || 0) > byMonth[m].users) byMonth[m].users = r[1] || 0;
+      if ((r[6] || 0) > byMonth[m].peers) byMonth[m].peers = r[6] || 0;
+      // 누적값에서 델타 계산을 위해 first/last 저장
+      if (byMonth[m].firstHttp === null) byMonth[m].firstHttp = r[3] || 0;
+      byMonth[m].lastHttp = r[3] || 0;
+      if (byMonth[m].firstP2p === null) byMonth[m].firstP2p = r[4] || 0;
+      byMonth[m].lastP2p = r[4] || 0;
+      if (byMonth[m].firstP2pUp === null) byMonth[m].firstP2pUp = r[5] || 0;
+      byMonth[m].lastP2pUp = r[5] || 0;
+    });
+    // 델타 계산 (last - first), 리셋 감지 시 last 값만 사용
+    Object.values(byMonth).forEach(d => {
+      d.http = d.lastHttp >= d.firstHttp ? d.lastHttp - d.firstHttp : d.lastHttp;
+      d.p2p = d.lastP2p >= d.firstP2p ? d.lastP2p - d.firstP2p : d.lastP2p;
+      d.p2pUp = d.lastP2pUp >= d.firstP2pUp ? d.lastP2pUp - d.firstP2pUp : d.lastP2pUp;
+    });
+
+    const months = Object.keys(byMonth).map(Number).sort((a, b) => b - a);
+
+    // 합계 계산
+    let sumPlays = 0, sumVisitors = 0, sumTvmon = 0, sumTvwiki = 0, sumTvhot = 0, sumMobile = 0, sumPc = 0, sumHttp = 0, sumP2p = 0, sumP2pUp = 0;
+    months.forEach(m => {
+      const d = byMonth[m];
+      sumPlays += d.plays; sumVisitors += d.visitors;
+      sumTvmon += d.tvmon; sumTvwiki += d.tvwiki; sumTvhot += d.tvhot;
+      sumMobile += d.mobile; sumPc += d.pc;
+      sumHttp += d.http; sumP2p += d.p2p; sumP2pUp += d.p2pUp;
+    });
+    const sumTotal = sumHttp + sumP2p;
+    const sumRatio = sumTotal > 0 ? ((sumP2p / sumTotal) * 100).toFixed(1) : '0';
+
+    const dataRows = months.map(m => {
+      const d = byMonth[m];
+      const total = d.http + d.p2p;
+      const ratio = total > 0 ? ((d.p2p / total) * 100).toFixed(1) : '0';
+      return `<tr>
+        <td>${m}월</td>
+        <td style="text-align:right;color:#fd9644;font-weight:bold">${d.plays.toLocaleString()}</td>
+        <td style="text-align:right;color:#00d4ff">${d.visitors.toLocaleString()}</td>
+        <td style="text-align:right;color:#ff6b81">${d.tvmon.toLocaleString()}</td>
+        <td style="text-align:right;color:#7bed9f">${d.tvwiki.toLocaleString()}</td>
+        <td style="text-align:right;color:#70a1ff">${d.tvhot.toLocaleString()}</td>
+        <td style="text-align:right;color:#ffa502" class="hide-mobile">${d.mobile.toLocaleString()}</td>
+        <td style="text-align:right;color:#a55eea" class="hide-mobile">${d.pc.toLocaleString()}</td>
+        <td style="text-align:right;color:#ff6b6b">${formatBytes(d.http)}</td>
+        <td style="text-align:right;color:#00ff88" class="hide-mobile">${formatBytes(d.p2p)}</td>
+        <td style="text-align:right;color:#26de81" class="hide-mobile">${formatBytes(d.p2pUp)}</td>
+        <td style="text-align:right;color:#fff;font-weight:bold">${formatBytes(total)}</td>
+        <td style="text-align:right;color:#ffa502">${ratio}%</td>
+      </tr>`;
+    }).join('');
+
+    const cnt = months.length || 1;
+    const sumRow = months.length > 0 ? `<tr style="background:#1a1a2e;font-weight:bold;border-top:2px solid #444">
+      <td>합계</td>
+      <td style="text-align:right;color:#fd9644">${sumPlays.toLocaleString()}</td>
+      <td style="text-align:right;color:#00d4ff">${sumVisitors.toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b81">${sumTvmon.toLocaleString()}</td>
+      <td style="text-align:right;color:#7bed9f">${sumTvwiki.toLocaleString()}</td>
+      <td style="text-align:right;color:#70a1ff">${sumTvhot.toLocaleString()}</td>
+      <td style="text-align:right;color:#ffa502" class="hide-mobile">${sumMobile.toLocaleString()}</td>
+      <td style="text-align:right;color:#a55eea" class="hide-mobile">${sumPc.toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b6b">${formatBytes(sumHttp)}</td>
+      <td style="text-align:right;color:#00ff88" class="hide-mobile">${formatBytes(sumP2p)}</td>
+      <td style="text-align:right;color:#26de81" class="hide-mobile">${formatBytes(sumP2pUp)}</td>
+      <td style="text-align:right;color:#fff">${formatBytes(sumTotal)}</td>
+      <td style="text-align:right;color:#ffa502">${sumRatio}%</td>
+    </tr>
+    <tr style="background:#0d0d1f;color:#888;border-top:1px solid #333">
+      <td>평균</td>
+      <td style="text-align:right;color:#fd9644">${Math.round(sumPlays/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#00d4ff">${Math.round(sumVisitors/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b81">${Math.round(sumTvmon/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#7bed9f">${Math.round(sumTvwiki/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#70a1ff">${Math.round(sumTvhot/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#ffa502" class="hide-mobile">${Math.round(sumMobile/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#a55eea" class="hide-mobile">${Math.round(sumPc/cnt).toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b6b">${formatBytes(Math.round(sumHttp/cnt))}</td>
+      <td style="text-align:right;color:#00ff88" class="hide-mobile">${formatBytes(Math.round(sumP2p/cnt))}</td>
+      <td style="text-align:right;color:#26de81" class="hide-mobile">${formatBytes(Math.round(sumP2pUp/cnt))}</td>
+      <td style="text-align:right;color:#fff">${formatBytes(Math.round(sumTotal/cnt))}</td>
+      <td style="text-align:right;color:#ffa502">${sumRatio}%</td>
+    </tr>` : '';
+
+    document.querySelector('#summaryTable tbody').innerHTML = (dataRows + sumRow) || '<tr><td colspan="13" style="text-align:center;color:#888">데이터 없음</td></tr>';
+  }
+
+  function render() {
+    renderBreadcrumb();
+    if (st.drillMonth && st.drillDay) {
+      renderHourlyTable(st.allData, st.drillMonth, st.drillDay);
+    } else if (st.view === 'daily') {
+      renderDailyTable(st.allData);
+      renderTotals(st.allData);
+      renderCards(st.allData);
+    } else {
+      renderMonthlyTable(st.allData);
+      renderTotals(st.allData);
+      renderCards(st.allData);
+    }
+  }
+
+  async function load() {
+    try {
+      // 일별: 이번달 데이터 (30d, 1h sample)
+      // 월별: 1년 데이터 (365d, 1d sample)
+      const period = st.view === 'daily' ? '30d' : '365d';
+      const sample = st.view === 'daily' ? '1h' : '1d';
+      const url = `/api/history/stats?period=${period}&sample=${sample}&_t=${Date.now()}`;
+      const data = await fetch(url).then(r => r.json());
+      st.allData = data.dataset || [];
+      render();
+    } catch (e) { console.error('Summary load error:', e); }
+  }
+
+  // 글로벌 함수 등록
+  window.summaryDrill = (month, day) => {
+    st.drillMonth = month;
+    st.drillDay = day;
+    render();
+  };
+  window.summaryBack = () => {
+    st.drillMonth = null;
+    st.drillDay = null;
+    render();
+  };
+
+  // 버튼 이벤트
+  document.querySelectorAll('.summary-period-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.summary-period-btn').forEach(b => {
+        b.style.background = 'rgba(255,255,255,.05)';
+        b.style.borderColor = 'rgba(255,255,255,.2)';
+        b.style.color = '#888';
+        b.classList.remove('active');
+      });
+      btn.style.background = '#00d4ff';
+      btn.style.borderColor = '#00d4ff';
+      btn.style.color = '#fff';
+      btn.classList.add('active');
+      st.view = btn.dataset.view;
+      st.drillMonth = null;
+      st.drillDay = null;
+      load();
+    };
+  });
+
+  load();
+  setActiveInterval(load, getPageInterval('summary'));
+}
+
+function initAnalysis() {
+  let period = 'realtime';
+  function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+  }
+  function updateLayout() {
+    // 모든 기간에서 동일한 레이아웃 사용
+    document.querySelectorAll('.realtime-only').forEach(el => el.style.display = '');
+    document.getElementById('analysisCards').style.gridTemplateColumns = 'repeat(5,1fr)';
+    const thead = document.getElementById('analysisTableHead');
+    if (period === 'realtime') {
+      thead.innerHTML = '<tr><th style="text-align:left;width:3%">#</th><th style="text-align:left;width:12%">IP</th><th style="text-align:right;width:5%">세션</th><th style="text-align:center;width:4%">서버</th><th style="text-align:left;width:22%">제목</th><th style="text-align:right;width:10%">HTTP</th><th style="text-align:right;width:10%">P2P Down</th><th style="text-align:right;width:10%">P2P Up</th><th style="text-align:right;width:14%">합계</th></tr>';
+    } else {
+      thead.innerHTML = '<tr><th style="text-align:left;width:4%">#</th><th style="text-align:left;width:14%">IP</th><th style="text-align:right;width:7%">세션</th><th style="text-align:center;width:6%">서버</th><th style="text-align:right;width:12%">HTTP</th><th style="text-align:right;width:12%">P2P Down</th><th style="text-align:right;width:12%">P2P Up</th><th style="text-align:right;width:16%">합계</th></tr>';
+    }
+  }
+  function render(data) {
+    const totals = data.totals || {};
+    const ips = data.ips || [];
+    updateLayout();
+    document.getElementById('analysisUniqueIps').textContent = (totals.uniqueIps || 0).toLocaleString();
+    document.getElementById('analysisTotalSessions').textContent = (totals.totalSessions || 0).toLocaleString();
+    document.getElementById('analysisTotalHttp').textContent = formatBytes(totals.totalHttp || 0);
+    document.getElementById('analysisTotalP2p').textContent = formatBytes(totals.totalP2p || 0);
+    document.getElementById('analysisTotalP2pUp').textContent = formatBytes(totals.totalP2pUp || 0);
+    document.getElementById('analysisCount').textContent = `상위 ${ips.length}개`;
+    const tbody = document.querySelector('#analysisTable tbody');
+    if (ips.length === 0) { tbody.innerHTML = `<tr><td colspan="${period === 'realtime' ? 9 : 8}" style="text-align:center;color:#888">데이터 없음</td></tr>`; return; }
+    const totalTraffic = (totals.totalHttp || 0) + (totals.totalP2p || 0);
+    tbody.innerHTML = ips.map((ip, i) => {
+      const serverNum = ip.server ? (ip.server.match(/every(\d+)/) || [])[1] || '-' : '-';
+      const pct = totalTraffic > 0 ? ((ip.totalBytes / totalTraffic) * 100).toFixed(2) : 0;
+      const filename = ip.filename || '-';
+      const shortFilename = filename.length > 30 ? filename.slice(0, 30) + '...' : filename;
+      if (period === 'realtime') {
+        return `<tr><td style="color:#666">${i + 1}</td><td class="copy-ip" data-ip="${ip.ip}" style="font-family:monospace;font-size:11px;cursor:pointer" title="클릭하여 복사">${ip.ip}</td><td style="text-align:right;color:#fd9644">${ip.sessions}</td><td style="text-align:center;color:#00d4ff" title="${ip.server||''}">${serverNum}</td><td style="color:#aaa;font-size:11px" title="${filename}">${shortFilename}</td><td style="text-align:right;color:#ff6b6b">${formatBytes(ip.httpBytes)}</td><td style="text-align:right;color:#00ff88">${formatBytes(ip.p2pBytes)}</td><td style="text-align:right;color:#26de81">${formatBytes(ip.p2pUpBytes)}</td><td style="text-align:right;color:#fff;font-weight:bold">${formatBytes(ip.totalBytes)} <span style="color:#666;font-size:10px">(${pct}%)</span></td></tr>`;
+      } else {
+        return `<tr><td style="color:#666">${i + 1}</td><td class="copy-ip" data-ip="${ip.ip}" style="font-family:monospace;font-size:11px;cursor:pointer" title="클릭하여 복사">${ip.ip}</td><td style="text-align:right;color:#fd9644">${ip.sessions}</td><td style="text-align:center;color:#00d4ff" title="${ip.server||''}">${serverNum}</td><td style="text-align:right;color:#ff6b6b">${formatBytes(ip.httpBytes)}</td><td style="text-align:right;color:#00ff88">${formatBytes(ip.p2pBytes)}</td><td style="text-align:right;color:#26de81">${formatBytes(ip.p2pUpBytes)}</td><td style="text-align:right;color:#fff;font-weight:bold">${formatBytes(ip.totalBytes)} <span style="color:#666;font-size:10px">(${pct}%)</span></td></tr>`;
+      }
+    }).join('');
+    // IP 복사 이벤트
+    tbody.querySelectorAll('.copy-ip').forEach(td => {
+      td.onclick = () => {
+        copyToClipboard(td.dataset.ip);
+        td.style.color = '#00ff88';
+        setTimeout(() => td.style.color = '', 300);
+      };
+    });
+  }
+  async function load() {
+    const data = await fetch(`/api/ip-analysis?period=${period}&limit=100&_t=${Date.now()}`).then(r => r.json());
+    render(data);
+  }
+  // 버튼 이벤트
+  document.querySelectorAll('.analysis-period-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.analysis-period-btn').forEach(b => { b.style.background = 'rgba(255,255,255,.05)'; b.style.borderColor = 'rgba(255,255,255,.2)'; b.style.color = '#888'; });
+      btn.style.background = '#00d4ff'; btn.style.borderColor = '#00d4ff'; btn.style.color = '#fff';
+      period = btn.dataset.period;
+      load();
+    };
+  });
+  load();
+  setActiveInterval(load, 5000); // 5초마다 갱신
+}
+
+function initVisitors() {
+  let st = { p: 1, size: 50, period: '1d', ip: '' };
+  function render(data) {
+    const rows = data.dataset || [];
+    document.querySelector('#visitorsTable tbody').innerHTML = rows.map((r, i) => {
+      const idx = (st.p - 1) * st.size + i + 1;
+      const ts = r[0] ? formatServerDateTime(r[0]) : '-';
+      const ip = r[1] || '-';
+      const fn = r[4]?.length > 30 ? r[4].slice(0, 30) + '...' : (r[4] || '-');
+      const dev = r[6] || r[5] || '-';
+      const br = r[7]?.length > 15 ? r[7].slice(0, 15) + '...' : (r[7] || '-');
+      const ref = r[8]?.length > 20 ? r[8].slice(0, 20) + '...' : (r[8] || 'direct');
+      return `<tr><td>${idx}</td><td style="font-size:11px">${ts}</td><td style="font-size:11px">${ip}</td><td title="${r[4]}">${fn}</td><td>${dev}</td><td>${br}</td><td title="${r[8]}">${ref}</td></tr>`;
+    }).join('') || '<tr><td colspan="7" style="text-align:center">데이터 없음</td></tr>';
+    document.getElementById('pageInfo').textContent = `${st.p} 페이지`;
+    document.getElementById('prev').disabled = st.p === 1;
+    document.getElementById('next').disabled = rows.length < st.size;
+  }
+  function getEndpoint() {
+    let url = `/api/visitors?period=${st.period}&limit=${st.size}&offset=${(st.p-1)*st.size}`;
+    if (st.ip) url += `&ip=${encodeURIComponent(st.ip)}`;
+    return url;
+  }
+  async function load() {
+    try { await loadWithCache(getEndpoint(), 'visitors', render); } catch (e) { console.error(e); }
+  }
+  document.getElementById('prev').onclick = () => { if (st.p > 1) { st.p--; load(); } };
+  document.getElementById('next').onclick = () => { st.p++; load(); };
+  document.getElementById('visitorPeriod').onchange = (e) => { st.period = e.target.value; st.p = 1; load(); };
+  document.getElementById('searchBtn').onclick = () => { st.ip = document.getElementById('ipSearch').value.trim(); st.p = 1; load(); };
+  document.getElementById('ipSearch').onkeypress = (e) => { if (e.key === 'Enter') { st.ip = e.target.value.trim(); st.p = 1; load(); } };
+  load();
+
+  // 실시간 갱신 (설정 변경 시 자동 업데이트)
+  setActiveInterval(load, getPageInterval('visitors'));
 }
 
 let historyChart = null;
-let trafficChart = null;
+let historyTrafficChart = null;
 
 function initHistory() {
   loadHistory();
@@ -535,8 +3124,7 @@ async function loadHistory() {
   const sample = sampleMap[period] || '10m';
 
   try {
-    const r = await fetch(`/api/history/stats?period=${period}&sample=${sample}`);
-    const data = await r.json();
+    const data = await fetchWithCache(`/api/history/stats?period=${period}&sample=${sample}`, 'history');
 
     if (data.error) {
       console.error('History error:', data.error);
@@ -544,9 +3132,9 @@ async function loadHistory() {
     }
 
     const rows = data.dataset || [];
+    // 서버시간(KST) 기준 레이블
     const labels = rows.map(r => {
-      const d = new Date(r[0]);
-      return period === '1h' || period === '6h' ? d.toLocaleTimeString() : d.toLocaleString();
+      return (period === '1h' || period === '6h') ? formatServerTime(r[0]) : formatServerDateTime(r[0]);
     });
     const viewers = rows.map(r => r[1] || 0);
     const uniqueUsers = rows.map(r => r[2] || 0);
@@ -555,7 +3143,7 @@ async function loadHistory() {
 
     // Destroy old charts
     if (historyChart) historyChart.destroy();
-    if (trafficChart) trafficChart.destroy();
+    if (historyTrafficChart) historyTrafficChart.destroy();
 
     // Viewers chart
     historyChart = new Chart(document.getElementById('historyChart'), {
@@ -578,7 +3166,7 @@ async function loadHistory() {
     });
 
     // Traffic chart
-    trafficChart = new Chart(document.getElementById('trafficChart'), {
+    historyTrafficChart = new Chart(document.getElementById('historyTrafficChart'), {
       type: 'line',
       data: {
         labels,
@@ -602,10 +3190,25 @@ async function loadHistory() {
 }
 
 document.querySelectorAll('.menu-item a').forEach(a => {
-  a.onclick = e => { e.preventDefault(); window.location.hash = a.getAttribute('href').slice(1); };
+  a.onclick = e => {
+    e.preventDefault();
+    const href = a.getAttribute('href');
+    const page = href.slice(1);
+    console.log('[menu click] href:', href, 'page:', page);
+    window.location.hash = page;
+  };
 });
-window.onhashchange = () => nav(location.hash.slice(1) || 'dashboard');
+window.onhashchange = () => {
+  const newPage = location.hash.slice(1) || 'dashboard';
+  console.log('[hashchange] Hash changed to:', location.hash, '-> page:', newPage);
+  nav(newPage);
+};
 nav(location.hash.slice(1) || 'dashboard');
+
+// Close modal when clicking outside
+document.getElementById('settingsModal').onclick = (e) => {
+  if (e.target.id === 'settingsModal') closeModal();
+};
 </script>
 </body>
 </html>
