@@ -4,6 +4,59 @@ P2P 스트리밍 서비스의 실시간 통계 수집 및 시각화 시스템
 
 ---
 
+## 0. 서버 정보 및 접속
+
+### 현재 운영 서버
+
+| 항목 | 값 |
+|------|-----|
+| **서버 IP** | `37.27.122.163` |
+| **IPv6** | `2a01:4f9:3070:2c81::2` |
+| **OS** | Ubuntu 24.04.1 LTS (ARM64) |
+| **CPU** | 80 cores |
+| **RAM** | 125GB |
+| **Hostname** | Ubuntu-2404-noble-arm64-base |
+
+### 접속 URL
+
+| 서비스 | URL | 용도 |
+|--------|-----|------|
+| **관리자 대시보드** | `http://37.27.122.163` | 통계 대시보드 (nginx 프록시) |
+| **대시보드 (HTTPS)** | `https://37.27.122.163` | SSL 적용 대시보드 |
+| **대시보드 (직접)** | `http://37.27.122.163:8080` | nginx 우회 직접 접속 |
+| **WebSocket (P2P)** | `wss://37.27.122.163:8443` | P2P 클라이언트 연결 |
+| **QuestDB Console** | `http://37.27.122.163:9000` | DB 관리 콘솔 |
+
+### 포트 구성
+
+| 포트 | 프로토콜 | 서비스 | 설명 |
+|------|----------|--------|------|
+| 80 | HTTP | nginx | 대시보드 프록시 |
+| 443 | HTTPS | nginx | SSL 대시보드 프록시 |
+| 8080 | HTTP | stats_dashboard | 대시보드 직접 |
+| 8443 | WSS | simple_ws | P2P WebSocket |
+| 9000 | HTTP | QuestDB | 웹 콘솔 |
+| 9002 | HTTP | QuestDB | REST API |
+| 9009 | TCP | QuestDB | ILP (Line Protocol) |
+| 9019 | TCP | QuestDB | ILP TCP |
+
+### 방화벽 설정 (필요 시)
+
+```bash
+# UFW 사용 시
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw allow 8443/tcp
+ufw allow 9000/tcp  # QuestDB 콘솔 (필요 시)
+
+# iptables 사용 시
+iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+iptables -A INPUT -p tcp --dport 8443 -j ACCEPT
+```
+
+---
+
 ## 1. 기술 스택
 
 ### Backend
@@ -205,6 +258,283 @@ net.ipv4.tcp_fin_timeout = 15
 EOF
 
 sysctl -p /etc/sysctl.d/99-p2p-stats.conf
+```
+
+### 3.7 Nginx 리버스 프록시 설정
+
+```bash
+# nginx 설치
+apt install nginx -y
+
+# 설정 파일 생성
+cat > /etc/nginx/sites-available/p2p_stats << 'EOF'
+upstream p2p_backend {
+    server 127.0.0.1:8080;
+    keepalive 64;
+}
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    location / {
+        proxy_pass http://p2p_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /ws {
+        proxy_pass http://p2p_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+}
+EOF
+
+# 심볼릭 링크 생성 및 기본 설정 제거
+rm -f /etc/nginx/sites-enabled/default
+ln -sf /etc/nginx/sites-available/p2p_stats /etc/nginx/sites-enabled/
+
+# nginx 재시작
+nginx -t && systemctl restart nginx
+```
+
+### 3.8 SSL 인증서 설정
+
+#### 방법 1: Let's Encrypt (무료, 도메인 필요)
+
+```bash
+# certbot 설치
+apt install certbot python3-certbot-nginx -y
+
+# 인증서 발급 (도메인 필요)
+certbot --nginx -d your-domain.com
+
+# 자동 갱신 확인
+certbot renew --dry-run
+```
+
+#### 방법 2: Cloudflare Origin 인증서 (현재 사용 중)
+
+```bash
+# 인증서 디렉토리 생성
+mkdir -p /etc/nginx/ssl
+
+# Cloudflare 대시보드에서 Origin Certificate 발급 후 저장
+# SSL/TLS > Origin Server > Create Certificate
+
+# 인증서 저장
+cat > /etc/nginx/ssl/cloudflare.crt << 'EOF'
+-----BEGIN CERTIFICATE-----
+(Cloudflare에서 발급받은 인증서 내용)
+-----END CERTIFICATE-----
+EOF
+
+cat > /etc/nginx/ssl/cloudflare.key << 'EOF'
+-----BEGIN PRIVATE KEY-----
+(Cloudflare에서 발급받은 키 내용)
+-----END PRIVATE KEY-----
+EOF
+
+# 권한 설정
+chmod 600 /etc/nginx/ssl/cloudflare.key
+```
+
+#### 방법 3: 자체 서명 인증서 (테스트용)
+
+```bash
+# 자체 서명 인증서 생성
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /etc/nginx/ssl/self-signed.key \
+  -out /etc/nginx/ssl/self-signed.crt \
+  -subj "/CN=localhost"
+```
+
+#### Nginx SSL 설정 추가
+
+```bash
+# SSL 서버 블록 추가
+cat >> /etc/nginx/sites-available/p2p_stats << 'EOF'
+
+server {
+    listen 443 ssl http2 default_server;
+    listen [::]:443 ssl http2 default_server;
+    server_name _;
+
+    # Cloudflare Origin 인증서
+    ssl_certificate /etc/nginx/ssl/cloudflare.crt;
+    ssl_certificate_key /etc/nginx/ssl/cloudflare.key;
+
+    # 또는 Let's Encrypt
+    # ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
+    ssl_prefer_server_ciphers off;
+
+    location / {
+        proxy_pass http://p2p_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /ws {
+        proxy_pass http://p2p_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+}
+EOF
+
+nginx -t && systemctl reload nginx
+```
+
+### 3.9 QuestDB 연동 설정
+
+#### 연결 정보
+
+| 항목 | 값 | 용도 |
+|------|-----|------|
+| **HTTP API** | `http://127.0.0.1:9002` | REST 쿼리 (SELECT) |
+| **ILP TCP** | `127.0.0.1:9019` | 데이터 적재 (INSERT) |
+| **ILP UDP** | `127.0.0.1:9009` | 데이터 적재 (고속) |
+| **Web Console** | `http://127.0.0.1:9000` | 관리 UI |
+| **PostgreSQL** | `127.0.0.1:8812` | PG Wire Protocol |
+
+#### simple_ws 설정 (src/main.rs)
+
+```rust
+// QuestDB ILP 연결 주소
+const QUESTDB_ILP_ADDR: &str = "127.0.0.1:9019";
+```
+
+#### stats_dashboard 설정 (src/main.rs)
+
+```rust
+// simple_ws API 주소
+const SIMPLE_WS_URL: &str = "https://127.0.0.1:8443";
+
+// QuestDB HTTP API 주소
+const QUESTDB_URL: &str = "http://127.0.0.1:9002";
+```
+
+#### 테이블 생성 (자동 생성되지만 수동 생성 시)
+
+```sql
+-- QuestDB Web Console (http://localhost:9000)에서 실행
+
+-- 전체 통계 (10초마다 기록)
+CREATE TABLE IF NOT EXISTS p2p_stats (
+    ts TIMESTAMP,
+    viewers LONG,
+    unique_users LONG,
+    http_bytes LONG,
+    p2p_bytes LONG,
+    p2p_up_bytes LONG,
+    peers LONG,
+    swarms LONG
+) TIMESTAMP(ts) PARTITION BY DAY WAL;
+
+-- 스웜별 통계
+CREATE TABLE IF NOT EXISTS p2p_swarms (
+    ts TIMESTAMP,
+    swarm_id SYMBOL,
+    filename STRING,
+    viewers LONG,
+    http_bytes LONG,
+    p2p_bytes LONG
+) TIMESTAMP(ts) PARTITION BY DAY WAL;
+
+-- 방문자 로그 (세션 종료 시)
+CREATE TABLE IF NOT EXISTS visitor_logs (
+    timestamp TIMESTAMP,
+    ip STRING,
+    session_id STRING,
+    swarm_id STRING,
+    filename STRING,
+    device STRING,
+    device_name STRING,
+    browser STRING,
+    referrer STRING,
+    net_type STRING,
+    player_id SHORT,
+    http_bytes LONG,
+    p2p_bytes LONG,
+    p2p_up_bytes LONG
+) TIMESTAMP(timestamp) PARTITION BY DAY WAL;
+
+-- 일별 집계
+CREATE TABLE IF NOT EXISTS daily_stats (
+    date TIMESTAMP,
+    total_sessions LONG,
+    unique_ips LONG,
+    total_http LONG,
+    total_p2p LONG,
+    total_p2p_up LONG,
+    peak_viewers LONG
+) TIMESTAMP(date) PARTITION BY MONTH WAL;
+```
+
+#### 데이터 확인 쿼리
+
+```sql
+-- 최근 통계
+SELECT * FROM p2p_stats ORDER BY ts DESC LIMIT 10;
+
+-- 오늘 방문자 수
+SELECT count(), count_distinct(ip) FROM visitor_logs
+WHERE timestamp > timestamp_floor('d', now());
+
+-- IP별 트래픽 (24시간)
+SELECT ip, count() as sessions,
+       sum(http_bytes) as http,
+       sum(p2p_bytes) as p2p
+FROM visitor_logs
+WHERE timestamp > dateadd('d', -1, now())
+GROUP BY ip
+ORDER BY http + p2p DESC
+LIMIT 20;
+
+-- 일별 추이
+SELECT timestamp_floor('d', ts) as day,
+       max(viewers) as peak,
+       sum(http_bytes)/1024/1024/1024 as http_gb,
+       sum(p2p_bytes)/1024/1024/1024 as p2p_gb
+FROM p2p_stats
+WHERE ts > dateadd('d', -7, now())
+GROUP BY day
+ORDER BY day;
+```
+
+#### QuestDB 백업
+
+```bash
+# 데이터 디렉토리 백업
+docker exec questdb tar czf - /var/lib/questdb/db > questdb_backup_$(date +%Y%m%d).tar.gz
+
+# 복원
+docker stop questdb
+docker run --rm -v questdb_data:/var/lib/questdb \
+  -v $(pwd):/backup alpine \
+  tar xzf /backup/questdb_backup_YYYYMMDD.tar.gz -C /
+docker start questdb
 ```
 
 ---
