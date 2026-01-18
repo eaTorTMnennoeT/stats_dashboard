@@ -51,6 +51,17 @@ P2P 스트리밍 서비스의 실시간 통계를 수집하고 시각화하는 �
 | 프론트엔드 | Vanilla JS, Chart.js 4.4 |
 | TLS | rustls |
 
+## Redis/Dragonfly 미사용 이유
+
+| 용도 | Redis 대신 사용 | 이유 |
+|------|----------------|------|
+| 실시간 통계 | Rust 인메모리 (`RwLock<HashMap>`) | 외부 DB 호출 없이 나노초 단위 접근, 단일 서버라 분산 필요 없음 |
+| 세션 관리 | Rust `HashMap<u64, Session>` | WebSocket 연결당 세션, 프로세스 내 관리 |
+| 히스토리 | QuestDB | 시계열 특화 DB, 집계 쿼리 최적화 |
+| 캐싱 | 프론트엔드 JS | 대시보드 자체 캐싱 옵션 |
+
+**결론:** 단일 서버 + 실시간 처리 구조에서 외부 캐시 레이어 추가 시 오히려 레이턴시만 증가. Rust 인메모리가 Redis보다 빠름.
+
 ## 컴포넌트
 
 ### simple_ws (WebSocket 서버)
