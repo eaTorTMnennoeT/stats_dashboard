@@ -21,8 +21,8 @@ use tower_http::cors::CorsLayer;
 const WORKER_THREADS: usize = 72;
 const BLOCKING_THREADS: usize = 128;
 const MAX_CONNECTIONS: usize = 1_000_000;
-const IDLE_TIMEOUT_SECS: u64 = 60;
-const PING_INTERVAL_SECS: u64 = 30;
+const IDLE_TIMEOUT_SECS: u64 = 120;
+const PING_INTERVAL_SECS: u64 = 15;
 const QUESTDB_ILP_ADDR: &str = "127.0.0.1:9019";
 const QUESTDB_FLUSH_SECS: u64 = 1;
 
@@ -67,6 +67,8 @@ struct P2PStats {
     r_http_bytes: u64,
     r_p2p_bytes: u64,
     r_p2p_up_bytes: u64,
+    // Timestamp when deltas were last reset (for accurate speed calculation)
+    last_reset_ms: u64,
     player1: PlayerStats,
     player2: PlayerStats,
     devices: DeviceStats,
@@ -75,7 +77,8 @@ struct P2PStats {
     browsers: HashMap<String, u64>,
     referrers: HashMap<String, u64>,
     swarms: HashMap<String, SwarmStats>,
-    unique_ips: std::collections::HashSet<String>,
+    // IP별 세션 카운트 (모든 세션 종료 시에만 삭제)
+    unique_ips: HashMap<String, u64>,
 }
 
 #[derive(Default, Clone)]
@@ -88,6 +91,12 @@ struct PlayerStats {
     r_http_bytes: u64,
     r_p2p_bytes: u64,
     r_p2p_up_bytes: u64,
+    // Last known speed (preserved after reset for API)
+    last_http_speed: u64,
+    last_p2p_speed: u64,
+    last_p2p_up_speed: u64,
+    // 플레이어별 고유 IP 카운트
+    unique_ips: HashMap<String, u64>,
 }
 
 #[derive(Default)]
@@ -119,7 +128,8 @@ struct SwarmStats {
     r_http_bytes: u64,
     r_p2p_bytes: u64,
     r_p2p_up_bytes: u64,
-    unique_ips: std::collections::HashSet<String>,
+    // IP별 세션 카운트 (0이면 삭제)
+    unique_ips: HashMap<String, u64>,
 }
 
 #[derive(Default)]
@@ -290,7 +300,7 @@ async fn flush_to_questdb() -> Result<(), Box<dyn std::error::Error + Send + Syn
             entry.4 += swarm.r_p2p_bytes;
             entry.5 += swarm.r_p2p_up_bytes;
             entry.6 += swarm.unique_ips.len() as u64;
-            for ip in &swarm.unique_ips {
+            for ip in swarm.unique_ips.keys() {
                 entry.7.insert(ip.clone());
             }
         }
@@ -386,9 +396,30 @@ async fn flush_to_questdb() -> Result<(), Box<dyn std::error::Error + Send + Syn
     }
     stream.flush().await?;
 
-    // Reset delta values after successful write
+    // Save last speed values before reset, then reset delta values
     {
         let mut stats = P2P_STATS.write().unwrap();
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        // Calculate actual elapsed time (avoid divide by zero)
+        let elapsed_ms = if stats.last_reset_ms > 0 { now_ms - stats.last_reset_ms } else { 1000 };
+        let elapsed_secs = (elapsed_ms as f64 / 1000.0).max(0.1); // Minimum 0.1s to avoid huge numbers
+
+        // Normalize speed: bytes accumulated / actual elapsed seconds = bytes per second
+        stats.player1.last_http_speed = (stats.player1.r_http_bytes as f64 / elapsed_secs) as u64;
+        stats.player1.last_p2p_speed = (stats.player1.r_p2p_bytes as f64 / elapsed_secs) as u64;
+        stats.player1.last_p2p_up_speed = (stats.player1.r_p2p_up_bytes as f64 / elapsed_secs) as u64;
+        stats.player2.last_http_speed = (stats.player2.r_http_bytes as f64 / elapsed_secs) as u64;
+        stats.player2.last_p2p_speed = (stats.player2.r_p2p_bytes as f64 / elapsed_secs) as u64;
+        stats.player2.last_p2p_up_speed = (stats.player2.r_p2p_up_bytes as f64 / elapsed_secs) as u64;
+
+        // Update reset timestamp
+        stats.last_reset_ms = now_ms;
+
+        // Reset main delta values
         stats.r_http_bytes = 0;
         stats.r_p2p_bytes = 0;
         stats.r_p2p_up_bytes = 0;
@@ -427,6 +458,7 @@ struct RealtimeResponse {
     networks: NetworksResponse,
     browsers: Vec<NameCount>,
     referrers: Vec<NameCount>,
+    servers: Vec<ServerSwarmStats>,
 }
 
 #[derive(Serialize)]
@@ -448,6 +480,8 @@ struct TotalStats {
 #[derive(Serialize)]
 struct PlayerStatsResponse {
     viewers: u64,
+    #[serde(rename = "uniqueUsers")]
+    unique_users: u64,
     #[serde(rename = "httpBytes")]
     http_bytes: u64,
     #[serde(rename = "p2pBytes")]
@@ -490,17 +524,20 @@ struct NameCount {
     count: u64,
 }
 
+#[derive(Serialize)]
+struct ServerSwarmStats {
+    name: String,
+    swarms: u64,
+    viewers: u64,
+    #[serde(rename = "uniqueUsers")]
+    unique_users: u64,
+}
+
 async fn api_realtime() -> Json<RealtimeResponse> {
     let stats = P2P_STATS.read().unwrap();
 
-    // Calculate real-time unique users from active sessions
-    let realtime_unique_ips: std::collections::HashSet<String> = {
-        let sessions = SESSIONS.read().unwrap();
-        sessions.values()
-            .filter(|s| s.initialized && !s.user_ip.is_empty())
-            .map(|s| s.user_ip.clone())
-            .collect()
-    };
+    // Use pre-computed unique IPs from P2P_STATS (faster than iterating sessions)
+    let unique_user_count = stats.unique_ips.len() as u64;
 
     let total_traffic = stats.http_bytes + stats.p2p_bytes;
     let p2p_ratio = if total_traffic > 0 {
@@ -535,12 +572,33 @@ async fn api_realtime() -> Json<RealtimeResponse> {
     referrers.sort_by(|a, b| b.count.cmp(&a.count));
     referrers.truncate(10);
 
+    // 서버별 스웜 통계 (swarm_id에서 서버명 추출)
+    let mut server_stats: HashMap<String, (u64, u64, std::collections::HashSet<String>)> = HashMap::new();
+    for (swarm_id, swarm) in stats.swarms.iter() {
+        let server = swarm_id.split('.').next().unwrap_or("unknown").to_string();
+        let entry = server_stats.entry(server).or_insert((0, 0, std::collections::HashSet::new()));
+        entry.0 += 1; // swarm count
+        entry.1 += swarm.unique_ips.len() as u64; // viewers
+        for ip in swarm.unique_ips.keys() {
+            entry.2.insert(ip.clone()); // unique IPs
+        }
+    }
+    let mut servers: Vec<ServerSwarmStats> = server_stats.into_iter()
+        .map(|(name, (swarms, viewers, unique_ips))| ServerSwarmStats {
+            name,
+            swarms,
+            viewers,
+            unique_users: unique_ips.len() as u64,
+        })
+        .collect();
+    servers.sort_by(|a, b| b.swarms.cmp(&a.swarms));
+
     let current_connections = TOTAL_CONNECTIONS.load(Ordering::Relaxed) as u64;
 
     Json(RealtimeResponse {
         total: TotalStats {
             viewers: current_connections,
-            unique_users: realtime_unique_ips.len() as u64,
+            unique_users: unique_user_count,
             http_bytes: stats.http_bytes,
             p2p_bytes: stats.p2p_bytes,
             p2p_up_bytes: stats.p2p_up_bytes,
@@ -549,23 +607,27 @@ async fn api_realtime() -> Json<RealtimeResponse> {
         },
         player1: PlayerStatsResponse {
             viewers: stats.player1.viewers,
+            unique_users: stats.player1.unique_ips.len() as u64,
             http_bytes: stats.player1.http_bytes,
             p2p_bytes: stats.player1.p2p_bytes,
             p2p_up_bytes: stats.player1.p2p_up_bytes,
             p2p_ratio: p1_ratio,
-            r_http_bytes: stats.player1.r_http_bytes,
-            r_p2p_bytes: stats.player1.r_p2p_bytes,
-            r_p2p_up_bytes: stats.player1.r_p2p_up_bytes,
+            // Always use last_speed for stable per-second rate
+            r_http_bytes: stats.player1.last_http_speed,
+            r_p2p_bytes: stats.player1.last_p2p_speed,
+            r_p2p_up_bytes: stats.player1.last_p2p_up_speed,
         },
         player2: PlayerStatsResponse {
             viewers: stats.player2.viewers,
+            unique_users: stats.player2.unique_ips.len() as u64,
             http_bytes: stats.player2.http_bytes,
             p2p_bytes: stats.player2.p2p_bytes,
             p2p_up_bytes: stats.player2.p2p_up_bytes,
             p2p_ratio: p2_ratio,
-            r_http_bytes: stats.player2.r_http_bytes,
-            r_p2p_bytes: stats.player2.r_p2p_bytes,
-            r_p2p_up_bytes: stats.player2.r_p2p_up_bytes,
+            // Always use last_speed for stable per-second rate
+            r_http_bytes: stats.player2.last_http_speed,
+            r_p2p_bytes: stats.player2.last_p2p_speed,
+            r_p2p_up_bytes: stats.player2.last_p2p_up_speed,
         },
         active_swarms: stats.swarms.len(),
         devices: DevicesResponse {
@@ -592,6 +654,7 @@ async fn api_realtime() -> Json<RealtimeResponse> {
         },
         browsers,
         referrers,
+        servers,
     })
 }
 
@@ -619,7 +682,7 @@ async fn api_live(axum::extract::Query(params): axum::extract::Query<HashMap<Str
         .map(|(id, s)| LiveItem {
             swarm_id: id.clone(),
             filename: s.filename.clone(),
-            viewers: s.unique_ips.len() as u64,
+            viewers: s.unique_ips.len() as u64,  // 실시간 고유 IP 수
             http_bytes: s.http_bytes,
             p2p_bytes: s.p2p_bytes,
         })
@@ -915,8 +978,24 @@ fn cleanup_session(session_id: &str) {
             // Player stats
             if sess.player_id == 1 {
                 stats.player1.viewers = stats.player1.viewers.saturating_sub(1);
+                if !sess.user_ip.is_empty() {
+                    if let Some(count) = stats.player1.unique_ips.get_mut(&sess.user_ip) {
+                        *count = count.saturating_sub(1);
+                        if *count == 0 {
+                            stats.player1.unique_ips.remove(&sess.user_ip);
+                        }
+                    }
+                }
             } else if sess.player_id == 2 {
                 stats.player2.viewers = stats.player2.viewers.saturating_sub(1);
+                if !sess.user_ip.is_empty() {
+                    if let Some(count) = stats.player2.unique_ips.get_mut(&sess.user_ip) {
+                        *count = count.saturating_sub(1);
+                        if *count == 0 {
+                            stats.player2.unique_ips.remove(&sess.user_ip);
+                        }
+                    }
+                }
             }
 
             // Device stats
@@ -972,15 +1051,29 @@ fn cleanup_session(session_id: &str) {
                 }
             }
 
-            // Unique IP
+            // Unique IP (카운트 감소, 0이면 삭제)
             if !sess.user_ip.is_empty() {
-                stats.unique_ips.remove(&sess.user_ip);
+                if let Some(count) = stats.unique_ips.get_mut(&sess.user_ip) {
+                    *count = count.saturating_sub(1);
+                    if *count == 0 {
+                        stats.unique_ips.remove(&sess.user_ip);
+                    }
+                }
             }
 
             // Swarm
             if !sess.swarm_id.is_empty() {
                 if let Some(swarm) = stats.swarms.get_mut(&sess.swarm_id) {
                     swarm.viewers = swarm.viewers.saturating_sub(1);
+                    // IP 카운트 감소
+                    if !sess.user_ip.is_empty() {
+                        if let Some(count) = swarm.unique_ips.get_mut(&sess.user_ip) {
+                            *count = count.saturating_sub(1);
+                            if *count == 0 {
+                                swarm.unique_ips.remove(&sess.user_ip);
+                            }
+                        }
+                    }
                     if swarm.viewers == 0 {
                         stats.swarms.remove(&sess.swarm_id);
                     }
@@ -1033,7 +1126,12 @@ async fn handle_socket_inner(socket: WebSocket, session_id: String) {
                         match &message {
                             Message::Text(text) => {
                                 if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(text) {
-                                    handle_client_message(&session_id, client_msg);
+                                    // ping 메시지면 pong 응답
+                                    if client_msg.msg_type == "ping" {
+                                        let _ = sender.send(Message::Text(r#"{"type":"pong"}"#.to_string())).await;
+                                    } else {
+                                        handle_client_message(&session_id, client_msg);
+                                    }
                                 }
                             }
                             Message::Ping(data) => {
@@ -1103,8 +1201,14 @@ fn handle_init(session_id: &str, msg: ClientMessage) {
 
     if sess.player_id == 1 {
         stats.player1.viewers += 1;
+        if !sess.user_ip.is_empty() {
+            *stats.player1.unique_ips.entry(sess.user_ip.clone()).or_insert(0) += 1;
+        }
     } else if sess.player_id == 2 {
         stats.player2.viewers += 1;
+        if !sess.user_ip.is_empty() {
+            *stats.player2.unique_ips.entry(sess.user_ip.clone()).or_insert(0) += 1;
+        }
     }
 
     // Device stats
@@ -1145,9 +1249,9 @@ fn handle_init(session_id: &str, msg: ClientMessage) {
         *stats.referrers.entry(sess.referrer.clone()).or_insert(0) += 1;
     }
 
-    // Unique IP
+    // Unique IP (카운트 증가)
     if !sess.user_ip.is_empty() {
-        stats.unique_ips.insert(sess.user_ip.clone());
+        *stats.unique_ips.entry(sess.user_ip.clone()).or_insert(0) += 1;
     }
 
     // Swarm
@@ -1158,7 +1262,7 @@ fn handle_init(session_id: &str, msg: ClientMessage) {
         });
         swarm.viewers += 1;
         if !sess.user_ip.is_empty() {
-            swarm.unique_ips.insert(sess.user_ip.clone());
+            *swarm.unique_ips.entry(sess.user_ip.clone()).or_insert(0) += 1;
         }
     }
 
