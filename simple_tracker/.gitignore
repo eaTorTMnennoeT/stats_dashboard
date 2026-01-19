@@ -1,0 +1,4 @@
+/target/
+/data/*.mmdb
+/certs/
+Cargo.lock
