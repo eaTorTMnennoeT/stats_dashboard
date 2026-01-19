@@ -7,7 +7,7 @@ use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -147,6 +147,7 @@ struct PeerConnection {
 }
 
 const MAX_MESSAGE_LOGS: usize = 200;
+const ALLOWED_REFERRERS_FILE: &str = "data/allowed_referrers.txt";
 
 #[derive(Default)]
 struct TrackerState {
@@ -188,6 +189,12 @@ struct TrackerState {
 
     // 피어별 연결 관계
     peer_connections: HashMap<String, PeerConnection>,
+
+    // 허용 리퍼러 목록 (비어있으면 모두 허용)
+    allowed_referrers: HashSet<String>,
+
+    // 리퍼러 차단 통계
+    blocked_connections: u64,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -376,6 +383,84 @@ struct ConnectionInfo {
 // ============================================================
 // 유틸리티 함수
 // ============================================================
+
+// ============================================================
+// 허용 리퍼러 파일 관리
+// ============================================================
+
+fn load_allowed_referrers() -> HashSet<String> {
+    match std::fs::read_to_string(ALLOWED_REFERRERS_FILE) {
+        Ok(content) => {
+            let referrers: HashSet<String> = content
+                .lines()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty() && !s.starts_with('#'))
+                .collect();
+            log::info!("Loaded {} allowed referrers from {}", referrers.len(), ALLOWED_REFERRERS_FILE);
+            referrers
+        }
+        Err(_) => {
+            log::info!("No allowed referrers file found, allowing all connections");
+            HashSet::new()
+        }
+    }
+}
+
+fn save_allowed_referrers(referrers: &HashSet<String>) -> std::io::Result<()> {
+    // data 디렉토리 생성
+    if let Some(parent) = std::path::Path::new(ALLOWED_REFERRERS_FILE).parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let content: String = referrers.iter().cloned().collect::<Vec<_>>().join("\n");
+    std::fs::write(ALLOWED_REFERRERS_FILE, content)?;
+    log::info!("Saved {} allowed referrers to {}", referrers.len(), ALLOWED_REFERRERS_FILE);
+    Ok(())
+}
+
+/// 리퍼러 검증: 허용 목록에 있는지 확인
+fn is_referrer_allowed(referrer: &str, allowed: &HashSet<String>) -> bool {
+    // 허용 목록이 비어있으면 모두 허용
+    if allowed.is_empty() {
+        return true;
+    }
+
+    // 리퍼러가 비어있으면 차단
+    if referrer.is_empty() {
+        return false;
+    }
+
+    // 리퍼러에서 도메인 추출 (https://example.com/path -> example.com)
+    let domain = referrer
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .split('/')
+        .next()
+        .unwrap_or("")
+        .split(':')
+        .next()
+        .unwrap_or("");
+
+    // 정확히 일치하거나 서브도메인 매칭
+    for pattern in allowed.iter() {
+        if domain == pattern {
+            return true;
+        }
+        // 와일드카드 패턴 (*.example.com)
+        if pattern.starts_with("*.") {
+            let suffix = &pattern[1..];  // .example.com
+            if domain.ends_with(suffix) {
+                return true;
+            }
+        }
+        // 서브도메인 포함 (.example.com으로 끝나면 허용)
+        if domain.ends_with(&format!(".{}", pattern)) {
+            return true;
+        }
+    }
+
+    false
+}
 
 fn now_ms() -> u64 {
     SystemTime::now()
@@ -1008,6 +1093,26 @@ async fn ws_handler(
     stream: web::Payload,
     state: web::Data<SharedState>,
 ) -> Result<HttpResponse, actix_web::Error> {
+    // 리퍼러 검증
+    let referrer = req.headers()
+        .get("referer")
+        .or_else(|| req.headers().get("origin"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    {
+        let s = state.read();
+        if !is_referrer_allowed(referrer, &s.allowed_referrers) {
+            drop(s);
+            let mut s = state.write();
+            s.blocked_connections += 1;
+            log::warn!("Blocked connection from referrer: {}", referrer);
+            return Ok(HttpResponse::Forbidden().json(serde_json::json!({
+                "error": "Referrer not allowed"
+            })));
+        }
+    }
+
     let (res, mut session, mut msg_stream) = actix_ws::handle(&req, stream)?;
 
     // 소켓 ID 생성
@@ -1029,7 +1134,7 @@ async fn ws_handler(
         s.total_connections += 1;
     }
 
-    log::info!("New connection: socket_id={}, ip={}", socket_id, ip);
+    log::info!("New connection: socket_id={}, ip={}, referrer={}", socket_id, ip, referrer);
 
     let state_clone = state.clone();
     let ip_clone = ip.clone();
@@ -1347,6 +1452,111 @@ async fn api_health() -> HttpResponse {
 }
 
 // ============================================================
+// 어드민 API (리퍼러 관리)
+// ============================================================
+
+#[derive(Serialize)]
+struct ReferrersResponse {
+    referrers: Vec<String>,
+    #[serde(rename = "blockedConnections")]
+    blocked_connections: u64,
+}
+
+#[derive(Deserialize)]
+struct AddReferrerRequest {
+    referrer: String,
+}
+
+// 리퍼러 목록 조회
+async fn api_admin_referrers(state: web::Data<SharedState>) -> HttpResponse {
+    let s = state.read();
+    let referrers: Vec<String> = s.allowed_referrers.iter().cloned().collect();
+    HttpResponse::Ok().json(ReferrersResponse {
+        referrers,
+        blocked_connections: s.blocked_connections,
+    })
+}
+
+// 리퍼러 추가
+async fn api_admin_add_referrer(
+    state: web::Data<SharedState>,
+    body: web::Json<AddReferrerRequest>,
+) -> HttpResponse {
+    let referrer = body.referrer.trim().to_string();
+
+    if referrer.is_empty() {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "error": "Referrer cannot be empty"
+        }));
+    }
+
+    let mut s = state.write();
+    s.allowed_referrers.insert(referrer.clone());
+
+    // 파일에 저장
+    if let Err(e) = save_allowed_referrers(&s.allowed_referrers) {
+        log::error!("Failed to save referrers: {}", e);
+    }
+
+    log::info!("Added allowed referrer: {}", referrer);
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "success": true,
+        "referrer": referrer,
+        "total": s.allowed_referrers.len()
+    }))
+}
+
+// 리퍼러 삭제
+async fn api_admin_remove_referrer(
+    state: web::Data<SharedState>,
+    path: web::Path<String>,
+) -> HttpResponse {
+    let referrer = path.into_inner();
+
+    let mut s = state.write();
+    let removed = s.allowed_referrers.remove(&referrer);
+
+    if removed {
+        // 파일에 저장
+        if let Err(e) = save_allowed_referrers(&s.allowed_referrers) {
+            log::error!("Failed to save referrers: {}", e);
+        }
+
+        log::info!("Removed allowed referrer: {}", referrer);
+
+        HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "referrer": referrer,
+            "total": s.allowed_referrers.len()
+        }))
+    } else {
+        HttpResponse::NotFound().json(serde_json::json!({
+            "error": "Referrer not found"
+        }))
+    }
+}
+
+// 모든 리퍼러 삭제 (모든 연결 허용)
+async fn api_admin_clear_referrers(state: web::Data<SharedState>) -> HttpResponse {
+    let mut s = state.write();
+    let count = s.allowed_referrers.len();
+    s.allowed_referrers.clear();
+
+    // 파일에 저장
+    if let Err(e) = save_allowed_referrers(&s.allowed_referrers) {
+        log::error!("Failed to save referrers: {}", e);
+    }
+
+    log::info!("Cleared all allowed referrers (was: {})", count);
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "success": true,
+        "cleared": count
+    }))
+}
+
+// ============================================================
 // 백그라운드 태스크: 타임아웃 피어/Offer 정리
 // ============================================================
 
@@ -1407,8 +1617,12 @@ async fn cleanup_task(state: SharedState) {
 async fn main() -> std::io::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
+    // 허용 리퍼러 목록 로드
+    let allowed_referrers = load_allowed_referrers();
+
     let state = Arc::new(RwLock::new(TrackerState {
         start_time: now_secs(),
+        allowed_referrers,
         ..Default::default()
     }));
 
@@ -1471,6 +1685,11 @@ async fn main() -> std::io::Result<()> {
             .route("/api/peer/{peer_id}", web::get().to(api_peer_detail))
             .route("/api/connections", web::get().to(api_connections))
             .route("/api/health", web::get().to(api_health))
+            // 어드민 API (리퍼러 관리)
+            .route("/api/admin/referrers", web::get().to(api_admin_referrers))
+            .route("/api/admin/referrers", web::post().to(api_admin_add_referrer))
+            .route("/api/admin/referrers/{referrer}", web::delete().to(api_admin_remove_referrer))
+            .route("/api/admin/referrers/clear", web::post().to(api_admin_clear_referrers))
     })
     .workers(num_cpus::get());
 
