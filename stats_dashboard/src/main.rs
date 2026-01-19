@@ -1044,9 +1044,9 @@ async fn api_traffic(
         time_filter
     );
 
-    // 4. 실시간 속도 계산 (최근 10초간 r_* 합산)
+    // 4. 실시간 속도 계산 (최근 30초간 r_* 합산)
     let speed_query = "SELECT sum(r_http_bytes) as http, sum(r_p2p_bytes) as p2p, sum(r_p2p_up_bytes) as p2p_up \
-         FROM p2p_stats WHERE ts > dateadd('s', -10, now())";
+         FROM p2p_stats WHERE ts > dateadd('s', -30, now())";
 
     // 5. CDN 서버별 통계 (p2p_servers에서 트래픽 + visitor_logs에서 접속자)
     let server_traffic_query = format!(
@@ -1065,13 +1065,13 @@ async fn api_traffic(
         time_filter.replace("ts >", "timestamp >")
     );
 
-    // 6. 서버별 실시간 속도 (최근 10초간 r_* 합산)
+    // 6. 서버별 실시간 속도 (최근 30초간 r_* 합산)
     let server_speed_query = "SELECT server, sum(r_http_bytes) as r_http, sum(r_p2p_bytes) as r_p2p, sum(r_p2p_up_bytes) as r_p2p_up \
-         FROM p2p_servers WHERE timestamp > dateadd('s', -10, now()) GROUP BY server";
+         FROM p2p_servers WHERE timestamp > dateadd('s', -30, now()) GROUP BY server";
 
-    // 7. 플레이어별 실시간 속도 (최근 10초간 r_* 합산)
+    // 7. 플레이어별 실시간 속도 (최근 30초간 r_* 합산)
     let player_speed_query = "SELECT player, sum(r_http_bytes) as r_http, sum(r_p2p_bytes) as r_p2p, sum(r_p2p_up_bytes) as r_p2p_up \
-         FROM p2p_players WHERE timestamp > dateadd('s', -10, now()) GROUP BY player";
+         FROM p2p_players WHERE timestamp > dateadd('s', -30, now()) GROUP BY player";
 
     // 병렬 쿼리 실행 (QuestDB + simple_ws)
     let timeline_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&timeline_query));
@@ -1176,31 +1176,31 @@ async fn api_traffic(
         }
     }
 
-    // 실시간 속도 계산 (GB/s) - 10초간 r_* 합산 / 10
-    let (http_gbps, p2p_gbps, p2p_up_gbps) = if let Some(dataset) = speed_data.get("dataset").and_then(|d| d.as_array()) {
-        if let Some(row) = dataset.first().and_then(|r| r.as_array()) {
-            let http_sum = row.get(0).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
-            let p2p_sum = row.get(1).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
-            let p2p_up_sum = row.get(2).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
-            // bytes/10sec -> GB/s
-            let http_gbs = (http_sum as f64) / 10.0 / 1_073_741_824.0;
-            let p2p_gbs = (p2p_sum as f64) / 10.0 / 1_073_741_824.0;
-            let p2p_up_gbs = (p2p_up_sum as f64) / 10.0 / 1_073_741_824.0;
-            (http_gbs, p2p_gbs, p2p_up_gbs)
-        } else {
-            (0.0, 0.0, 0.0)
-        }
-    } else {
-        (0.0, 0.0, 0.0)
+    // 실시간 속도 계산 (GB/s) - simple_ws의 rHttpBytes 등 사용 (이미 bytes/sec)
+    let empty_player = serde_json::json!({});
+    let (http_gbps, p2p_gbps, p2p_up_gbps) = {
+        let p1 = realtime_data.get("player1").unwrap_or(&empty_player);
+        let p2 = realtime_data.get("player2").unwrap_or(&empty_player);
+        let r_http = p1.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0)
+                  + p2.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let r_p2p = p1.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0)
+                  + p2.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let r_p2p_up = p1.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0)
+                     + p2.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        // bytes/sec -> GB/s
+        let http_gbs = (r_http as f64) / 1_073_741_824.0;
+        let p2p_gbs = (r_p2p as f64) / 1_073_741_824.0;
+        let p2p_up_gbs = (r_p2p_up as f64) / 1_073_741_824.0;
+        (http_gbs, p2p_gbs, p2p_up_gbs)
     };
 
     let mut totals = serde_json::json!({
         "totalHttp": total_http,
         "totalP2p": total_p2p,
         "totalP2pUp": total_p2p_up,
-        "httpGbps": format!("{:.1}", http_gbps),
-        "p2pGbps": format!("{:.1}", p2p_gbps),
-        "p2pUpGbps": format!("{:.1}", p2p_up_gbps)
+        "httpGbps": format!("{:.2}", http_gbps),
+        "p2pGbps": format!("{:.2}", p2p_gbps),
+        "p2pUpGbps": format!("{:.2}", p2p_up_gbps)
     });
     if let Some(dataset) = total_data.get("dataset").and_then(|d| d.as_array()) {
         if let Some(row) = dataset.first().and_then(|r| r.as_array()) {
@@ -1210,9 +1210,9 @@ async fn api_traffic(
                 "totalHttp": total_http,
                 "totalP2p": total_p2p,
                 "totalP2pUp": total_p2p_up,
-                "httpGbps": format!("{:.1}", http_gbps),
-                "p2pGbps": format!("{:.1}", p2p_gbps),
-                "p2pUpGbps": format!("{:.1}", p2p_up_gbps),
+                "httpGbps": format!("{:.2}", http_gbps),
+                "p2pGbps": format!("{:.2}", p2p_gbps),
+                "p2pUpGbps": format!("{:.2}", p2p_up_gbps),
                 "peakPeers": row.get(2),
                 "peakSwarms": row.get(3)
             });
@@ -1257,7 +1257,7 @@ async fn api_traffic(
         }
     }
 
-    // 4. 서버별 속도 맵 구성 (r_* 합산 / 10 = GB/s)
+    // 4. 서버별 속도 맵 구성 (r_* 합산 / 30 = GB/s)
     let mut server_speed_map: std::collections::HashMap<String, (f64, f64, f64)> = std::collections::HashMap::new();
     if let Some(dataset) = server_speed_data.get("dataset").and_then(|d| d.as_array()) {
         for row in dataset {
@@ -1266,10 +1266,10 @@ async fn api_traffic(
                 let r_http = arr.get(1).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
                 let r_p2p = arr.get(2).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
                 let r_p2p_up = arr.get(3).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
-                // bytes/10sec -> GB/s
-                let http_gbs = (r_http as f64) / 10.0 / 1_073_741_824.0;
-                let p2p_gbs = (r_p2p as f64) / 10.0 / 1_073_741_824.0;
-                let p2p_up_gbs = (r_p2p_up as f64) / 10.0 / 1_073_741_824.0;
+                // bytes/30sec -> GB/s
+                let http_gbs = (r_http as f64) / 30.0 / 1_073_741_824.0;
+                let p2p_gbs = (r_p2p as f64) / 30.0 / 1_073_741_824.0;
+                let p2p_up_gbs = (r_p2p_up as f64) / 30.0 / 1_073_741_824.0;
                 server_speed_map.insert(server, (http_gbs, p2p_gbs, p2p_up_gbs));
             }
         }
@@ -1305,26 +1305,22 @@ async fn api_traffic(
         }));
     }
 
-    // 플레이어별 속도 계산 (r_* 합산 / 10 = GB/s)
+    // 플레이어별 속도 계산 - simple_ws realtime_data 사용 (bytes/sec -> GB/s)
     let mut player_speeds: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-    if let Some(dataset) = player_speed_data.get("dataset").and_then(|d| d.as_array()) {
-        for row in dataset {
-            if let Some(arr) = row.as_array() {
-                let player = arr.get(0).and_then(|v| v.as_str().or_else(|| v.as_i64().map(|n| if n == 1 { "1" } else { "2" }))).unwrap_or("1");
-                let r_http = arr.get(1).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
-                let r_p2p = arr.get(2).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
-                let r_p2p_up = arr.get(3).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
-                // bytes/10sec -> GB/s
-                let http_gbs = (r_http as f64) / 10.0 / 1_073_741_824.0;
-                let p2p_gbs = (r_p2p as f64) / 10.0 / 1_073_741_824.0;
-                let p2p_up_gbs = (r_p2p_up as f64) / 10.0 / 1_073_741_824.0;
-                let key = format!("player{}", player);
-                player_speeds.insert(key, serde_json::json!({
-                    "httpGbps": format!("{:.2}", http_gbs),
-                    "p2pGbps": format!("{:.2}", p2p_gbs),
-                    "p2pUpGbps": format!("{:.2}", p2p_up_gbs)
-                }));
-            }
+    for (key, player_key) in [("player1", "player1"), ("player2", "player2")] {
+        if let Some(p) = realtime_data.get(player_key) {
+            let r_http = p.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+            let r_p2p = p.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+            let r_p2p_up = p.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+            // bytes/sec -> GB/s
+            let http_gbs = (r_http as f64) / 1_073_741_824.0;
+            let p2p_gbs = (r_p2p as f64) / 1_073_741_824.0;
+            let p2p_up_gbs = (r_p2p_up as f64) / 1_073_741_824.0;
+            player_speeds.insert(key.to_string(), serde_json::json!({
+                "httpGbps": format!("{:.2}", http_gbs),
+                "p2pGbps": format!("{:.2}", p2p_gbs),
+                "p2pUpGbps": format!("{:.2}", p2p_up_gbs)
+            }));
         }
     }
 

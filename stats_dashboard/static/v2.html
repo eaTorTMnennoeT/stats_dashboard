@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P2P Stats Dashboard v2</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+:root {
+  --bg: #0a0a0a;
+  --bg2: #111111;
+  --bg3: #1a1a1a;
+  --card: linear-gradient(145deg, #141414 0%, #1c1c1c 100%);
+  --text: #f5f5f5;
+  --text2: #888888;
+  --text3: #555555;
+  --gold: #d4af37;
+  --gold-light: #f4d03f;
+  --gold-dark: #b8860b;
+  --gold-glow: rgba(212, 175, 55, 0.4);
+  --danger: #c0392b;
+  --success: #27ae60;
+  --border: rgba(212, 175, 55, 0.15);
+  --border2: rgba(255,255,255,0.05);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at top, rgba(212,175,55,0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom, rgba(0,0,0,0.8) 0%, transparent 50%);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* Header */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 30px;
+  background: linear-gradient(180deg, var(--bg2) 0%, var(--bg) 100%);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+}
+.logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 50%, var(--gold-dark) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 30px var(--gold-glow);
+}
+.logo span {
+  font-family: 'Inter', sans-serif;
+  font-weight: 300;
+  font-size: 11px;
+  margin-left: 10px;
+  color: var(--text3);
+  -webkit-text-fill-color: var(--text3);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.top-right { display: flex; align-items: center; gap: 15px; }
+
+/* Live Toggle */
+.live-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 30px;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+.live-toggle:hover {
+  border-color: var(--gold);
+  box-shadow: 0 0 20px rgba(212,175,55,0.1);
+}
+.live-toggle .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text3);
+  transition: all 0.4s;
+}
+.live-toggle.on {
+  background: linear-gradient(135deg, rgba(212,175,55,0.15) 0%, rgba(212,175,55,0.05) 100%);
+  border-color: var(--gold);
+}
+.live-toggle.on .dot {
+  background: var(--gold);
+  box-shadow: 0 0 15px var(--gold-glow);
+  animation: pulse-gold 2s infinite;
+}
+@keyframes pulse-gold {
+  0%, 100% { opacity: 1; box-shadow: 0 0 10px var(--gold-glow); }
+  50% { opacity: 0.7; box-shadow: 0 0 25px var(--gold-glow); }
+}
+.live-toggle .label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text3);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.live-toggle.on .label { color: var(--gold); }
+
+.refresh-btn {
+  padding: 10px 18px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--gold);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  transition: all 0.3s;
+}
+.refresh-btn:hover {
+  background: rgba(212,175,55,0.1);
+  border-color: var(--gold);
+  box-shadow: 0 0 15px rgba(212,175,55,0.1);
+}
+
+.status-badge {
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--success) 0%, #1e8449 100%);
+  color: #fff;
+}
+.status-badge.off {
+  background: var(--bg3);
+  color: var(--text3);
+}
+
+.back-link {
+  color: var(--text3);
+  text-decoration: none;
+  font-size: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  transition: all 0.3s;
+}
+.back-link:hover {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 8px;
+  padding: 20px 30px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border2);
+}
+.tab {
+  padding: 12px 28px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text3);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.3s;
+}
+.tab:hover {
+  color: var(--text2);
+  background: var(--bg3);
+}
+.tab.active {
+  background: linear-gradient(135deg, rgba(212,175,55,0.2) 0%, rgba(212,175,55,0.05) 100%);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* Main */
+.main { padding: 30px; max-width: 1500px; margin: 0 auto; }
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+.card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid var(--border2);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.card:hover {
+  transform: translateY(-4px);
+  border-color: var(--border);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 30px rgba(212,175,55,0.05);
+}
+.card:hover::before { opacity: 1; }
+.card h3 {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text3);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  letter-spacing: 1.5px;
+}
+.card .val {
+  font-size: 32px;
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.card .sub {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 8px;
+  font-weight: 400;
+}
+.card.p2p .val {
+  background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+  -webkit-background-clip: text;
+}
+.card.http .val {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  -webkit-background-clip: text;
+}
+
+/* Section */
+.section {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gold);
+  margin: 40px 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.section::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--border), transparent);
+}
+
+/* Panel */
+.panel {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 28px;
+  border: 1px solid var(--border2);
+  margin-bottom: 24px;
+}
+.panel h3 {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--gold);
+  margin-bottom: 20px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* Period Tabs */
+.period-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.period-btn {
+  padding: 8px 16px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  color: var(--text2);
+  text-decoration: none;
+  font-size: 13px;
+  transition: all 0.3s;
+}
+.period-btn:hover {
+  border-color: var(--gold);
+  color: var(--text);
+}
+.period-btn.active {
+  background: linear-gradient(135deg, rgba(212,175,55,0.2) 0%, rgba(212,175,55,0.05) 100%);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* Table */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  padding: 16px;
+  text-align: left;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  background: rgba(212,175,55,0.05);
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: 16px;
+  border-bottom: 1px solid var(--border2);
+  color: var(--text2);
+  font-weight: 400;
+}
+tr:hover td { background: rgba(212,175,55,0.03); }
+
+.page-nav { display: flex; justify-content: center; gap: 12px; margin-top: 24px; }
+.page-nav button {
+  padding: 10px 20px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--gold);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+.page-nav button:hover {
+  background: rgba(212,175,55,0.1);
+  box-shadow: 0 0 15px rgba(212,175,55,0.1);
+}
+.page-nav button:disabled { opacity: 0.3; cursor: not-allowed; }
+.page-nav span { color: var(--text3); font-size: 12px; line-height: 38px; }
+
+/* Chart */
+canvas { max-height: 280px; }
+
+/* Update indicator */
+.update-time {
+  font-size: 10px;
+  color: var(--text3);
+  text-align: right;
+  margin-top: 15px;
+  letter-spacing: 0.5px;
+}
+
+/* Select */
+select {
+  padding: 10px 16px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--gold);
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+}
+select:hover { border-color: var(--gold); }
+
+/* Sessions Table */
+.sortable { cursor: pointer; user-select: none; }
+.sortable:hover { color: var(--gold); }
+.server-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  background: linear-gradient(135deg, rgba(212,175,55,0.15) 0%, rgba(212,175,55,0.05) 100%);
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--gold);
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+.pagination button {
+  padding: 10px 18px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.pagination button:hover:not(:disabled) {
+  border-color: var(--gold);
+  color: var(--gold);
+  box-shadow: 0 0 15px rgba(212,175,55,0.15);
+}
+.pagination button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.pagination button.active {
+  background: linear-gradient(135deg, rgba(212,175,55,0.2) 0%, rgba(212,175,55,0.05) 100%);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.pagination .page-info {
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--text2);
+}
+
+/* IP Copy */
+.ip-copy {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ip-copy:hover {
+  color: var(--gold);
+  text-decoration: underline;
+}
+
+/* Toast */
+.copy-toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  background: linear-gradient(135deg, rgba(212,175,55,0.9) 0%, rgba(184,134,11,0.9) 100%);
+  color: #000;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  z-index: 9999;
+  animation: toastIn 0.3s ease;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--gold-dark); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .tabs { overflow-x: auto; padding: 15px 20px; }
+  .top-bar { padding: 15px 20px; }
+  .main { padding: 20px; }
+  .card { padding: 18px; }
+  .card .val { font-size: 26px; }
+}
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <div class="logo">P2P Stats <span>v2</span></div>
+    <div class="top-right">
+      <button class="refresh-btn" onclick="fetchData()">새로고침</button>
+      <div class="live-toggle" id="liveToggle" onclick="toggleLive()">
+        <span class="dot"></span>
+        <span class="label">LIVE OFF</span>
+      </div>
+      <div class="status-badge" id="statusBadge">Polling</div>
+      <a href="/" class="back-link">← v1으로</a>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="dashboard">Dashboard</button>
+    <button class="tab" data-tab="realtime">실시간</button>
+    <button class="tab" data-tab="live">시청 중</button>
+    <button class="tab" data-tab="sessions">세션</button>
+    <button class="tab" data-tab="history">히스토리</button>
+  </div>
+
+  <div class="main" id="app"></div>
+
+<script>
+let currentTab = 'dashboard';
+let liveMode = localStorage.getItem('liveMode') === 'true';
+let ws = null;
+let data = null;
+let prevData = null;
+let prevTime = null;
+let rates = { http: 0, p2pDown: 0, p2pUp: 0 };
+let pollInterval = null;
+
+// 실시간 차트용 데이터
+let realtimeHistory = {
+  labels: [],
+  viewers: [],
+  unique: [],
+  initialized: false
+};
+let realtimeChart = null;
+const MAX_POINTS = 3600; // 1시간 (1초 간격)
+
+// DB에서 초기 데이터 로드
+async function initRealtimeHistory() {
+  if (realtimeHistory.initialized) return;
+  try {
+    // 1시간 데이터를 1초 샘플로 가져오기
+    const res = await fetch('/api/history/stats?period=1h&sample=1s');
+    const json = await res.json();
+    const rows = json.dataset || [];
+
+    realtimeHistory.labels = rows.map(r => new Date(r[0]).toLocaleTimeString());
+    realtimeHistory.viewers = rows.map(r => r[1] || 0);
+    realtimeHistory.unique = rows.map(r => r[2] || 0);
+    realtimeHistory.initialized = true;
+    console.log(`Loaded ${rows.length} historical points from DB`);
+  } catch(e) {
+    console.error('Failed to load history:', e);
+    realtimeHistory.initialized = true; // 실패해도 플래그 설정
+  }
+}
+
+// 실시간 데이터 수집 (DB 초기화 후 추가)
+function updateRealtimeHistory() {
+  if (!data?.total || !realtimeHistory.initialized) return;
+  const now = new Date().toLocaleTimeString();
+  realtimeHistory.labels.push(now);
+  realtimeHistory.viewers.push(data.total.viewers || 0);
+  realtimeHistory.unique.push(data.total.uniqueUsers || 0);
+  if (realtimeHistory.labels.length > MAX_POINTS) {
+    realtimeHistory.labels.shift();
+    realtimeHistory.viewers.shift();
+    realtimeHistory.unique.shift();
+  }
+}
+
+// Format helpers
+function fmt(n) {
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return n?.toLocaleString() || '0';
+}
+function fmtBytes(b) {
+  if (!b) return '0 B';
+  const u = ['B','KB','MB','GB','TB','PB','EB'];
+  const i = Math.min(Math.floor(Math.log(b) / Math.log(1024)), u.length - 1);
+  return (b / Math.pow(1024, i)).toFixed(2) + ' ' + u[i];
+}
+
+// Toggle live mode
+function toggleLive() {
+  liveMode = !liveMode;
+  localStorage.setItem('liveMode', liveMode);
+  applyLiveMode();
+}
+
+function applyLiveMode() {
+  const toggle = document.getElementById('liveToggle');
+  const badge = document.getElementById('statusBadge');
+  const label = toggle.querySelector('.label');
+
+  if (liveMode) {
+    // LIVE ON: WebSocket 실시간
+    toggle.classList.add('on');
+    label.textContent = 'LIVE ON';
+    badge.textContent = 'WebSocket';
+    badge.classList.remove('off');
+    stopPolling();
+    connectWS();
+  } else {
+    // LIVE OFF: 폴링 방식
+    toggle.classList.remove('on');
+    label.textContent = 'LIVE OFF';
+    badge.textContent = 'Polling';
+    badge.classList.add('off');
+    badge.style.background = '';
+    if (ws) { ws.close(); ws = null; }
+    startPolling();
+  }
+}
+
+function startPolling() {
+  if (pollInterval) return;
+  pollInterval = setInterval(fetchData, 1000); // 1초마다 폴링
+}
+
+function stopPolling() {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
+}
+
+// WebSocket
+function connectWS() {
+  if (ws) return;
+  const badge = document.getElementById('statusBadge');
+  badge.textContent = '연결 중...';
+
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    console.log('WS connected');
+    badge.textContent = 'WebSocket ●';
+    badge.style.background = 'linear-gradient(135deg, #d4af37 0%, #b8860b 100%)';
+  };
+  ws.onclose = () => {
+    ws = null;
+    if (liveMode) {
+      badge.textContent = '재연결...';
+      setTimeout(connectWS, 2000);
+    }
+  };
+  ws.onerror = () => {
+    badge.textContent = 'WS 오류';
+    badge.style.background = '#c0392b';
+  };
+  ws.onmessage = (e) => {
+    try {
+      const newData = JSON.parse(e.data);
+      const now = Date.now();
+
+      // 실시간 전송량 계산
+      if (prevData && prevTime && newData.total && prevData.total) {
+        const elapsed = (now - prevTime) / 1000;
+        if (elapsed > 0) {
+          rates.http = Math.max(0, (newData.total.httpBytes - prevData.total.httpBytes) / elapsed);
+          rates.p2pDown = Math.max(0, (newData.total.p2pBytes - prevData.total.p2pBytes) / elapsed);
+          rates.p2pUp = Math.max(0, (newData.total.p2pUpBytes - prevData.total.p2pUpBytes) / elapsed);
+        }
+      }
+
+      prevData = newData;
+      prevTime = now;
+      data = newData;
+      render();
+    } catch(err) {}
+  };
+}
+
+// Fetch data (non-live mode)
+async function fetchData() {
+  try {
+    const res = await fetch('/api/realtime');
+    const newData = await res.json();
+    const now = Date.now();
+
+    // 실시간 전송량 계산 (초당)
+    if (prevData && prevTime && newData.total && prevData.total) {
+      const elapsed = (now - prevTime) / 1000; // 초
+      if (elapsed > 0) {
+        rates.http = Math.max(0, (newData.total.httpBytes - prevData.total.httpBytes) / elapsed);
+        rates.p2pDown = Math.max(0, (newData.total.p2pBytes - prevData.total.p2pBytes) / elapsed);
+        rates.p2pUp = Math.max(0, (newData.total.p2pUpBytes - prevData.total.p2pUpBytes) / elapsed);
+        console.log('rates calculated:', elapsed, rates.http, rates.p2pDown, rates.p2pUp);
+      }
+    }
+
+    prevData = newData;
+    prevTime = now;
+    data = newData;
+    render();
+  } catch(e) {}
+}
+
+// Card helper
+function card(title, val, sub = '', cls = '') {
+  return `<div class="card ${cls}"><h3>${title}</h3><div class="val">${val}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+}
+
+// Render based on tab
+let liveStructureReady = false;
+let historyStructureReady = false;
+
+function render() {
+  if (!data) return;
+  const app = document.getElementById('app');
+
+  switch(currentTab) {
+    case 'dashboard':
+      stopSessionsDurationInterval();
+      renderDashboard(app);
+      liveStructureReady = false;
+      historyStructureReady = false;
+      break;
+    case 'realtime':
+      stopSessionsDurationInterval();
+      renderRealtime(app);
+      liveStructureReady = false;
+      historyStructureReady = false;
+      break;
+    case 'live':
+      stopSessionsDurationInterval();
+      // 구조가 없으면 생성, 있으면 데이터만 갱신
+      if (!liveStructureReady || !document.getElementById('liveBody')) {
+        renderLiveStructure(app);
+        liveStructureReady = true;
+      }
+      loadLive(); // 매번 데이터 갱신
+      historyStructureReady = false;
+      break;
+    case 'history':
+      stopSessionsDurationInterval();
+      // 실시간 데이터 수집 (다른 탭에서도 계속)
+      updateRealtimeHistory();
+
+      if (!historyStructureReady || !document.getElementById('historyChart')) {
+        renderHistoryStructure(app);
+        historyStructureReady = true;
+      } else {
+        // 실시간 업데이트 (force=false)
+        loadHistoryData();
+      }
+      liveStructureReady = false;
+      break;
+    case 'sessions':
+      updateRealtimeHistory();
+      if (!sessionsStructureReady || !document.getElementById('sessionsBody')) {
+        renderSessionsStructure(app);
+        sessionsStructureReady = true;
+      }
+      loadSessions();
+      startSessionsDurationInterval(); // 접속시간 실시간 갱신
+      liveStructureReady = false;
+      historyStructureReady = false;
+      break;
+  }
+}
+
+// Sessions 관련 변수
+let sessionsStructureReady = false;
+let sessionsData = { data: [], total: 0, page: 1, limit: 50, sort: 'duration', sortDir: 'desc', search: '' };
+let sessionsDurationInterval = null;
+
+function startSessionsDurationInterval() {
+  if (sessionsDurationInterval) clearInterval(sessionsDurationInterval);
+  // 1초마다 접속시간 갱신
+  sessionsDurationInterval = setInterval(() => {
+    if (!document.getElementById('sessionsBody')) {
+      clearInterval(sessionsDurationInterval);
+      sessionsDurationInterval = null;
+      return;
+    }
+    renderSessionsData();
+  }, 1000);
+}
+
+function stopSessionsDurationInterval() {
+  if (sessionsDurationInterval) {
+    clearInterval(sessionsDurationInterval);
+    sessionsDurationInterval = null;
+  }
+}
+
+function renderSessionsStructure(app) {
+  app.innerHTML = `
+    <div class="panel" style="padding:15px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h3 style="margin:0;display:inline;">세션 목록</h3>
+          <span id="sessionsTotal" style="margin-left:15px;font-size:14px;color:var(--gold);"></span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="sessionsSearch" placeholder="IP, 파일명, 서버 검색..."
+            style="padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);width:200px;"
+            onkeyup="sessionsData.search=this.value;renderSessionsData()">
+          <select id="sessionsLimit" onchange="sessionsData.limit=+this.value;sessionsData.page=1;loadSessions()">
+            <option value="50">50개</option>
+            <option value="100">100개</option>
+            <option value="200">200개</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:10px;font-size:12px;color:#888;">
+        정렬: <span id="sortInfo" style="color:var(--gold);">접속시간 (내림차순)</span>
+        <span id="sessionsInfo" style="margin-left:15px;"></span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table id="sessionsTable">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="time" onclick="sortSessions('time')">방문시간</th>
+              <th class="sortable" data-sort="duration" onclick="sortSessions('duration')">접속시간</th>
+              <th class="sortable" data-sort="server" onclick="sortSessions('server')">서버</th>
+              <th class="sortable" data-sort="ip" onclick="sortSessions('ip')">IP</th>
+              <th class="sortable" data-sort="filename" onclick="sortSessions('filename')">파일명</th>
+              <th class="sortable" data-sort="device" onclick="sortSessions('device')">디바이스</th>
+              <th class="sortable" data-sort="browser" onclick="sortSessions('browser')">브라우저</th>
+              <th class="sortable" data-sort="referrer" onclick="sortSessions('referrer')">리퍼러</th>
+              <th class="sortable" data-sort="http" onclick="sortSessions('http')">HTTP</th>
+              <th class="sortable" data-sort="p2p" onclick="sortSessions('p2p')">P2P↓</th>
+              <th class="sortable" data-sort="p2pUp" onclick="sortSessions('p2pUp')">P2P↑</th>
+            </tr>
+          </thead>
+          <tbody id="sessionsBody"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="sessionsPagination"></div>
+    </div>
+  `;
+}
+
+function extractServer(swarmId) {
+  if (!swarmId) return '-';
+  const match = swarmId.match(/^([^.]+)/);
+  return match ? match[1] : '-';
+}
+
+function extractTime(sessionId) {
+  if (!sessionId) return '-';
+  const ts = parseInt(sessionId.split('_')[0]);
+  if (isNaN(ts)) return '-';
+  return new Date(ts).toLocaleString('ko-KR');
+}
+
+function extractTimestamp(sessionId) {
+  if (!sessionId) return 0;
+  return parseInt(sessionId.split('_')[0]) || 0;
+}
+
+function calcDuration(sessionId) {
+  const start = extractTimestamp(sessionId);
+  if (!start) return 0;
+  return Date.now() - start;
+}
+
+function fmtDuration(ms) {
+  if (!ms || ms < 0) return '-';
+  const sec = Math.floor(ms / 1000);
+  const min = Math.floor(sec / 60);
+  const hr = Math.floor(min / 60);
+  if (hr > 0) return `${hr}시간 ${min % 60}분`;
+  if (min > 0) return `${min}분 ${sec % 60}초`;
+  return `${sec}초`;
+}
+
+async function loadSessions() {
+  try {
+    const res = await fetch(`/api/sessions?limit=${sessionsData.limit}&offset=${(sessionsData.page-1)*sessionsData.limit}`);
+    const json = await res.json();
+    sessionsData.data = json.data || [];
+    sessionsData.total = json.total || 0;
+    renderSessionsData();
+  } catch(e) {
+    console.error('loadSessions error:', e);
+  }
+}
+
+const sortLabels = {
+  time: '방문시간', duration: '접속시간', server: '서버', ip: 'IP',
+  filename: '파일명', device: '디바이스', browser: '브라우저',
+  referrer: '리퍼러', http: 'HTTP', p2p: 'P2P↓', p2pUp: 'P2P↑'
+};
+
+function sortSessions(field) {
+  if (sessionsData.sort === field) {
+    sessionsData.sortDir = sessionsData.sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    sessionsData.sort = field;
+    sessionsData.sortDir = 'desc';
+  }
+  renderSessionsData();
+}
+
+function renderSessionsData() {
+  const tbody = document.getElementById('sessionsBody');
+  if (!tbody) return;
+
+  // 검색 필터
+  let filtered = sessionsData.data;
+  if (sessionsData.search) {
+    const q = sessionsData.search.toLowerCase();
+    filtered = filtered.filter(s =>
+      (s.ip || '').toLowerCase().includes(q) ||
+      (s.filename || '').toLowerCase().includes(q) ||
+      extractServer(s.swarm_id).toLowerCase().includes(q) ||
+      (s.referrer || '').toLowerCase().includes(q) ||
+      (s.device_name || '').toLowerCase().includes(q)
+    );
+  }
+
+  // 정렬
+  let sorted = [...filtered];
+  const dir = sessionsData.sortDir === 'asc' ? 1 : -1;
+
+  sorted.sort((a, b) => {
+    switch(sessionsData.sort) {
+      case 'time': return dir * (extractTimestamp(a.session_id) - extractTimestamp(b.session_id));
+      case 'duration': return dir * (calcDuration(a.session_id) - calcDuration(b.session_id));
+      case 'server': return dir * extractServer(a.swarm_id).localeCompare(extractServer(b.swarm_id));
+      case 'ip': return dir * (a.ip || '').localeCompare(b.ip || '');
+      case 'filename': return dir * (a.filename || '').localeCompare(b.filename || '');
+      case 'device': return dir * (a.device_name || '').localeCompare(b.device_name || '');
+      case 'browser': return dir * (a.browser || '').localeCompare(b.browser || '');
+      case 'referrer': return dir * (a.referrer || '').localeCompare(b.referrer || '');
+      case 'http': return dir * ((a.http_bytes || 0) - (b.http_bytes || 0));
+      case 'p2p': return dir * ((a.p2p_bytes || 0) - (b.p2p_bytes || 0));
+      case 'p2pUp': return dir * ((a.p2p_up_bytes || 0) - (b.p2p_up_bytes || 0));
+      default: return 0;
+    }
+  });
+
+  tbody.innerHTML = sorted.map(s => `
+    <tr>
+      <td>${extractTime(s.session_id)}</td>
+      <td>${fmtDuration(calcDuration(s.session_id))}</td>
+      <td><span class="server-badge">${extractServer(s.swarm_id)}</span></td>
+      <td class="ip-copy" onclick="copyIP('${s.ip || ''}')" title="클릭하여 복사">${s.ip || '-'}</td>
+      <td title="${s.filename || ''}">${(s.filename || '-').slice(0, 25)}${(s.filename?.length > 25) ? '...' : ''}</td>
+      <td>${s.device_name || s.device || '-'}</td>
+      <td>${s.browser || '-'}</td>
+      <td title="${s.referrer || ''}">${(s.referrer || '-').slice(0, 15)}${(s.referrer?.length > 15) ? '...' : ''}</td>
+      <td>${fmtBytes(s.http_bytes)}</td>
+      <td>${fmtBytes(s.p2p_bytes)}</td>
+      <td>${fmtBytes(s.p2p_up_bytes)}</td>
+    </tr>
+  `).join('');
+
+  // 총 접속자수
+  document.getElementById('sessionsTotal').textContent = `총 ${fmt(sessionsData.total)}명 접속 중`;
+  // 정렬 정보
+  const dirText = sessionsData.sortDir === 'asc' ? '오름차순' : '내림차순';
+  document.getElementById('sortInfo').textContent = `${sortLabels[sessionsData.sort]} (${dirText})`;
+  // 표시 정보
+  document.getElementById('sessionsInfo').textContent = sessionsData.search ? `검색결과 ${sorted.length}개` : `${sorted.length}개 표시`;
+
+  // 페이지네이션 렌더링
+  renderSessionsPagination();
+}
+
+function renderSessionsPagination() {
+  const container = document.getElementById('sessionsPagination');
+  if (!container) return;
+
+  const totalPages = Math.ceil(sessionsData.total / sessionsData.limit) || 1;
+  const currentPage = sessionsData.page;
+
+  let html = '';
+
+  // 이전 버튼
+  html += `<button onclick="sessionsGoPage(1)" ${currentPage === 1 ? 'disabled' : ''}>« 처음</button>`;
+  html += `<button onclick="sessionsGoPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>‹ 이전</button>`;
+
+  // 페이지 번호
+  const maxVisible = 5;
+  let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+  let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+
+  if (endPage - startPage < maxVisible - 1) {
+    startPage = Math.max(1, endPage - maxVisible + 1);
+  }
+
+  if (startPage > 1) {
+    html += `<button onclick="sessionsGoPage(1)">1</button>`;
+    if (startPage > 2) html += `<span class="page-info">...</span>`;
+  }
+
+  for (let i = startPage; i <= endPage; i++) {
+    html += `<button onclick="sessionsGoPage(${i})" class="${i === currentPage ? 'active' : ''}">${i}</button>`;
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) html += `<span class="page-info">...</span>`;
+    html += `<button onclick="sessionsGoPage(${totalPages})">${totalPages}</button>`;
+  }
+
+  // 다음 버튼
+  html += `<button onclick="sessionsGoPage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>다음 ›</button>`;
+  html += `<button onclick="sessionsGoPage(${totalPages})" ${currentPage >= totalPages ? 'disabled' : ''}>마지막 »</button>`;
+
+  // 페이지 정보
+  html += `<span class="page-info">${currentPage} / ${totalPages} 페이지</span>`;
+
+  container.innerHTML = html;
+}
+
+function sessionsGoPage(page) {
+  const totalPages = Math.ceil(sessionsData.total / sessionsData.limit) || 1;
+  sessionsData.page = Math.max(1, Math.min(totalPages, page));
+  loadSessions();
+}
+
+function copyIP(ip) {
+  if (!ip) return;
+  navigator.clipboard.writeText(ip);
+}
+
+function renderDashboard(app) {
+  const d = data;
+
+  // 실시간 데이터 수집
+  updateRealtimeHistory();
+
+  // 차트 영역이 없으면 생성
+  if (!document.getElementById('realtimeChart')) {
+    app.innerHTML = `
+      <div class="stats-grid">
+        ${card('연결 수', fmt(d.total?.viewers))}
+        ${card('고유 유저', fmt(d.total?.uniqueUsers))}
+        ${card('P2P 효율', d.total?.p2pRatio + '%', '', 'p2p')}
+        ${card('P2P 피어', fmt(d.total?.peers))}
+        ${card('Swarms', fmt(d.activeSwarms))}
+        ${card('누적 HTTP', fmtBytes(d.total?.httpBytes), '', 'http')}
+        ${card('누적 P2P ↓', fmtBytes(d.total?.p2pBytes), '', 'p2p')}
+        ${card('누적 P2P ↑', fmtBytes(d.total?.p2pUpBytes), '', 'p2p')}
+      </div>
+
+      <div class="section">실시간 전송량</div>
+      <div class="stats-grid" id="rateGrid">
+        ${card('HTTP ↓', fmtBytes(rates.http) + '/s', '', 'http')}
+        ${card('P2P ↓', fmtBytes(rates.p2pDown) + '/s', '', 'p2p')}
+        ${card('P2P ↑', fmtBytes(rates.p2pUp) + '/s', '', 'p2p')}
+      </div>
+
+      <div class="section">실시간 그래프</div>
+      <div class="panel">
+        <canvas id="realtimeChart"></canvas>
+      </div>
+
+      <div class="update-time">마지막 업데이트: ${new Date().toLocaleTimeString()}</div>
+    `;
+
+    // 차트 생성
+    realtimeChart = new Chart(document.getElementById('realtimeChart'), {
+      type: 'line',
+      data: {
+        labels: realtimeHistory.labels,
+        datasets: [
+          { label: '연결 수', data: realtimeHistory.viewers, borderColor: '#d4af37', backgroundColor: 'rgba(212,175,55,0.1)', tension: 0.3, fill: true, pointRadius: 0 },
+          { label: '고유 유저', data: realtimeHistory.unique, borderColor: '#27ae60', backgroundColor: 'rgba(39,174,96,0.1)', tension: 0.3, fill: true, pointRadius: 0 }
+        ]
+      },
+      options: {
+        responsive: true,
+        animation: false,
+        plugins: { legend: { labels: { color: '#888' } } },
+        scales: {
+          x: { ticks: { color: '#555', maxTicksLimit: 8 }, grid: { color: '#222' } },
+          y: { ticks: { color: '#555' }, grid: { color: '#222' } }
+        }
+      }
+    });
+  } else {
+    // 카드 값만 업데이트
+    const cards = app.querySelectorAll('.card .val');
+    if (cards.length >= 8) {
+      cards[0].textContent = fmt(d.total?.viewers);
+      cards[1].textContent = fmt(d.total?.uniqueUsers);
+      cards[2].textContent = d.total?.p2pRatio + '%';
+      cards[3].textContent = fmt(d.total?.peers);
+      cards[4].textContent = fmt(d.activeSwarms);
+      cards[5].textContent = fmtBytes(d.total?.httpBytes);
+      cards[6].textContent = fmtBytes(d.total?.p2pBytes);
+      cards[7].textContent = fmtBytes(d.total?.p2pUpBytes);
+    }
+    const rateCards = document.querySelectorAll('#rateGrid .card .val');
+    console.log('rateCards:', rateCards.length, 'rates:', rates.http, rates.p2pDown, rates.p2pUp);
+    if (rateCards.length >= 3) {
+      rateCards[0].textContent = fmtBytes(rates.http) + '/s';
+      rateCards[1].textContent = fmtBytes(rates.p2pDown) + '/s';
+      rateCards[2].textContent = fmtBytes(rates.p2pUp) + '/s';
+    }
+
+    // 차트 데이터 업데이트
+    if (realtimeChart) {
+      realtimeChart.data.labels = realtimeHistory.labels;
+      realtimeChart.data.datasets[0].data = realtimeHistory.viewers;
+      realtimeChart.data.datasets[1].data = realtimeHistory.unique;
+      realtimeChart.update('none');
+    }
+
+    // 업데이트 시간
+    const updateTime = app.querySelector('.update-time');
+    if (updateTime) updateTime.textContent = `마지막 업데이트: ${new Date().toLocaleTimeString()}`;
+  }
+}
+
+function renderRealtime(app) {
+  const d = data;
+  const dev = d.devices || {};
+  const devT = Object.values(dev).reduce((a,b) => a+b, 0) || 1;
+  const dn = d.deviceNames || [];
+  const br = d.browsers || [];
+  const ref = d.referrers || [];
+
+  app.innerHTML = `
+    <div class="stats-grid">
+      ${card('연결 수', fmt(d.total?.viewers))}
+      ${card('고유 유저', fmt(d.total?.uniqueUsers))}
+      ${card('플레이어1', fmt(d.player1?.viewers))}
+      ${card('플레이어2', fmt(d.player2?.viewers))}
+      ${card('P2P 피어', fmt(d.total?.peers))}
+      ${card('Swarms', fmt(d.activeSwarms))}
+    </div>
+
+    <div class="section">디바이스 타입</div>
+    <div class="stats-grid">
+      ${card('모바일', fmt(dev.mobile), ((dev.mobile||0)/devT*100).toFixed(1) + '%')}
+      ${card('데스크톱', fmt(dev.desktop), ((dev.desktop||0)/devT*100).toFixed(1) + '%')}
+      ${card('태블릿', fmt(dev.tablet), ((dev.tablet||0)/devT*100).toFixed(1) + '%')}
+    </div>
+
+    <div class="section">기기</div>
+    <div class="stats-grid">
+      ${dn.map(x => card(x.name, fmt(x.count))).join('')}
+    </div>
+
+    <div class="section">브라우저</div>
+    <div class="stats-grid">
+      ${br.map(x => card(x.name, fmt(x.count))).join('')}
+    </div>
+
+    <div class="section">유입 경로</div>
+    <div class="stats-grid">
+      ${ref.map(x => card(x.name.slice(0,20), fmt(x.count))).join('')}
+    </div>
+
+    <div class="update-time">마지막 업데이트: ${new Date().toLocaleTimeString()}.${new Date().getMilliseconds()}</div>
+  `;
+  console.log('renderRealtime called');
+}
+
+let liveData = { page: 1, size: 20, total: 0, items: [] };
+
+function renderLiveStructure(app) {
+  app.innerHTML = `
+    <div class="panel">
+      <table>
+        <thead><tr><th>#</th><th>파일명</th><th>Swarm</th><th>시청자</th><th>HTTP</th><th>P2P</th><th>P2P%</th></tr></thead>
+        <tbody id="liveBody"><tr><td colspan="7" style="text-align:center">로딩 중...</td></tr></tbody>
+      </table>
+      <div class="page-nav">
+        <button onclick="livePage(-1)">← 이전</button>
+        <span id="pageInfo">1 / 1</span>
+        <button onclick="livePage(1)">다음 →</button>
+      </div>
+      <div class="update-time" id="liveUpdateTime"></div>
+    </div>
+  `;
+}
+
+async function loadLive() {
+  try {
+    const res = await fetch(`/api/live?limit=${liveData.size}&offset=${(liveData.page-1)*liveData.size}`);
+    const json = await res.json();
+    liveData.total = json.total || 0;
+    liveData.items = json.data || [];
+
+    const tbody = document.getElementById('liveBody');
+    const pageInfo = document.getElementById('pageInfo');
+    const updateTime = document.getElementById('liveUpdateTime');
+
+    if (!tbody) return;
+
+    tbody.innerHTML = liveData.items.map((d, i) => {
+      const idx = (liveData.page-1)*liveData.size + i + 1;
+      const t = (d.http_bytes||0) + (d.p2p_bytes||0);
+      const ratio = t > 0 ? ((d.p2p_bytes||0)/t*100).toFixed(1) : '0';
+      return `<tr>
+        <td>${idx}</td>
+        <td>${d.filename?.slice(0,30) || '-'}</td>
+        <td style="font-size:11px">${d.swarm_id?.slice(0,12)}...</td>
+        <td style="color:#d4af37"><b>${d.viewers}</b></td>
+        <td>${fmtBytes(d.http_bytes)}</td>
+        <td>${fmtBytes(d.p2p_bytes)}</td>
+        <td style="color:#27ae60"><b>${ratio}%</b></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7" style="text-align:center">데이터 없음</td></tr>';
+
+    const pages = Math.ceil(liveData.total / liveData.size) || 1;
+    if (pageInfo) pageInfo.textContent = `${liveData.page} / ${pages}`;
+    if (updateTime) updateTime.textContent = `마지막 업데이트: ${new Date().toLocaleTimeString()}`;
+  } catch(e) {
+    console.error('loadLive error:', e);
+  }
+}
+
+function livePage(dir) {
+  const pages = Math.ceil(liveData.total / liveData.size) || 1;
+  liveData.page = Math.max(1, Math.min(pages, liveData.page + dir));
+  loadLive();
+}
+
+let historyChart = null;
+let lastHistoryUpdate = 0;
+
+const historyPeriods = ['realtime', '5m', '15m', '30m', '1h', '6h', '1d', '7d'];
+const periodLabels = { realtime: '실시간', '5m': '5분', '15m': '15분', '30m': '30분', '1h': '1시간', '6h': '6시간', '1d': '24시간', '7d': '7일' };
+let currentPeriod = 'realtime';
+
+function renderHistoryStructure(app) {
+  const buttons = historyPeriods.map(p =>
+    `<a href="#history/${p}" class="period-btn ${currentPeriod === p ? 'active' : ''}" data-period="${p}">${periodLabels[p]}</a>`
+  ).join('');
+
+  app.innerHTML = `
+    <div class="period-tabs">${buttons}</div>
+    <div style="margin:10px 0;font-size:11px;color:#888;">
+      <span id="historyUpdateTime"></span>
+    </div>
+    <div class="panel">
+      <h3>시청자 추이</h3>
+      <canvas id="historyChart"></canvas>
+    </div>
+  `;
+  loadHistoryData(true);
+}
+
+async function loadHistoryData(force = false) {
+  const period = currentPeriod;
+  console.log('loadHistoryData: period:', period, 'force:', force);
+  const canvas = document.getElementById('historyChart');
+  if (!canvas) { console.log('no canvas'); return; }
+
+  // 기간 변경(force=true) 시 차트 무조건 재생성
+  if (force && historyChart) {
+    console.log('destroying chart');
+    historyChart.destroy();
+    historyChart = null;
+  }
+
+  // 1시간 이하: 메모리 데이터 사용 (실시간)
+  const memoryPeriods = ['realtime', '5m', '15m', '30m', '1h'];
+  if (memoryPeriods.includes(period)) {
+    // 기간에 따른 데이터 슬라이싱
+    let sliceCount = MAX_POINTS;
+    if (period === '5m') sliceCount = 300;
+    else if (period === '15m') sliceCount = 900;
+    else if (period === '30m') sliceCount = 1800;
+    else if (period === '1h') sliceCount = 3600;
+
+    const displayLabels = realtimeHistory.labels.slice(-sliceCount);
+    const displayViewers = realtimeHistory.viewers.slice(-sliceCount);
+    const displayUnique = realtimeHistory.unique.slice(-sliceCount);
+    if (!historyChart) {
+      historyChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: displayLabels,
+          datasets: [
+            { label: '연결 수', data: displayViewers, borderColor: '#d4af37', backgroundColor: 'rgba(212,175,55,0.1)', tension: 0.3, fill: true, pointRadius: 0 },
+            { label: '고유 유저', data: displayUnique, borderColor: '#27ae60', backgroundColor: 'rgba(39,174,96,0.1)', tension: 0.3, fill: true, pointRadius: 0 }
+          ]
+        },
+        options: {
+          responsive: true,
+          animation: false,
+          plugins: { legend: { labels: { color: '#888' } } },
+          scales: {
+            x: { ticks: { color: '#555', maxTicksLimit: 10 }, grid: { color: '#222' } },
+            y: { ticks: { color: '#555' }, grid: { color: '#222' } }
+          }
+        }
+      });
+    } else {
+      historyChart.data.labels = displayLabels;
+      historyChart.data.datasets[0].data = displayViewers;
+      historyChart.data.datasets[1].data = displayUnique;
+      historyChart.update('none');
+    }
+    const updateTime = document.getElementById('historyUpdateTime');
+    const periodNames = { 'realtime': '실시간', '5m': '5분', '15m': '15분', '30m': '30분', '1h': '1시간' };
+    if (updateTime) {
+      updateTime.textContent = `${periodNames[period] || period} (${displayLabels.length}건)`;
+      updateTime.style.color = '#d4af37';
+    }
+    return;
+  }
+
+  // DB 조회 모드: 쓰로틀링 적용
+  const now = Date.now();
+  if (!force && now - lastHistoryUpdate < 3000) return;
+  lastHistoryUpdate = now;
+
+  const sampleMap = { '5m': '5s', '15m': '15s', '30m': '30s', '1h': '1m', '6h': '5m', '1d': '10m', '7d': '1h' };
+  const sample = sampleMap[period] || '5s';
+
+  try {
+    const res = await fetch(`/api/history/stats?period=${period}&sample=${sample}`);
+    const json = await res.json();
+    const rows = json.dataset || [];
+
+    const labels = rows.map(r => new Date(r[0]).toLocaleTimeString());
+    const viewers = rows.map(r => r[1] || 0);
+    const unique = rows.map(r => r[2] || 0);
+
+    if (historyChart) historyChart.destroy();
+    historyChart = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: '연결 수', data: viewers, borderColor: '#d4af37', backgroundColor: 'rgba(212,175,55,0.1)', tension: 0.4, fill: true },
+          { label: '고유 유저', data: unique, borderColor: '#f4d03f', backgroundColor: 'rgba(244,208,63,0.05)', tension: 0.4, fill: true }
+        ]
+      },
+      options: {
+        responsive: true,
+        animation: false,
+        plugins: { legend: { labels: { color: '#888' } } },
+        scales: {
+          x: { ticks: { color: '#555', maxTicksLimit: 10 }, grid: { color: '#222' } },
+          y: { ticks: { color: '#555' }, grid: { color: '#222' } }
+        }
+      }
+    });
+
+    const updateTime = document.getElementById('historyUpdateTime');
+    if (updateTime) {
+      updateTime.textContent = `${period} (${rows.length}건)`;
+      updateTime.style.color = '#d4af37';
+    }
+  } catch(e) {
+    console.error('loadHistoryData error:', e);
+  }
+}
+
+// Tab switching with hash routing
+function switchTab(tabName) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.tab[data-tab="${tabName}"]`)?.classList.add('active');
+
+  // 탭 변경시 구조 플래그 리셋
+  if (currentTab !== tabName) {
+    liveStructureReady = false;
+    historyStructureReady = false;
+  }
+
+  currentTab = tabName;
+  // history 탭은 기간 포함
+  if (tabName === 'history') {
+    window.location.hash = `history/${currentPeriod}`;
+  } else {
+    window.location.hash = tabName;
+  }
+  render();
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => switchTab(tab.dataset.tab);
+});
+
+// Hash 파싱 함수
+function parseHash(hash) {
+  const parts = hash.split('/');
+  const tab = parts[0] || 'dashboard';
+  const period = parts[1] || null;
+  return { tab, period };
+}
+
+// Hash change listener
+window.addEventListener('hashchange', () => {
+  const hash = window.location.hash.slice(1) || 'dashboard';
+  const { tab, period } = parseHash(hash);
+  console.log('hashchange:', hash, 'tab:', tab, 'period:', period, 'currentPeriod:', currentPeriod, 'currentTab:', currentTab);
+
+  if (tab === 'history') {
+    const newPeriod = (period && historyPeriods.includes(period)) ? period : 'realtime';
+    const periodChanged = currentPeriod !== newPeriod;
+    const tabChanged = currentTab !== 'history';
+    console.log('history: newPeriod:', newPeriod, 'periodChanged:', periodChanged, 'tabChanged:', tabChanged);
+
+    if (tabChanged) {
+      currentPeriod = newPeriod;
+      switchTab('history');
+    } else if (periodChanged) {
+      currentPeriod = newPeriod;
+      document.querySelectorAll('.period-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.period === newPeriod);
+      });
+      loadHistoryData(true);
+    }
+  } else if (['dashboard', 'realtime', 'live', 'sessions'].includes(tab)) {
+    switchTab(tab);
+  }
+});
+
+// Init - 해시에서 탭/기간 결정
+const initHash = window.location.hash.slice(1) || 'dashboard';
+const { tab: initTab, period: initPeriod } = parseHash(initHash);
+if (initTab === 'history' && initPeriod && historyPeriods.includes(initPeriod)) {
+  currentPeriod = initPeriod;
+  currentTab = 'history';
+} else if (['dashboard', 'realtime', 'live', 'sessions', 'history'].includes(initTab)) {
+  currentTab = initTab;
+}
+document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+document.querySelector(`.tab[data-tab="${currentTab}"]`)?.classList.add('active');
+
+async function init() {
+  // DB에서 초기 히스토리 로드
+  await initRealtimeHistory();
+  await fetchData();
+  // 저장된 모드 적용
+  applyLiveMode();
+  console.log('v2 init: liveMode=' + liveMode + ', currentTab=' + currentTab + ', history=' + realtimeHistory.labels.length);
+}
+init();
+</script>
+</body>
+</html>

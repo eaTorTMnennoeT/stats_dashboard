@@ -699,7 +699,9 @@ function toServerTime(utcString) {
 // 서버시간 기준 날짜 포맷 (월/일)
 function formatServerDate(utcString) {
   const d = toServerTime(utcString);
-  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+  const days = ['일', '월', '화', '수', '목', '금', '토'];
+  const dayName = days[d.getUTCDay()];
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}(${dayName})`;
 }
 
 // 서버시간 기준 시간 포맷 (HH:mm)
@@ -714,10 +716,12 @@ function formatServerDateTime(utcString) {
   return `${d.getUTCMonth()+1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
 }
 
-// 서버시간 기준 날짜만 포맷 (7d/30d용)
+// 서버시간 기준 날짜만 포맷 (7d/30d용) - 요일 포함
 function formatServerDate(utcString) {
   const d = toServerTime(utcString);
-  return `${d.getUTCMonth()+1}/${d.getUTCDate()}`;
+  const days = ['일', '월', '화', '수', '목', '금', '토'];
+  const dayName = days[d.getUTCDay()];
+  return `${d.getUTCMonth()+1}/${d.getUTCDate()}(${dayName})`;
 }
 
 // 서버시간 기준 월/일/시 추출
