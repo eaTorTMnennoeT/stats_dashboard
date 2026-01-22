@@ -1,25 +1,405 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        Query, State,
+        ConnectInfo, Query, State,
     },
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    routing::get,
+    http::{Request, StatusCode, HeaderMap},
+    response::{IntoResponse, Response, Redirect},
+    routing::{get, post},
+    middleware::{self, Next},
+    body::Body,
     Json, Router,
 };
 use chrono::{Datelike, FixedOffset, Timelike, Utc};
 use futures_util::{SinkExt, StreamExt};
+use parking_lot::RwLock;
 use redis::AsyncCommands;
 use reqwest::Client;
+use serde::Deserialize;
+use sha2::{Sha256, Digest};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;
+use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 
-const SIMPLE_WS_URL: &str = "https://127.0.0.1:8443";
+const SIMPLE_WS_URL: &str = "http://127.0.0.1:8444";
 const QUESTDB_URL: &str = "http://127.0.0.1:9002";
 const DRAGONFLY_URL: &str = "redis://127.0.0.1:6379";
+
+// 전역 상태
+lazy_static::lazy_static! {
+    // 외부 서버 관리
+    static ref EXTERNAL_SERVERS: Arc<RwLock<HashMap<String, ExternalServer>>> = Arc::new(RwLock::new(HashMap::new()));
+    // 에이전트 최신 버전
+    static ref AGENT_LATEST_VERSION: Arc<RwLock<String>> = Arc::new(RwLock::new("37".to_string()));
+    // 서버 이벤트 (메모리)
+    static ref SERVER_EVENTS: Arc<RwLock<Vec<ServerEvent>>> = Arc::new(RwLock::new(Vec::new()));
+    // Cloudflare 설정
+    static ref CF_SETTINGS: Arc<RwLock<CloudflareSettings>> = Arc::new(RwLock::new(CloudflareSettings::default()));
+    // 차단 대기 명령
+    static ref PENDING_BLOCKS: Arc<RwLock<HashMap<String, BlockCommand>>> = Arc::new(RwLock::new(HashMap::new()));
+    // IP별 차단된 서버 목록
+    static ref BLOCKED_SERVERS: Arc<RwLock<HashMap<String, BlockCommand>>> = Arc::new(RwLock::new(HashMap::new()));
+    // 세션 저장소 (session_id -> username)
+    static ref SESSIONS: Arc<RwLock<HashMap<String, String>>> = Arc::new(RwLock::new(HashMap::new()));
+    // 에이전트 시크릿 키
+    static ref AGENT_SECRET: Arc<RwLock<String>> = Arc::new(RwLock::new(String::new()));
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Default)]
+struct ExternalServer {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    ip: String,
+    #[serde(default)]
+    url: String,
+    #[serde(default)]
+    version: String,
+    #[serde(default)]
+    last_seen: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(default)]
+    blocked_ips: Vec<String>,
+    // 시스템 상태
+    #[serde(default)]
+    cpu: f64,
+    #[serde(default)]
+    memory_used: u64,
+    #[serde(default)]
+    memory_total: u64,
+    #[serde(default)]
+    disk_used: u64,
+    #[serde(default)]
+    disk_total: u64,
+    #[serde(default)]
+    rx_bytes: u64,
+    #[serde(default)]
+    tx_bytes: u64,
+    #[serde(default)]
+    connections: u64,
+    #[serde(default)]
+    uptime: u64,
+    #[serde(default)]
+    online: bool,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct ServerEvent {
+    server: String,
+    message: String,
+    timestamp: u64,
+}
+
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+struct CloudflareSettings {
+    enabled: bool,
+    email: String,
+    api_key: String,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct BlockCommand {
+    ip: String,
+    reason: String,
+    created_at: String,
+    cf_blocked: bool,
+    servers_blocked: Vec<String>,
+}
+
+// 비밀번호 해시
+fn hash_password(password: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(password.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+// DB에서 인증 확인
+async fn verify_credentials(username: &str, password: &str) -> bool {
+    let client = reqwest::Client::new();
+    let password_hash = hash_password(password);
+    let query = format!(
+        "SELECT password_hash FROM dashboard_users WHERE username = '{}' LIMIT 1",
+        username.replace("'", "''")
+    );
+    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&query));
+
+    if let Ok(res) = client.get(&url).send().await {
+        if let Ok(data) = res.json::<serde_json::Value>().await {
+            if let Some(rows) = data.get("dataset").and_then(|d| d.as_array()) {
+                if let Some(row) = rows.first() {
+                    if let Some(stored_hash) = row.get(0).and_then(|v| v.as_str()) {
+                        return stored_hash == password_hash;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+// 사용자 테이블 초기화
+async fn ensure_users_table(client: &Client) {
+    let create_query = "CREATE TABLE IF NOT EXISTS dashboard_users (username STRING, password_hash STRING, created_at TIMESTAMP) timestamp(created_at)";
+    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(create_query));
+    let _ = client.get(&url).send().await;
+
+    // admin 계정 확인
+    let check_query = "SELECT count() FROM dashboard_users WHERE username = 'admin'";
+    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(check_query));
+
+    if let Ok(res) = client.get(&url).send().await {
+        if let Ok(data) = res.json::<serde_json::Value>().await {
+            if let Some(count) = data.get("dataset").and_then(|d| d.as_array()).and_then(|a| a.first()).and_then(|r| r.get(0)).and_then(|v| v.as_i64()) {
+                if count == 0 {
+                    let pw_hash = hash_password("tlqkf123@");
+                    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ");
+                    let insert = format!(
+                        "INSERT INTO dashboard_users VALUES('admin', '{}', '{}')",
+                        pw_hash, now
+                    );
+                    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&insert));
+                    let _ = client.get(&url).send().await;
+                }
+            }
+        }
+    }
+}
+
+// 서버 이벤트 테이블 초기화
+async fn ensure_server_events_table(client: &Client) {
+    let create_query = "CREATE TABLE IF NOT EXISTS server_events (timestamp TIMESTAMP, server STRING, message STRING) timestamp(timestamp)";
+    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(create_query));
+    let _ = client.get(&url).send().await;
+}
+
+// 에이전트 설정 테이블 초기화
+async fn ensure_agent_settings_table(client: &Client) {
+    let create_query = "CREATE TABLE IF NOT EXISTS agent_settings (key STRING, value STRING, updated_at TIMESTAMP) timestamp(updated_at)";
+    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(create_query));
+    let _ = client.get(&url).send().await;
+
+    // 기본 시크릿 생성
+    let check_query = "SELECT count() FROM agent_settings WHERE key = 'secret'";
+    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(check_query));
+
+    if let Ok(res) = client.get(&url).send().await {
+        if let Ok(data) = res.json::<serde_json::Value>().await {
+            if let Some(count) = data.get("dataset").and_then(|d| d.as_array()).and_then(|a| a.first()).and_then(|r| r.get(0)).and_then(|v| v.as_i64()) {
+                if count == 0 {
+                    let secret = format!("{:x}", rand::random::<u128>());
+                    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ");
+                    let insert = format!(
+                        "INSERT INTO agent_settings VALUES('secret', '{}', '{}')",
+                        secret, now
+                    );
+                    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&insert));
+                    let _ = client.get(&url).send().await;
+                }
+            }
+        }
+    }
+}
+
+// 에이전트 시크릿 로드
+async fn load_agent_secret(client: &Client) {
+    let query = "SELECT value FROM agent_settings WHERE key = 'secret' LIMIT 1";
+    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(query));
+
+    if let Ok(res) = client.get(&url).send().await {
+        if let Ok(data) = res.json::<serde_json::Value>().await {
+            if let Some(secret) = data.get("dataset").and_then(|d| d.as_array()).and_then(|a| a.first()).and_then(|r| r.get(0)).and_then(|v| v.as_str()) {
+                let mut s = AGENT_SECRET.write();
+                *s = secret.to_string();
+            }
+        }
+    }
+}
+
+// CF 설정 로드 (파일에서)
+fn load_cf_settings() {
+    if let Ok(content) = std::fs::read_to_string("data/cf_settings.json") {
+        if let Ok(settings) = serde_json::from_str::<CloudflareSettings>(&content) {
+            *CF_SETTINGS.write() = settings;
+        }
+    }
+}
+
+// 블랙리스트 로드 (파일에서)
+fn load_blocked_list() {
+    if let Ok(content) = std::fs::read_to_string("data/blocked_ips.json") {
+        if let Ok(map) = serde_json::from_str::<HashMap<String, BlockCommand>>(&content) {
+            *BLOCKED_SERVERS.write() = map;
+        }
+    }
+}
+
+// 서버 테이블 초기화
+async fn ensure_servers_table(client: &Client) {
+    // 서버 정보 테이블 (LATEST BY로 최신 값만 조회)
+    let create_query = "CREATE TABLE IF NOT EXISTS dashboard_servers (\
+        server_id STRING, name STRING, ip STRING, url STRING, version STRING, \
+        updated_at TIMESTAMP) timestamp(updated_at) PARTITION BY MONTH";
+    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(create_query));
+    let _ = client.get(&url).send().await;
+}
+
+// 세션 테이블 초기화
+async fn ensure_sessions_table(client: &Client) {
+    let create_query = "CREATE TABLE IF NOT EXISTS dashboard_sessions (\
+        session_id STRING, username STRING, created_at TIMESTAMP) timestamp(created_at) PARTITION BY MONTH";
+    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(create_query));
+    let _ = client.get(&url).send().await;
+}
+
+// 세션 로드 (DB에서) - 최근 7일 세션만
+async fn load_sessions_from_db(client: &Client) {
+    let query = "SELECT session_id, username FROM dashboard_sessions \
+        WHERE created_at > dateadd('d', -7, now())";
+    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(query));
+
+    match client.get(&url).send().await {
+        Ok(res) => {
+            match res.json::<serde_json::Value>().await {
+                Ok(data) => {
+                    if let Some(rows) = data.get("dataset").and_then(|d| d.as_array()) {
+                        let mut sessions = SESSIONS.write();
+                        for row in rows {
+                            let session_id = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                            let username = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                            if !session_id.is_empty() {
+                                sessions.insert(session_id, username);
+                            }
+                        }
+                        eprintln!("Loaded {} sessions from database", sessions.len());
+                    } else {
+                        eprintln!("No dataset in sessions response");
+                    }
+                }
+                Err(e) => eprintln!("Failed to parse sessions JSON: {}", e),
+            }
+        }
+        Err(e) => eprintln!("Failed to load sessions: {}", e),
+    }
+}
+
+// 세션 저장 (DB로)
+fn save_session_to_db(session_id: &str, username: &str) {
+    let session_id = session_id.to_string();
+    let username = username.to_string();
+    tokio::spawn(async move {
+        let client = reqwest::Client::new();
+        let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ");
+        let query = format!(
+            "INSERT INTO dashboard_sessions VALUES('{}', '{}', '{}')",
+            session_id.replace("'", "''"),
+            username.replace("'", "''"),
+            now
+        );
+        let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&query));
+        let _ = client.get(&url).send().await;
+    });
+}
+
+// 서버 목록 로드 (DB에서)
+async fn load_servers_from_db(client: &Client) {
+    let query = "SELECT server_id, name, ip, url, version FROM dashboard_servers LATEST BY server_id";
+    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(query));
+
+    if let Ok(res) = client.get(&url).send().await {
+        if let Ok(data) = res.json::<serde_json::Value>().await {
+            if let Some(rows) = data.get("dataset").and_then(|d| d.as_array()) {
+                let mut server_map = EXTERNAL_SERVERS.write();
+                for row in rows {
+                    let server_id = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let name = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let ip = row.get(2).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let url = row.get(3).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let version = row.get(4).and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+                    if !server_id.is_empty() {
+                        server_map.insert(server_id.clone(), ExternalServer {
+                            id: server_id,
+                            name,
+                            ip,
+                            url,
+                            version,
+                            online: false,
+                            ..Default::default()
+                        });
+                    }
+                }
+                eprintln!("Loaded {} servers from database", server_map.len());
+            }
+        }
+    }
+}
+
+// 서버 정보 저장 (DB로) - 백그라운드 태스크로 실행
+fn save_server_to_db(server: &ExternalServer) {
+    let server_id = server.id.clone();
+    let name = server.name.clone();
+    let ip = server.ip.clone();
+    let url = server.url.clone();
+    let version = server.version.clone();
+
+    tokio::spawn(async move {
+        let client = reqwest::Client::new();
+        let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ");
+        let query = format!(
+            "INSERT INTO dashboard_servers VALUES('{}', '{}', '{}', '{}', '{}', '{}')",
+            server_id.replace("'", "''"),
+            name.replace("'", "''"),
+            ip.replace("'", "''"),
+            url.replace("'", "''"),
+            version.replace("'", "''"),
+            now
+        );
+        let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&query));
+        let _ = client.get(&url).send().await;
+    });
+}
+
+// 에이전트 시크릿 검증
+fn verify_agent_secret(provided: &str) -> bool {
+    let secret = AGENT_SECRET.read();
+    !secret.is_empty() && secret.as_str() == provided
+}
+
+// 서버 이벤트 추가
+fn add_server_event(server: &str, message: &str) {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+
+    let event = ServerEvent {
+        server: server.to_string(),
+        message: message.to_string(),
+        timestamp,
+    };
+
+    let mut events = SERVER_EVENTS.write();
+    events.push(event);
+    if events.len() > 100 {
+        events.remove(0);
+    }
+
+    // QuestDB에 영구 저장
+    let srv = server.replace("'", "''");
+    let msg = message.replace("'", "''");
+    tokio::spawn(async move {
+        let query = format!(
+            "INSERT INTO server_events VALUES({}000, '{}', '{}')",
+            timestamp, srv, msg
+        );
+        let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&query));
+        let _ = reqwest::Client::new().get(&url).send().await;
+    });
+}
 
 #[derive(Clone)]
 struct AppState {
@@ -49,31 +429,29 @@ async fn main() {
         redis,
     };
 
-    // hourly_stats 테이블 생성 (디비화)
-    ensure_hourly_stats_table(&client).await;
-    eprintln!("hourly_stats table ensured");
+    // 데이터 디렉토리 생성
+    let _ = std::fs::create_dir_all("data");
 
-    // Background task: 과거 데이터 디비화 (최초 실행 시 과거 365일 데이터 저장)
-    let init_client = client.clone();
-    tokio::spawn(async move {
-        eprintln!("Starting historical data aggregation...");
-        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-        // 과거 365일까지 데이터가 없는 날만 저장
-        for i in 1..=365i64 {
-            let date = (chrono::Utc::now() - chrono::Duration::days(i)).format("%Y-%m-%d").to_string();
-            if !has_hourly_stats_for_date(&init_client, &date).await {
-                eprintln!("Aggregating data for {}...", date);
-                if store_hourly_stats(&init_client, &date).await {
-                    eprintln!("  -> {} stored successfully", date);
-                } else {
-                    eprintln!("  -> {} no data or failed", date);
-                }
-                // 부하 방지를 위해 짧은 딜레이
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-        }
-        eprintln!("Historical data aggregation complete");
-    });
+    // 테이블 초기화
+    ensure_hourly_stats_table(&client).await;
+    ensure_users_table(&client).await;
+    ensure_server_events_table(&client).await;
+    ensure_agent_settings_table(&client).await;
+    ensure_servers_table(&client).await;
+    ensure_sessions_table(&client).await;
+
+    // 설정 로드
+    load_agent_secret(&client).await;
+    load_cf_settings();
+    load_blocked_list();
+    load_servers_from_db(&client).await;
+    load_sessions_from_db(&client).await;
+
+    eprintln!("All tables and settings initialized");
+
+    // Background task: 과거 데이터 디비화 - 일시 비활성화
+    // 이미 hourly_stats에 5500+ 행 있음, 나중에 필요하면 재활성화
+    eprintln!("Historical data aggregation DISABLED (data already exists)");
 
     // Background task: poll simple_ws and broadcast to all clients
     let poll_client = client.clone();
@@ -95,6 +473,12 @@ async fn main() {
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
+        // 인증
+        .route("/login", get(login_page))
+        .route("/auth/login", post(auth_login))
+        .route("/auth/logout", post(auth_logout))
+        .route("/auth/check", get(auth_check))
+        // 기존 API
         .route("/api/realtime", get(proxy_realtime))
         .route("/api/live", get(proxy_live))
         .route("/api/sessions", get(proxy_sessions))
@@ -105,12 +489,47 @@ async fn main() {
         .route("/api/history/hourly", get(history_hourly))
         .route("/api/popular", get(api_popular))
         .route("/api/summary", get(api_summary))
+        .route("/api/init-data", get(api_init_data))
         .route("/api/visitors", get(api_visitors))
         .route("/api/traffic", get(api_traffic))
         .route("/api/servers/realtime", get(api_servers_realtime))
         .route("/api/server-time", get(api_server_time))
         .route("/api/ip-analysis", get(api_ip_analysis))
+        // 서버 관리
+        .route("/api/servers", get(api_servers_list))
+        .route("/api/servers/status", post(api_servers_status))
+        .route("/api/servers/report", post(api_servers_status))  // 에이전트 호환
+        .route("/api/servers/events", get(api_servers_events))
+        .route("/api/servers/:id/name", axum::routing::put(api_server_update_name))
+        // 블랙리스트
+        .route("/api/blacklist", get(api_blacklist_list))
+        .route("/api/blacklist/block", post(api_blacklist_block))
+        .route("/api/blacklist/unblock", post(api_blacklist_unblock))
+        .route("/api/blacklist/pending", get(api_blacklist_pending))
+        .route("/api/blacklist/confirm", post(api_blacklist_confirm))
+        // Cloudflare 설정
+        .route("/api/settings/cloudflare", get(api_cf_settings_get))
+        .route("/api/settings/cloudflare", post(api_cf_settings_set))
+        // 에이전트
+        .route("/api/agent/version", get(api_agent_version))
+        .route("/agent/server_agent.sh", get(serve_agent_script))
+        .route("/agent/server_agent.sh.sha256", get(serve_agent_checksum))
+        // 어뷰저 탐지
+        .route("/api/servers/logs/abusers", get(api_logs_abusers))
+        // 로그 리스트
+        .route("/api/servers/logs", get(api_logs_list).post(api_logs_receive))
+        .route("/api/servers/logs/ip/:ip", get(api_logs_by_ip))
+        .route("/api/servers/logs/stats", get(api_logs_stats_summary))
+        // 로그 통계
+        .route("/api/servers/logs/stats/ips", get(api_logs_stats_ips))
+        .route("/api/servers/logs/stats/timeline", get(api_logs_stats_timeline))
+        .route("/api/servers/logs/stats/daily", get(api_logs_stats_daily))
+        .route("/api/servers/logs/stats/daily/servers", get(api_logs_stats_daily_servers))
+        .route("/api/servers/logs/stats/hourly", get(api_logs_stats_hourly))
+        .route("/api/servers/logs/stats/servers", get(api_logs_stats_servers))
         .nest_service("/", ServeDir::new("static"))
+        .layer(middleware::from_fn_with_state(state.clone(), auth_middleware))
+        .layer(CookieManagerLayer::new())
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -118,7 +537,7 @@ async fn main() {
     eprintln!("P2P Stats Dashboard listening on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).await.unwrap();
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
@@ -988,6 +1407,50 @@ async fn questdb_query_json(client: &Client, query: &str) -> Result<serde_json::
     serde_json::from_str(&body).map_err(|e| e.to_string())
 }
 
+// 초기 데이터 API (summary + daily + monthly)
+async fn api_init_data(State(state): State<AppState>) -> Response {
+    let client = &state.client;
+
+    // 오늘/어제 summary
+    let today_query = "SELECT max(viewers) as max_viewers, max(unique_users) as max_users, \
+        last(http_bytes) as http_bytes, last(p2p_bytes) as p2p_bytes, last(swarms) as swarms \
+        FROM p2p_stats WHERE ts >= timestamp_floor('d', now())";
+    let yesterday_query = "SELECT max(viewers) as max_viewers, max(unique_users) as max_users, \
+        last(http_bytes) as http_bytes, last(p2p_bytes) as p2p_bytes, last(swarms) as swarms \
+        FROM p2p_stats WHERE ts >= dateadd('d', -1, timestamp_floor('d', now())) AND ts < timestamp_floor('d', now())";
+
+    let today = questdb_query_json(client, today_query).await.ok();
+    let yesterday = questdb_query_json(client, yesterday_query).await.ok();
+
+    let summary = serde_json::json!({
+        "today": today,
+        "yesterday": yesterday
+    });
+
+    // 일별 통계 (최근 30일)
+    let daily_query = "SELECT ts, viewers, unique_users, http_bytes, p2p_bytes, p2p_up_bytes, \
+        peers, swarms, plays, unique_visitors, tvmon, tvwiki, tvhot, mobile, pc \
+        FROM hourly_stats WHERE ts >= dateadd('d', -30, now()) ORDER BY ts";
+    let daily_stats = questdb_query_json(client, daily_query).await.unwrap_or(serde_json::json!({}));
+
+    // 월별 통계
+    let monthly_query = "SELECT timestamp_floor('M', ts) as month, \
+        max(viewers) as peak_viewers, max(unique_users) as peak_users, \
+        sum(http_bytes) as total_http, sum(p2p_bytes) as total_p2p \
+        FROM hourly_stats GROUP BY month ORDER BY month DESC LIMIT 12";
+    let monthly_stats = questdb_query_json(client, monthly_query).await.unwrap_or(serde_json::json!({}));
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::json!({
+            "summary": summary,
+            "daily_stats": daily_stats,
+            "monthly_stats": monthly_stats
+        }).to_string()))
+        .unwrap()
+}
+
 // 트래픽 통계 API (클라우드플레어 스타일)
 async fn api_traffic(
     State(state): State<AppState>,
@@ -1703,4 +2166,1712 @@ async fn api_ip_analysis_historical(state: &AppState, period: &str, limit: usize
         .header("access-control-allow-origin", "*")
         .body(axum::body::Body::from(result.to_string()))
         .unwrap()
+}
+
+// ============ 인증 시스템 ============
+
+async fn login_page() -> impl IntoResponse {
+    axum::response::Html(r#"<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><title>Admin Login</title>
+<style>
+body { font-family: -apple-system, sans-serif; background: #1a1a2e; color: #eee; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+.login-box { background: #16213e; padding: 40px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+h1 { margin: 0 0 30px; text-align: center; color: #00d9ff; }
+input { width: 100%; padding: 12px; margin: 10px 0; border: none; border-radius: 5px; background: #1a1a2e; color: #eee; box-sizing: border-box; }
+button { width: 100%; padding: 12px; margin-top: 20px; border: none; border-radius: 5px; background: #00d9ff; color: #000; font-weight: bold; cursor: pointer; }
+button:hover { background: #00b8d4; }
+.error { color: #ff6b6b; text-align: center; margin-top: 15px; }
+</style>
+</head><body>
+<div class="login-box">
+<h1>🔐 Admin Login</h1>
+<form id="loginForm">
+<input type="text" id="username" placeholder="Username" required>
+<input type="password" id="password" placeholder="Password" required>
+<button type="submit">Login</button>
+<div id="error" class="error"></div>
+</form>
+</div>
+<script>
+document.getElementById('loginForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const res = await fetch('/auth/login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value
+        })
+    });
+    const data = await res.json();
+    if (data.success) {
+        window.location.href = '/';
+    } else {
+        document.getElementById('error').textContent = data.error || 'Login failed';
+    }
+};
+</script>
+</body></html>"#)
+}
+
+#[derive(Deserialize)]
+struct LoginRequest {
+    username: String,
+    password: String,
+}
+
+async fn auth_login(cookies: Cookies, Json(req): Json<LoginRequest>) -> impl IntoResponse {
+    if verify_credentials(&req.username, &req.password).await {
+        let session_id = format!("{:x}", rand::random::<u128>());
+        SESSIONS.write().insert(session_id.clone(), req.username.clone());
+        save_session_to_db(&session_id, &req.username);
+
+        let cookie = Cookie::build(("session", session_id))
+            .path("/")
+            .http_only(true)
+            .same_site(tower_cookies::cookie::SameSite::Lax)
+            .max_age(time::Duration::days(7))
+            .build();
+        cookies.add(cookie);
+
+        Json(serde_json::json!({"success": true}))
+    } else {
+        Json(serde_json::json!({"success": false, "error": "Invalid credentials"}))
+    }
+}
+
+async fn auth_logout(cookies: Cookies) -> impl IntoResponse {
+    if let Some(session) = cookies.get("session") {
+        SESSIONS.write().remove(session.value());
+    }
+    cookies.remove(Cookie::from("session"));
+    Json(serde_json::json!({"success": true}))
+}
+
+async fn auth_check(cookies: Cookies) -> impl IntoResponse {
+    let authenticated = cookies.get("session")
+        .map(|c| SESSIONS.read().contains_key(c.value()))
+        .unwrap_or(false);
+    Json(serde_json::json!({"authenticated": authenticated}))
+}
+
+async fn auth_middleware(
+    State(_state): State<AppState>,
+    cookies: Cookies,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let path = request.uri().path();
+
+    let method = request.method().clone();
+
+    // 공개 경로 (인증 불필요)
+    let public_paths = [
+        "/login", "/auth/", "/api/agent/", "/agent/",
+        "/api/servers/status", "/api/servers/report", "/api/servers/logs",  // 에이전트 상태 보고 (자체 시크릿 검증)
+        "/api/blacklist/pending", "/api/blacklist/confirm",  // 에이전트 차단 폴링/확인
+        // 읽기 전용 API
+        "/api/realtime", "/api/live", "/api/sessions", "/api/ip_stats", "/api/stats",
+        "/api/history/", "/api/popular", "/api/summary", "/api/visitors", "/api/traffic",
+        "/api/server-time", "/api/ip-analysis", "/api/init-data", "/ws"
+    ];
+    if public_paths.iter().any(|p| path.starts_with(p)) {
+        return next.run(request).await;
+    }
+
+    // GET 요청만 허용하는 경로
+    let public_get_paths = ["/api/servers", "/api/blacklist", "/api/settings/cloudflare"];
+    if method == axum::http::Method::GET && public_get_paths.iter().any(|p| path.starts_with(p)) {
+        return next.run(request).await;
+    }
+
+    // 정적 파일
+    if path.starts_with("/static/") || path == "/favicon.ico" || path == "/" || path.ends_with(".html") || path.ends_with(".js") || path.ends_with(".css") {
+        return next.run(request).await;
+    }
+
+    // 세션 확인
+    let authenticated = cookies.get("session")
+        .map(|c| SESSIONS.read().contains_key(c.value()))
+        .unwrap_or(false);
+
+    if !authenticated {
+        if path.starts_with("/api/") {
+            return Response::builder()
+                .status(StatusCode::UNAUTHORIZED)
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"error":"Unauthorized"}"#))
+                .unwrap();
+        }
+        return Redirect::to("/login").into_response();
+    }
+
+    next.run(request).await
+}
+
+// ============ 블랙리스트 API ============
+
+async fn api_blacklist_list() -> impl IntoResponse {
+    let blocked = BLOCKED_SERVERS.read();
+    let pending = PENDING_BLOCKS.read();
+
+    let mut items: Vec<serde_json::Value> = Vec::new();
+
+    for (ip, cmd) in blocked.iter() {
+        items.push(serde_json::json!({
+            "ip": ip,
+            "reason": cmd.reason,
+            "blocked_at": cmd.created_at,
+            "cf_blocked": cmd.cf_blocked,
+            "blocked_servers": cmd.servers_blocked,
+            "status": "blocked"
+        }));
+    }
+
+    for (ip, cmd) in pending.iter() {
+        items.push(serde_json::json!({
+            "ip": ip,
+            "reason": cmd.reason,
+            "blocked_at": cmd.created_at,
+            "cf_blocked": cmd.cf_blocked,
+            "blocked_servers": cmd.servers_blocked,
+            "status": "pending"
+        }));
+    }
+
+    Json(serde_json::json!({"blacklist": items}))
+}
+
+#[derive(Deserialize)]
+struct BlockRequest {
+    ip: String,
+    reason: String,
+}
+
+async fn api_blacklist_block(Json(req): Json<BlockRequest>) -> Json<serde_json::Value> {
+    let ip = req.ip.trim().to_string();
+    let reason = req.reason.trim().to_string();
+
+    // IP 형식 검증
+    if ip.parse::<std::net::IpAddr>().is_err() {
+        return Json(serde_json::json!({"success": false, "error": "Invalid IP format"}));
+    }
+
+    // 이미 차단된 경우
+    if BLOCKED_SERVERS.read().contains_key(&ip) {
+        return Json(serde_json::json!({"success": false, "error": "IP already blocked"}));
+    }
+
+    let cmd = BlockCommand {
+        ip: ip.clone(),
+        reason: reason.clone(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        cf_blocked: false,
+        servers_blocked: Vec::new(),
+    };
+
+    PENDING_BLOCKS.write().insert(ip.clone(), cmd);
+
+    // Cloudflare 차단 시도
+    let cf_result = block_ip_cloudflare(&ip, &reason).await;
+
+    // 서버 개수 확인
+    let server_count = EXTERNAL_SERVERS.read().len();
+
+    // pending에서 blocked로 이동 (에이전트가 confirm하면 servers_blocked 업데이트됨)
+    PENDING_BLOCKS.write().remove(&ip);
+
+    let final_cmd = BlockCommand {
+        ip: ip.clone(),
+        reason: reason.clone(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        cf_blocked: cf_result,
+        servers_blocked: Vec::new(), // 에이전트가 confirm하면 채워짐
+    };
+
+    BLOCKED_SERVERS.write().insert(ip.clone(), final_cmd);
+    save_blocked_list();
+
+    // 이벤트 기록
+    add_server_event("system", &format!("IP {} 차단됨 (CF: {}, 에이전트: {}대 대기)", ip, cf_result, server_count));
+
+    Json(serde_json::json!({
+        "success": true,
+        "cf_blocked": cf_result,
+        "servers_pending": server_count
+    }))
+}
+
+async fn api_blacklist_unblock(Json(req): Json<BlockRequest>) -> Json<serde_json::Value> {
+    let ip = req.ip.trim().to_string();
+
+    // 차단 해제
+    let was_blocked = BLOCKED_SERVERS.write().remove(&ip).is_some();
+    PENDING_BLOCKS.write().remove(&ip);
+
+    if !was_blocked {
+        return Json(serde_json::json!({"success": false, "error": "IP not in blacklist"}));
+    }
+
+    // Cloudflare 해제
+    let _ = unblock_ip_cloudflare(&ip).await;
+
+    // 모든 서버에 해제 명령
+    let servers: Vec<(String, String)> = {
+        let guard = EXTERNAL_SERVERS.read();
+        guard.iter().map(|(_name, s)| (s.url.clone(), s.ip.clone())).collect()
+    };
+    let secret = AGENT_SECRET.read().clone();
+    let client = reqwest::Client::new();
+
+    for (server_url, server_ip) in &servers {
+        let base_url = if !server_url.is_empty() {
+            server_url.clone()
+        } else if !server_ip.is_empty() {
+            format!("http://{}:8081", server_ip)
+        } else {
+            continue;
+        };
+        let url = format!("{}/unblock", base_url);
+        let _ = client.post(&url)
+            .header("X-Agent-Secret", secret.clone())
+            .json(&serde_json::json!({"ip": ip}))
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await;
+    }
+
+    save_blocked_list();
+    add_server_event("system", &format!("IP {} 차단 해제됨", ip));
+
+    Json(serde_json::json!({"success": true}))
+}
+
+fn save_blocked_list() {
+    // 락을 짧게 유지하고 복사본으로 저장 (데드락 방지)
+    let data: HashMap<String, BlockCommand> = BLOCKED_SERVERS.read().clone();
+    if let Ok(json) = serde_json::to_string_pretty(&data) {
+        let _ = std::fs::write("data/blocked_ips.json", json);
+    }
+}
+
+// ============ Cloudflare API ============
+
+async fn block_ip_cloudflare(ip: &str, reason: &str) -> bool {
+    let (enabled, email, api_key) = {
+        let settings = CF_SETTINGS.read();
+        (settings.enabled, settings.email.clone(), settings.api_key.clone())
+    };
+
+    if !enabled || email.is_empty() || api_key.is_empty() {
+        return false;
+    }
+
+    let client = reqwest::Client::new();
+    // User-level Global API
+    let url = "https://api.cloudflare.com/client/v4/user/firewall/access_rules/rules";
+
+    let res = client.post(url)
+        .header("X-Auth-Email", &email)
+        .header("X-Auth-Key", &api_key)
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({
+            "mode": "block",
+            "configuration": {
+                "target": "ip",
+                "value": ip
+            },
+            "notes": format!("Auto-blocked: {}", reason)
+        }))
+        .send()
+        .await;
+
+    match res {
+        Ok(resp) => resp.status().is_success(),
+        Err(_) => false,
+    }
+}
+
+async fn unblock_ip_cloudflare(ip: &str) -> bool {
+    let (enabled, email, api_key) = {
+        let settings = CF_SETTINGS.read();
+        (settings.enabled, settings.email.clone(), settings.api_key.clone())
+    };
+
+    if !enabled || email.is_empty() || api_key.is_empty() {
+        return false;
+    }
+
+    let client = reqwest::Client::new();
+
+    // User-level API로 규칙 ID 찾기
+    let list_url = format!(
+        "https://api.cloudflare.com/client/v4/user/firewall/access_rules/rules?configuration.value={}",
+        ip
+    );
+
+    let res = client.get(&list_url)
+        .header("X-Auth-Email", &email)
+        .header("X-Auth-Key", &api_key)
+        .send()
+        .await;
+
+    if let Ok(resp) = res {
+        if let Ok(data) = resp.json::<serde_json::Value>().await {
+            if let Some(rules) = data["result"].as_array() {
+                for rule in rules {
+                    if let Some(id) = rule["id"].as_str() {
+                        let delete_url = format!(
+                            "https://api.cloudflare.com/client/v4/user/firewall/access_rules/rules/{}",
+                            id
+                        );
+                        let _ = client.delete(&delete_url)
+                            .header("X-Auth-Email", &email)
+                            .header("X-Auth-Key", &api_key)
+                            .send()
+                            .await;
+                    }
+                }
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+async fn api_cf_settings_get() -> impl IntoResponse {
+    let settings = CF_SETTINGS.read();
+    // 프론트엔드 호환: accounts 배열 형식
+    let accounts = if settings.enabled && !settings.email.is_empty() && !settings.api_key.is_empty() {
+        vec![serde_json::json!({
+            "email": settings.email,
+            "has_key": true
+        })]
+    } else {
+        vec![]
+    };
+    Json(serde_json::json!({
+        "status": "ok",
+        "enabled": settings.enabled,
+        "email": settings.email,
+        "has_key": !settings.api_key.is_empty(),
+        "accounts": accounts
+    }))
+}
+
+#[derive(Deserialize)]
+struct CfSettingsRequest {
+    enabled: Option<bool>,
+    email: Option<String>,
+    api_key: Option<String>,
+}
+
+async fn api_cf_settings_set(Json(req): Json<CfSettingsRequest>) -> impl IntoResponse {
+    let mut settings = CF_SETTINGS.write();
+
+    if let Some(enabled) = req.enabled {
+        settings.enabled = enabled;
+    }
+    if let Some(email) = req.email {
+        settings.email = email;
+    }
+    if let Some(api_key) = req.api_key {
+        if !api_key.is_empty() {
+            settings.api_key = api_key;
+        }
+    }
+
+    // 저장
+    let save_data = serde_json::json!({
+        "enabled": settings.enabled,
+        "email": settings.email,
+        "api_key": settings.api_key
+    });
+    let _ = std::fs::write("data/cf_settings.json", save_data.to_string());
+
+    Json(serde_json::json!({"success": true}))
+}
+
+// ============ 에이전트 API ============
+
+#[derive(Deserialize)]
+struct AgentReportRequest {
+    server_name: String,
+    status: String,
+    #[serde(default)]
+    blocked_ips: Vec<String>,
+}
+
+async fn api_agent_report(
+    headers: HeaderMap,
+    Json(req): Json<AgentReportRequest>,
+) -> impl IntoResponse {
+    // 시크릿 검증
+    let secret = headers.get("X-Agent-Secret")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    if !verify_agent_secret(secret) {
+        return Json(serde_json::json!({"error": "Invalid secret"}));
+    }
+
+    // 서버 정보 업데이트
+    let mut servers = EXTERNAL_SERVERS.write();
+    if let Some(server) = servers.get_mut(&req.server_name) {
+        server.last_seen = Some(chrono::Utc::now());
+        server.blocked_ips = req.blocked_ips;
+    }
+
+    // 대기 중인 차단 명령 반환
+    let pending: Vec<serde_json::Value> = PENDING_BLOCKS.read()
+        .iter()
+        .map(|(ip, cmd)| serde_json::json!({"ip": ip, "reason": &cmd.reason}))
+        .collect();
+
+    Json(serde_json::json!({
+        "success": true,
+        "pending_blocks": pending
+    }))
+}
+
+async fn api_agent_register(
+    headers: HeaderMap,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let secret = headers.get("X-Agent-Secret")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    if !verify_agent_secret(secret) {
+        return Json(serde_json::json!({"error": "Invalid secret"}));
+    }
+
+    let server_name = req["server_name"].as_str().unwrap_or("unknown").to_string();
+    let url = req["url"].as_str().unwrap_or("").to_string();
+
+    let server = ExternalServer {
+        id: server_name.clone(),
+        name: server_name.clone(),
+        url,
+        last_seen: Some(chrono::Utc::now()),
+        online: true,
+        ..Default::default()
+    };
+
+    EXTERNAL_SERVERS.write().insert(server_name.clone(), server);
+    add_server_event(&server_name, "에이전트 등록됨");
+
+    Json(serde_json::json!({"success": true}))
+}
+
+// ============ 어뷰저 탐지 API ============
+
+async fn api_logs_abusers(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    let client = reqwest::Client::new();
+    let period = params.get("period").map(|s| s.as_str()).unwrap_or("6h");
+    let limit = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(30i32);
+
+    let time_filter = match period {
+        "1h" => "dateadd('h', -1, now())",
+        "3h" => "dateadd('h', -3, now())",
+        "6h" => "dateadd('h', -6, now())",
+        "12h" => "dateadd('h', -12, now())",
+        "24h" => "dateadd('d', -1, now())",
+        _ => "dateadd('h', -6, now())",
+    };
+
+    let period_seconds = match period {
+        "1h" => 3600.0,
+        "3h" => 10800.0,
+        "6h" => 21600.0,
+        "12h" => 43200.0,
+        "24h" => 86400.0,
+        _ => 21600.0,
+    };
+
+    // ========== 고도화된 쿼리들 (병렬 실행) ==========
+    // count_distinct는 GROUP BY와 함께 사용 시 매우 느림 - 제거
+
+    // 1. 기본 트래픽 통계 (count_distinct 제거)
+    let query = format!(r#"
+        SELECT client_ip, count() as requests, sum(bytes_sent) as total_bytes,
+               min(timestamp) as first_seen, max(timestamp) as last_seen
+        FROM nginx_logs
+        WHERE timestamp > {} AND status = 200
+        GROUP BY client_ip
+        ORDER BY total_bytes DESC
+        LIMIT {}
+    "#, time_filter, (limit * 5).max(150));
+
+    // 2. IP별 서버 목록 (5000개 - 더 많은 IP 커버리지)
+    let servers_query = format!(r#"
+        SELECT client_ip, server_id, count() as cnt
+        FROM nginx_logs
+        WHERE timestamp > {} AND status = 200
+        GROUP BY client_ip, server_id
+        ORDER BY cnt DESC
+        LIMIT 5000
+    "#, time_filter);
+
+    // 3. 100초 단위 버스트 분석 - 최대 6시간 (속도 최적화)
+    let burst_time = match period {
+        "1h" => "dateadd('h', -1, now())",
+        "3h" => "dateadd('h', -3, now())",
+        _ => "dateadd('h', -6, now())",  // 6h 이상은 6h로 제한
+    };
+    let max100s_query = format!(r#"
+        SELECT client_ip, max(cnt) as max_req
+        FROM (
+            SELECT client_ip, count() as cnt
+            FROM nginx_logs
+            WHERE timestamp > {} AND status = 200
+            SAMPLE BY 100s ALIGN TO CALENDAR
+        )
+        GROUP BY client_ip
+        ORDER BY max_req DESC
+        LIMIT 300
+    "#, burst_time);
+
+    // 4. 동일 경로 반복 접근 (단일 비디오 어뷰즈) - 최대 3시간 (속도 최적화)
+    let single_path_time = match period {
+        "1h" => "dateadd('h', -1, now())",
+        _ => "dateadd('h', -3, now())",  // 모든 기간 3h로 제한 (속도)
+    };
+    let single_path_query = format!(r#"
+        SELECT client_ip, path, count() as cnt, sum(bytes_sent) as bytes
+        FROM nginx_logs
+        WHERE timestamp > {} AND status = 200
+        GROUP BY client_ip, path
+        ORDER BY cnt DESC
+        LIMIT 300
+    "#, single_path_time);
+
+    // 모든 쿼리 병렬 실행
+    let (res, servers_res, max100s_res, single_path_res) = tokio::join!(
+        client.get("http://localhost:9002/exec")
+            .query(&[("query", &query)])
+            .timeout(std::time::Duration::from_secs(20))
+            .send(),
+        client.get("http://localhost:9002/exec")
+            .query(&[("query", &servers_query)])
+            .timeout(std::time::Duration::from_secs(20))
+            .send(),
+        client.get("http://localhost:9002/exec")
+            .query(&[("query", &max100s_query)])
+            .timeout(std::time::Duration::from_secs(20))
+            .send(),
+        client.get("http://localhost:9002/exec")
+            .query(&[("query", &single_path_query)])
+            .timeout(std::time::Duration::from_secs(20))
+            .send()
+    );
+
+    // ========== 데이터 파싱 ==========
+
+    // IP -> 100초 최대 요청
+    let mut ip_max100s: HashMap<String, i64> = HashMap::new();
+    if let Ok(resp) = max100s_res {
+        if let Ok(data) = resp.json::<serde_json::Value>().await {
+            if let Some(dataset) = data["dataset"].as_array() {
+                for row in dataset {
+                    let ip = row[0].as_str().unwrap_or("").to_string();
+                    let max_req = row[1].as_i64().unwrap_or(0);
+                    ip_max100s.insert(ip, max_req);
+                }
+            }
+        }
+    }
+
+    // IP -> 단일 경로 최대 반복 횟수 + 경로 수
+    let mut ip_max_single_path: HashMap<String, (i64, i64)> = HashMap::new(); // (횟수, 바이트)
+    let mut ip_path_count: HashMap<String, i64> = HashMap::new(); // IP별 고유 경로 수
+    if let Ok(resp) = single_path_res {
+        if let Ok(data) = resp.json::<serde_json::Value>().await {
+            if let Some(dataset) = data["dataset"].as_array() {
+                for row in dataset {
+                    let ip = row[0].as_str().unwrap_or("").to_string();
+                    let cnt = row[2].as_i64().unwrap_or(0);
+                    let bytes = row[3].as_i64().unwrap_or(0);
+                    // 고유 경로 수 카운트
+                    *ip_path_count.entry(ip.clone()).or_insert(0) += 1;
+                    // 최대 반복 경로 추적
+                    let entry = ip_max_single_path.entry(ip).or_insert((0, 0));
+                    if cnt > entry.0 {
+                        *entry = (cnt, bytes);
+                    }
+                }
+            }
+        }
+    }
+
+    // server_id -> server_name
+    let server_name_map: HashMap<String, String> = {
+        let servers = EXTERNAL_SERVERS.read();
+        servers.iter().map(|(_, s)| (s.id.clone(), s.name.clone())).collect()
+    };
+    let total_servers = server_name_map.len();
+
+    // IP -> 서버 목록
+    let mut ip_servers: HashMap<String, Vec<String>> = HashMap::new();
+    if let Ok(resp) = servers_res {
+        if let Ok(data) = resp.json::<serde_json::Value>().await {
+            if let Some(dataset) = data["dataset"].as_array() {
+                for row in dataset {
+                    let ip = row[0].as_str().unwrap_or("").to_string();
+                    let server_id = row[1].as_str().unwrap_or("").to_string();
+                    if !server_id.is_empty() {
+                        let server_name = server_name_map.get(&server_id)
+                            .cloned()
+                            .unwrap_or_else(|| server_id.chars().take(6).collect());
+                        ip_servers.entry(ip).or_default().push(server_name);
+                    }
+                }
+            }
+        }
+    }
+
+    // ========== 점수 계산 ==========
+    let mut abusers = Vec::new();
+
+    if let Ok(resp) = res {
+        if let Ok(data) = resp.json::<serde_json::Value>().await {
+            if let Some(dataset) = data["dataset"].as_array() {
+                for row in dataset {
+                    let ip = row[0].as_str().unwrap_or("");
+                    let requests = row[1].as_i64().unwrap_or(0);
+                    let total_bytes = row[2].as_i64().unwrap_or(0);
+                    let first_seen = row[3].as_str().unwrap_or("");
+                    let last_seen = row[4].as_str().unwrap_or("");
+                    // unique_paths와 unique_agents는 single_path와 servers 쿼리에서 추정
+                    let unique_paths = ip_path_count.get(ip).copied().unwrap_or(1) as i64;
+                    let unique_agents = ip_servers.get(ip).map(|s| s.len()).unwrap_or(1) as i64;
+
+                    let gb = total_bytes as f64 / 1024.0 / 1024.0 / 1024.0;
+                    if gb < 0.1 { continue; }  // 0.1GB (100MB) 미만 스킵
+
+                    let mut score: i32 = 0;
+                    let mut reasons = Vec::new();
+                    let mut flags = Vec::new();
+
+                    // ===== 패턴 1: 트래픽 양 (최대 60점) =====
+                    if gb > 30.0 {
+                        score += 60;
+                        reasons.push(format!("🔴 극대용량: {:.1}GB", gb));
+                        flags.push("EXTREME_TRAFFIC");
+                    } else if gb > 15.0 {
+                        score += 45;
+                        reasons.push(format!("🟠 대용량: {:.1}GB", gb));
+                        flags.push("HIGH_TRAFFIC");
+                    } else if gb > 8.0 {
+                        score += 30;
+                        reasons.push(format!("🟡 높은 트래픽: {:.1}GB", gb));
+                    } else if gb > 3.0 {
+                        score += 15;
+                        reasons.push(format!("중간 트래픽: {:.1}GB", gb));
+                    }
+
+                    // ===== 패턴 2: 100초 버스트 (최대 80점) =====
+                    let max_req_100s = ip_max100s.get(ip).copied().unwrap_or(0);
+                    if max_req_100s > 500 {
+                        score += 80;
+                        reasons.push(format!("🔴 극심한 버스트: {}req/100s", max_req_100s));
+                        flags.push("EXTREME_BURST");
+                    } else if max_req_100s > 200 {
+                        score += 50;
+                        reasons.push(format!("🟠 높은 버스트: {}req/100s", max_req_100s));
+                        flags.push("HIGH_BURST");
+                    } else if max_req_100s > 100 {
+                        score += 30;
+                        reasons.push(format!("🟡 버스트: {}req/100s", max_req_100s));
+                    }
+
+                    // ===== 패턴 3: 단일 비디오 어뷰즈 (최대 100점) =====
+                    if let Some((single_cnt, single_bytes)) = ip_max_single_path.get(ip) {
+                        let single_ratio = *single_cnt as f64 / requests.max(1) as f64;
+                        let single_gb = *single_bytes as f64 / 1024.0 / 1024.0 / 1024.0;
+
+                        if single_ratio > 0.8 && single_gb > 5.0 {
+                            score += 100;
+                            reasons.push(format!("🔴 단일비디오 어뷰즈: {:.0}% ({:.1}GB)", single_ratio * 100.0, single_gb));
+                            flags.push("SINGLE_VIDEO_ABUSE");
+                        } else if single_ratio > 0.6 && single_gb > 2.0 {
+                            score += 60;
+                            reasons.push(format!("🟠 반복다운로드: {:.0}%", single_ratio * 100.0));
+                            flags.push("REPEATED_DOWNLOAD");
+                        } else if *single_cnt > 200 {
+                            score += 30;
+                            reasons.push(format!("🟡 동일경로 반복: {}회", single_cnt));
+                        }
+                    }
+
+                    // ===== 패턴 4: 멀티서버 공격 (최대 50점) =====
+                    let servers: Vec<String> = ip_servers.get(ip).cloned().unwrap_or_default();
+                    let server_count = servers.len();
+                    if total_servers > 0 && server_count >= total_servers && gb > 5.0 {
+                        score += 50;
+                        reasons.push(format!("🔴 전체서버 공격: {}/{}대", server_count, total_servers));
+                        flags.push("ALL_SERVERS_ATTACK");
+                    } else if server_count > total_servers / 2 && gb > 3.0 {
+                        score += 25;
+                        reasons.push(format!("🟠 다수서버 접근: {}/{}대", server_count, total_servers));
+                    }
+
+                    // ===== 패턴 5: User-Agent 다중 사용 (봇 의심) =====
+                    if unique_agents > 5 && requests > 100 {
+                        score += 35;
+                        reasons.push(format!("🟠 다중 UA: {}개", unique_agents));
+                        flags.push("MULTI_UA");
+                    } else if unique_agents > 3 {
+                        score += 15;
+                        reasons.push(format!("🟡 UA 변경: {}개", unique_agents));
+                    }
+
+                    // ===== 패턴 6: 요청당 바이트 (대용량 세그먼트) =====
+                    let bytes_per_req = if requests > 0 { total_bytes / requests } else { 0 };
+                    let mb_per_req = bytes_per_req as f64 / 1024.0 / 1024.0;
+                    if mb_per_req > 10.0 {
+                        score += 25;
+                        reasons.push(format!("대형 세그먼트: {:.1}MB/req", mb_per_req));
+                    }
+
+                    // ===== 패턴 7: 시간당 트래픽 (최대 50점) =====
+                    let activity_hours = if !first_seen.is_empty() && !last_seen.is_empty() {
+                        let first_ts = format!("{}Z", first_seen.replace(" ", "T").trim_end_matches('Z'));
+                        let last_ts = format!("{}Z", last_seen.replace(" ", "T").trim_end_matches('Z'));
+                        if let (Ok(first), Ok(last)) = (
+                            chrono::DateTime::parse_from_rfc3339(&first_ts),
+                            chrono::DateTime::parse_from_rfc3339(&last_ts)
+                        ) {
+                            (last.signed_duration_since(first).num_seconds() as f64 / 3600.0).max(0.1)
+                        } else { 1.0 }
+                    } else { 1.0 };
+
+                    let gb_per_hour = gb / activity_hours;
+                    if gb_per_hour > 20.0 {
+                        score += 50;
+                        reasons.push(format!("🔴 극고속: {:.1}GB/h", gb_per_hour));
+                        flags.push("EXTREME_SPEED");
+                    } else if gb_per_hour > 10.0 {
+                        score += 30;
+                        reasons.push(format!("🟠 고속: {:.1}GB/h", gb_per_hour));
+                    } else if gb_per_hour > 5.0 {
+                        score += 15;
+                        reasons.push(format!("🟡 빠른 다운: {:.1}GB/h", gb_per_hour));
+                    }
+
+                    // ===== 패턴 8: 경로 다양성 낮음 =====
+                    let path_ratio = unique_paths as f64 / requests.max(1) as f64;
+                    if path_ratio < 0.01 && requests > 500 {
+                        score += 30;
+                        reasons.push(format!("🟡 낮은 경로다양성: {:.1}%", path_ratio * 100.0));
+                    }
+
+                    // ===== 확정 악성 유저 (300점 부여) =====
+                    // 조건: 단일비디오 어뷰즈 + 전체서버 공격 + 10GB 이상
+                    let is_confirmed_abuser = flags.contains(&"SINGLE_VIDEO_ABUSE")
+                        && (flags.contains(&"ALL_SERVERS_ATTACK") || gb > 10.0);
+
+                    // 또는: 극심한 버스트 + 극대용량
+                    let is_confirmed_abuser2 = flags.contains(&"EXTREME_BURST")
+                        && flags.contains(&"EXTREME_TRAFFIC");
+
+                    if is_confirmed_abuser || is_confirmed_abuser2 {
+                        score = 300;
+                        flags.push("CONFIRMED_ABUSER");
+                    }
+
+                    // 위험도 레벨
+                    let risk_level = if score >= 300 {
+                        "confirmed"
+                    } else if score >= 150 {
+                        "critical"
+                    } else if score >= 100 {
+                        "high"
+                    } else if score >= 50 {
+                        "medium"
+                    } else {
+                        "low"
+                    };
+
+                    // 10점 미만은 스킵
+                    if score < 10 { continue; }
+
+                    let already_blocked = BLOCKED_SERVERS.read().contains_key(ip);
+                    let req_per_sec = requests as f64 / period_seconds;
+
+                    abusers.push(serde_json::json!({
+                        "ip": ip,
+                        "requests": requests,
+                        "totalBytes": total_bytes,
+                        "gb": format!("{:.1}", gb),
+                        "gb_per_hour": format!("{:.1}", gb_per_hour),
+                        "avg_req_per_sec": format!("{:.2}", req_per_sec),
+                        "max_req_100s": max_req_100s,
+                        "unique_paths": unique_paths,
+                        "unique_agents": unique_agents,
+                        "first_seen": first_seen,
+                        "last_seen": last_seen,
+                        "score": score,
+                        "risk_score": score,
+                        "risk_level": risk_level,
+                        "reasons": reasons,
+                        "flags": flags,
+                        "servers": servers,
+                        "alreadyBlocked": already_blocked
+                    }));
+                }
+            }
+        }
+    }
+
+    // 점수순 정렬 후 limit 적용
+    abusers.sort_by(|a, b| {
+        let sa = a["score"].as_i64().unwrap_or(0);
+        let sb = b["score"].as_i64().unwrap_or(0);
+        sb.cmp(&sa)
+    });
+    abusers.truncate(limit as usize);
+
+    Json(serde_json::json!({"abusers": abusers}))
+}
+
+// ============ 로그 리스트 API ============
+
+// IP별 로그 조회
+async fn api_logs_by_ip(
+    axum::extract::Path(ip): axum::extract::Path<String>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let client = reqwest::Client::new();
+    let period = params.get("period").map(|s| s.as_str()).unwrap_or("6h");
+    let limit = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(500i32);
+
+    let time_filter = match period {
+        "1h" => "dateadd('h', -1, now())",
+        "3h" => "dateadd('h', -3, now())",
+        "6h" => "dateadd('h', -6, now())",
+        "12h" => "dateadd('h', -12, now())",
+        "24h" => "dateadd('d', -1, now())",
+        _ => "dateadd('h', -6, now())",
+    };
+
+    let escaped_ip = ip.replace("'", "''");
+    let query = format!(
+        "SELECT timestamp, server_id, method, path, status, bytes_sent, response_time, user_agent \
+         FROM nginx_logs \
+         WHERE timestamp > {} AND client_ip = '{}' \
+         ORDER BY timestamp DESC \
+         LIMIT {}",
+        time_filter, escaped_ip, limit
+    );
+
+    let res = client.get("http://localhost:9002/exec")
+        .query(&[("query", &query)])
+        .send()
+        .await;
+
+    match res {
+        Ok(resp) => {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                let logs: Vec<serde_json::Value> = data["dataset"].as_array()
+                    .map(|arr| arr.iter().map(|row| {
+                        serde_json::json!({
+                            "timestamp": row[0],
+                            "server_id": row[1],
+                            "method": row[2],
+                            "path": row[3],
+                            "status": row[4],
+                            "bytes_sent": row[5],
+                            "response_time": row[6],
+                            "user_agent": row[7]
+                        })
+                    }).collect())
+                    .unwrap_or_default();
+                Json(serde_json::json!({"logs": logs, "count": logs.len()}))
+            } else {
+                Json(serde_json::json!({"error": "Failed to parse response", "logs": []}))
+            }
+        }
+        Err(e) => Json(serde_json::json!({"error": e.to_string(), "logs": []}))
+    }
+}
+
+async fn api_logs_list(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    let client = reqwest::Client::new();
+    let period = params.get("period").map(|s| s.as_str()).unwrap_or("1h");
+    let limit = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(500i32);
+    let server_id = params.get("server_id").map(|s| s.as_str()).unwrap_or("");
+    let search = params.get("search").map(|s| s.as_str()).unwrap_or("");
+
+    let time_filter = match period {
+        "5m" => "dateadd('m', -5, now())",
+        "15m" => "dateadd('m', -15, now())",
+        "1h" => "dateadd('h', -1, now())",
+        "6h" => "dateadd('h', -6, now())",
+        "24h" => "dateadd('d', -1, now())",
+        _ => "dateadd('h', -1, now())",
+    };
+
+    let mut conditions = vec![format!("timestamp > {}", time_filter)];
+
+    if !server_id.is_empty() {
+        conditions.push(format!("server_id = '{}'", server_id.replace("'", "''")));
+    }
+    if !search.is_empty() {
+        let escaped = search.replace("'", "''");
+        conditions.push(format!("(client_ip LIKE '%{}%' OR path LIKE '%{}%')", escaped, escaped));
+    }
+
+    let query = format!(
+        "SELECT timestamp, client_ip, status, bytes_sent, path, user_agent, server_id \
+         FROM nginx_logs WHERE {} \
+         ORDER BY timestamp DESC LIMIT {}",
+        conditions.join(" AND "),
+        limit
+    );
+
+    let res = client.get("http://localhost:9002/exec")
+        .query(&[("query", &query)])
+        .send()
+        .await;
+
+    match res {
+        Ok(resp) => {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                Json(data)
+            } else {
+                Json(serde_json::json!({"error": "Failed to parse response"}))
+            }
+        }
+        Err(e) => Json(serde_json::json!({"error": e.to_string()}))
+    }
+}
+
+// 에이전트로부터 로그 수신 (압축 형식)
+#[derive(Deserialize)]
+struct CompressedLogsRequest {
+    server_id: String,
+    data: String, // base64 encoded gzipped JSON array
+}
+
+#[derive(Deserialize)]
+struct LogEntry {
+    timestamp: Option<String>,
+    client_ip: String,
+    method: Option<String>,
+    status: i32,
+    bytes_sent: i64,
+    response_time: Option<f64>,
+    path: String,
+    referer: Option<String>,
+    user_agent: Option<String>,
+}
+
+async fn api_logs_receive(
+    headers: HeaderMap,
+    Json(req): Json<CompressedLogsRequest>,
+) -> impl IntoResponse {
+    use base64::Engine;
+    use flate2::read::GzDecoder;
+    use std::io::Read;
+
+    // 시크릿 검증
+    let secret = headers.get("X-Agent-Secret")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    if !verify_agent_secret(secret) {
+        return Json(serde_json::json!({"error": "Unauthorized"}));
+    }
+
+    // base64 디코딩
+    let compressed = match base64::engine::general_purpose::STANDARD.decode(&req.data) {
+        Ok(data) => data,
+        Err(e) => return Json(serde_json::json!({"error": format!("base64 decode error: {}", e)})),
+    };
+
+    // gzip 압축 해제
+    let mut decoder = GzDecoder::new(&compressed[..]);
+    let mut json_str = String::new();
+    if let Err(e) = decoder.read_to_string(&mut json_str) {
+        return Json(serde_json::json!({"error": format!("gzip decode error: {}", e)}));
+    }
+
+    // JSON 파싱
+    let logs: Vec<LogEntry> = match serde_json::from_str(&json_str) {
+        Ok(logs) => logs,
+        Err(e) => return Json(serde_json::json!({"error": format!("JSON parse error: {}", e)})),
+    };
+
+    if logs.is_empty() {
+        return Json(serde_json::json!({"status": "ok", "inserted": 0}));
+    }
+
+    let client = reqwest::Client::new();
+    let mut inserted = 0;
+    let server_id = req.server_id.replace("'", "''");
+
+    // 각 로그 엔트리를 QuestDB에 삽입
+    for log in &logs {
+        // timestamp가 숫자(나노초)인 경우 ISO8601로 변환
+        let timestamp = match &log.timestamp {
+            Some(ts) => {
+                if let Ok(nanos) = ts.parse::<i64>() {
+                    let secs = nanos / 1_000_000_000;
+                    let nsecs = (nanos % 1_000_000_000) as u32;
+                    chrono::DateTime::from_timestamp(secs, nsecs)
+                        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S%.6fZ").to_string())
+                        .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ").to_string())
+                } else {
+                    ts.clone()
+                }
+            }
+            None => chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ").to_string(),
+        };
+
+        let method = log.method.clone().unwrap_or_default();
+        let user_agent = log.user_agent.clone().unwrap_or_default();
+        let referer = log.referer.clone().unwrap_or_default();
+        let response_time = log.response_time.unwrap_or(0.0);
+
+        // SQL escape
+        let client_ip = log.client_ip.replace("'", "''");
+        let path = log.path.replace("'", "''");
+        let method = method.replace("'", "''");
+        let user_agent = user_agent.replace("'", "''");
+        let referer = referer.replace("'", "''");
+
+        let query = format!(
+            "INSERT INTO nginx_logs (timestamp, server_id, client_ip, method, path, status, bytes_sent, response_time, referer, user_agent) \
+             VALUES ('{}', '{}', '{}', '{}', '{}', {}, {}, {}, '{}', '{}')",
+            timestamp, server_id, client_ip, method, path, log.status, log.bytes_sent, response_time, referer, user_agent
+        );
+
+        let res = client.get("http://localhost:9002/exec")
+            .query(&[("query", &query)])
+            .send()
+            .await;
+
+        if res.is_ok() {
+            inserted += 1;
+        }
+    }
+
+    Json(serde_json::json!({"status": "ok", "inserted": inserted}))
+}
+
+// ============ 로그 통계 API ============
+
+// 요약 통계
+async fn api_logs_stats_summary(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    let client = reqwest::Client::new();
+    let period = params.get("period").map(|s| s.as_str()).unwrap_or("1h");
+    let server_id = params.get("server_id").map(|s| s.as_str()).unwrap_or("");
+
+    let time_filter = match period {
+        "5m" => "dateadd('m', -5, now())",
+        "15m" => "dateadd('m', -15, now())",
+        "1h" => "dateadd('h', -1, now())",
+        "6h" => "dateadd('h', -6, now())",
+        "24h" => "dateadd('d', -1, now())",
+        _ => "dateadd('h', -1, now())",
+    };
+
+    let server_filter = if server_id.is_empty() {
+        String::new()
+    } else {
+        format!(" AND server_id = '{}'", server_id.replace("'", "''"))
+    };
+
+    let query = format!(
+        "SELECT count() as total, \
+         sum(CASE WHEN status >= 200 AND status < 300 THEN 1 ELSE 0 END) as s2xx, \
+         sum(CASE WHEN status >= 300 AND status < 400 THEN 1 ELSE 0 END) as s3xx, \
+         sum(CASE WHEN status >= 400 AND status < 500 THEN 1 ELSE 0 END) as s4xx, \
+         sum(CASE WHEN status >= 500 THEN 1 ELSE 0 END) as s5xx, \
+         sum(bytes_sent) as total_bytes \
+         FROM nginx_logs WHERE timestamp > {}{}",
+        time_filter, server_filter
+    );
+
+    let res = client.get("http://localhost:9002/exec")
+        .query(&[("query", &query)])
+        .send()
+        .await;
+
+    match res {
+        Ok(resp) => {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                if let Some(row) = data["dataset"].as_array().and_then(|a| a.first()) {
+                    return Json(serde_json::json!({
+                        "total": row[0].as_i64().unwrap_or(0),
+                        "s2xx": row[1].as_i64().unwrap_or(0),
+                        "s3xx": row[2].as_i64().unwrap_or(0),
+                        "s4xx": row[3].as_i64().unwrap_or(0),
+                        "s5xx": row[4].as_i64().unwrap_or(0),
+                        "total_bytes": row[5].as_i64().unwrap_or(0)
+                    }));
+                }
+            }
+            Json(serde_json::json!({"status": "error", "message": "No data"}))
+        }
+        Err(e) => Json(serde_json::json!({"status": "error", "message": e.to_string()}))
+    }
+}
+
+// IP별 통계
+async fn api_logs_stats_ips(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    let client = reqwest::Client::new();
+    let period = params.get("period").map(|s| s.as_str()).unwrap_or("6h");
+    let limit = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(20);
+
+    let time_filter = match period {
+        "1h" => "dateadd('h', -1, now())",
+        "6h" => "dateadd('h', -6, now())",
+        "24h" => "dateadd('d', -1, now())",
+        "7d" => "dateadd('d', -7, now())",
+        _ => "dateadd('h', -6, now())",
+    };
+
+    let query = format!(
+        "SELECT client_ip, count() as requests, sum(bytes_sent) as total_bytes \
+         FROM nginx_logs WHERE timestamp > {} GROUP BY client_ip \
+         ORDER BY total_bytes DESC LIMIT {}",
+        time_filter, limit
+    );
+
+    let res = client.get("http://localhost:9002/exec")
+        .query(&[("query", &query)])
+        .send()
+        .await;
+
+    match res {
+        Ok(resp) => {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                Json(data)
+            } else {
+                Json(serde_json::json!({"error": "Failed to parse response"}))
+            }
+        }
+        Err(e) => Json(serde_json::json!({"error": e.to_string()}))
+    }
+}
+
+// 타임라인 통계
+async fn api_logs_stats_timeline(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    let client = reqwest::Client::new();
+    let period = params.get("period").map(|s| s.as_str()).unwrap_or("6h");
+
+    let (time_filter, sample_by) = match period {
+        "1h" => ("dateadd('h', -1, now())", "1m"),
+        "6h" => ("dateadd('h', -6, now())", "5m"),
+        "24h" => ("dateadd('d', -1, now())", "30m"),
+        "7d" => ("dateadd('d', -7, now())", "1h"),
+        _ => ("dateadd('h', -6, now())", "5m"),
+    };
+
+    let query = format!(
+        "SELECT timestamp, count() as requests, sum(bytes_sent) as bytes \
+         FROM nginx_logs WHERE timestamp > {} \
+         SAMPLE BY {} ALIGN TO CALENDAR",
+        time_filter, sample_by
+    );
+
+    let res = client.get("http://localhost:9002/exec")
+        .query(&[("query", &query)])
+        .send()
+        .await;
+
+    match res {
+        Ok(resp) => {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                Json(data)
+            } else {
+                Json(serde_json::json!({"error": "Failed to parse response"}))
+            }
+        }
+        Err(e) => Json(serde_json::json!({"error": e.to_string()}))
+    }
+}
+
+// 일별 통계
+async fn api_logs_stats_daily(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    let client = reqwest::Client::new();
+    let limit = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(7);
+
+    let query = format!(
+        "SELECT timestamp, count() as requests, \
+         sum(CASE WHEN status >= 200 AND status < 300 THEN 1 ELSE 0 END) as s2xx, \
+         sum(CASE WHEN status >= 400 AND status < 500 THEN 1 ELSE 0 END) as s4xx, \
+         sum(CASE WHEN status >= 500 THEN 1 ELSE 0 END) as s5xx, \
+         sum(bytes_sent) as bytes \
+         FROM nginx_logs \
+         WHERE timestamp > dateadd('d', -{}, now()) \
+         SAMPLE BY 1d ALIGN TO CALENDAR",
+        limit
+    );
+
+    let res = client.get("http://localhost:9002/exec")
+        .query(&[("query", &query)])
+        .send()
+        .await;
+
+    match res {
+        Ok(resp) => {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                Json(data)
+            } else {
+                Json(serde_json::json!({"error": "Failed to parse response"}))
+            }
+        }
+        Err(e) => Json(serde_json::json!({"error": e.to_string()}))
+    }
+}
+
+// 서버별 일별 통계
+async fn api_logs_stats_daily_servers(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    let client = reqwest::Client::new();
+    let days = params.get("days").and_then(|s| s.parse().ok()).unwrap_or(7);
+
+    let query = format!(
+        "SELECT timestamp, server_id, count() as requests, \
+         sum(CASE WHEN status >= 200 AND status < 300 THEN 1 ELSE 0 END) as s2xx, \
+         sum(CASE WHEN status >= 400 AND status < 500 THEN 1 ELSE 0 END) as s4xx, \
+         sum(CASE WHEN status >= 500 THEN 1 ELSE 0 END) as s5xx, \
+         sum(bytes_sent) as bytes \
+         FROM nginx_logs \
+         WHERE timestamp > dateadd('d', -{}, now()) \
+         SAMPLE BY 1d ALIGN TO CALENDAR",
+        days
+    );
+
+    let res = client.get("http://localhost:9002/exec")
+        .query(&[("query", &query)])
+        .send()
+        .await;
+
+    match res {
+        Ok(resp) => {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                Json(data)
+            } else {
+                Json(serde_json::json!({"error": "Failed to parse response"}))
+            }
+        }
+        Err(e) => Json(serde_json::json!({"error": e.to_string()}))
+    }
+}
+
+// 시간별 통계
+async fn api_logs_stats_hourly(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    let client = reqwest::Client::new();
+    let date = params.get("date").map(|s| s.as_str()).unwrap_or("");
+
+    let query = if date.is_empty() {
+        "SELECT timestamp, count() as requests, \
+         sum(CASE WHEN status >= 200 AND status < 300 THEN 1 ELSE 0 END) as s2xx, \
+         sum(CASE WHEN status >= 400 AND status < 500 THEN 1 ELSE 0 END) as s4xx, \
+         sum(CASE WHEN status >= 500 THEN 1 ELSE 0 END) as s5xx, \
+         sum(bytes_sent) as bytes \
+         FROM nginx_logs \
+         WHERE timestamp > dateadd('d', -1, now()) \
+         SAMPLE BY 1h ALIGN TO CALENDAR".to_string()
+    } else {
+        format!(
+            "SELECT timestamp, count() as requests, \
+             sum(CASE WHEN status >= 200 AND status < 300 THEN 1 ELSE 0 END) as s2xx, \
+             sum(CASE WHEN status >= 400 AND status < 500 THEN 1 ELSE 0 END) as s4xx, \
+             sum(CASE WHEN status >= 500 THEN 1 ELSE 0 END) as s5xx, \
+             sum(bytes_sent) as bytes \
+             FROM nginx_logs \
+             WHERE timestamp >= '{}T00:00:00Z' AND timestamp < '{}T00:00:00Z' + 86400000000L \
+             SAMPLE BY 1h ALIGN TO CALENDAR",
+            date, date
+        )
+    };
+
+    let res = client.get("http://localhost:9002/exec")
+        .query(&[("query", &query)])
+        .send()
+        .await;
+
+    match res {
+        Ok(resp) => {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                Json(data)
+            } else {
+                Json(serde_json::json!({"error": "Failed to parse response"}))
+            }
+        }
+        Err(e) => Json(serde_json::json!({"error": e.to_string()}))
+    }
+}
+
+// 서버별 통계
+async fn api_logs_stats_servers(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    let client = reqwest::Client::new();
+    let period = params.get("period").map(|s| s.as_str()).unwrap_or("6h");
+
+    let time_filter = match period {
+        "1h" => "dateadd('h', -1, now())",
+        "6h" => "dateadd('h', -6, now())",
+        "24h" => "dateadd('d', -1, now())",
+        "7d" => "dateadd('d', -7, now())",
+        _ => "dateadd('h', -6, now())",
+    };
+
+    let query = format!(
+        "SELECT server_id, count() as requests, \
+         sum(CASE WHEN status >= 200 AND status < 300 THEN 1 ELSE 0 END) as s2xx, \
+         sum(CASE WHEN status >= 400 AND status < 500 THEN 1 ELSE 0 END) as s4xx, \
+         sum(CASE WHEN status >= 500 THEN 1 ELSE 0 END) as s5xx, \
+         sum(bytes_sent) as bytes \
+         FROM nginx_logs WHERE timestamp > {} \
+         GROUP BY server_id ORDER BY bytes DESC",
+        time_filter
+    );
+
+    let res = client.get("http://localhost:9002/exec")
+        .query(&[("query", &query)])
+        .send()
+        .await;
+
+    match res {
+        Ok(resp) => {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                Json(data)
+            } else {
+                Json(serde_json::json!({"error": "Failed to parse response"}))
+            }
+        }
+        Err(e) => Json(serde_json::json!({"error": e.to_string()}))
+    }
+}
+
+// ============ 이벤트 API ============
+
+async fn api_servers_events() -> impl IntoResponse {
+    let events = SERVER_EVENTS.read();
+    let recent: Vec<&ServerEvent> = events.iter().rev().take(100).collect();
+    Json(serde_json::json!({"events": recent}))
+}
+
+// 서버 이름 업데이트
+#[derive(Deserialize)]
+struct UpdateServerNameRequest {
+    name: String,
+}
+
+async fn api_server_update_name(
+    axum::extract::Path(server_id): axum::extract::Path<String>,
+    Json(req): Json<UpdateServerNameRequest>,
+) -> impl IntoResponse {
+    let mut servers = EXTERNAL_SERVERS.write();
+    if let Some(server) = servers.get_mut(&server_id) {
+        let old_name = server.name.clone();
+        server.name = req.name.clone();
+        let server_clone = server.clone();
+        drop(servers);
+        save_server_to_db(&server_clone);
+        add_server_event(&server_id, &format!("이름 변경: {} -> {}", old_name, req.name));
+        Json(serde_json::json!({"success": true, "name": req.name}))
+    } else {
+        drop(servers);
+        Json(serde_json::json!({"error": "Server not found"}))
+    }
+}
+
+// ============ 서버 상태 API ============
+
+async fn api_servers_list() -> impl IntoResponse {
+    let servers = EXTERNAL_SERVERS.read();
+    let cf_settings = CF_SETTINGS.read();
+    let blocked_count = BLOCKED_SERVERS.read().len();
+    let events = SERVER_EVENTS.read();
+    let latest_version = AGENT_LATEST_VERSION.read().clone();
+
+    let now = chrono::Utc::now();
+    let server_list: Vec<serde_json::Value> = servers.values()
+        .map(|s| {
+            let online = s.last_seen.map(|t| t > now - chrono::Duration::minutes(2)).unwrap_or(false);
+            let last_seen_ts = s.last_seen.map(|t| t.timestamp_millis()).unwrap_or(0);
+            serde_json::json!({
+                "id": s.id,
+                "name": if s.name.is_empty() { &s.id } else { &s.name },
+                "ip": s.ip,
+                "url": s.url,
+                "version": s.version,
+                "last_seen": last_seen_ts,
+                "blocked_ips": s.blocked_ips.len(),
+                "online": online,
+                "cpu": s.cpu,
+                "memory_used": s.memory_used,
+                "memory_total": s.memory_total,
+                "disk_used": s.disk_used,
+                "disk_total": s.disk_total,
+                "rx_bytes": s.rx_bytes,
+                "tx_bytes": s.tx_bytes,
+                "connections": s.connections,
+                "uptime": s.uptime
+            })
+        })
+        .collect();
+
+    let event_list: Vec<serde_json::Value> = events.iter().rev().take(50)
+        .map(|e| serde_json::json!({
+            "server": e.server,
+            "message": e.message,
+            "timestamp": e.timestamp
+        }))
+        .collect();
+
+    Json(serde_json::json!({
+        "servers": server_list,
+        "events": event_list,
+        "latest_version": latest_version,
+        "totalBlocked": blocked_count,
+        "cfEnabled": cf_settings.enabled
+    }))
+}
+
+// 에이전트가 상태 보고 (POST)
+#[derive(Deserialize)]
+struct ServerStatusReport {
+    #[serde(default)]
+    id: String,
+    #[serde(default, alias = "server_name")]
+    name: String,
+    #[serde(default)]
+    ip: String,
+    #[serde(default)]
+    version: String,
+    #[serde(default)]
+    blocked_ips: Vec<String>,
+    #[serde(default)]
+    cpu: f64,
+    #[serde(default)]
+    memory_used: u64,
+    #[serde(default)]
+    memory_total: u64,
+    #[serde(default)]
+    disk_used: u64,
+    #[serde(default)]
+    disk_total: u64,
+    #[serde(default)]
+    rx_bytes: u64,
+    #[serde(default)]
+    tx_bytes: u64,
+    #[serde(default)]
+    connections: u64,
+    #[serde(default)]
+    uptime: u64,
+}
+
+async fn api_servers_status(
+    ConnectInfo(addr): ConnectInfo<std::net::SocketAddr>,
+    headers: HeaderMap,
+    Json(req): Json<ServerStatusReport>,
+) -> impl IntoResponse {
+    // 시크릿 검증
+    let secret = headers.get("X-Agent-Secret")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    if !verify_agent_secret(secret) {
+        return Json(serde_json::json!({"error": "Invalid secret"}));
+    }
+
+    // 클라이언트 IP 추출: 에이전트 데이터 > x-forwarded-for > x-real-ip > 소켓 IP
+    let client_ip = if !req.ip.is_empty() {
+        req.ip.clone()
+    } else {
+        headers.get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.split(',').next())
+            .map(|s| s.trim().to_string())
+            .or_else(|| {
+                headers.get("x-real-ip")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| addr.ip().to_string())
+    };
+
+    let server_id = if !req.id.is_empty() { req.id.clone() } else { req.name.clone() };
+
+    // 서버 상태 업데이트 또는 신규 등록
+    let mut servers = EXTERNAL_SERVERS.write();
+
+    // 기존 서버의 커스텀 이름 유지
+    let existing_name = servers.get(&server_id).map(|s| s.name.clone());
+
+    let server = servers.entry(server_id.clone()).or_insert_with(|| ExternalServer {
+        id: server_id.clone(),
+        name: req.name.clone(),
+        ..Default::default()
+    });
+
+    server.last_seen = Some(chrono::Utc::now());
+    server.online = true;
+    server.ip = client_ip;
+    server.version = req.version;
+    server.blocked_ips = req.blocked_ips;
+    server.cpu = req.cpu;
+    server.memory_used = req.memory_used;
+    server.memory_total = req.memory_total;
+    server.disk_used = req.disk_used;
+    server.disk_total = req.disk_total;
+    server.rx_bytes = req.rx_bytes;
+    server.tx_bytes = req.tx_bytes;
+    server.connections = req.connections;
+    server.uptime = req.uptime;
+
+    // 기존 커스텀 이름이 있으면 유지, 없으면 에이전트가 보낸 이름 사용
+    if let Some(existing) = existing_name {
+        if !existing.is_empty() && existing != server_id {
+            // 커스텀 이름이 있으면 유지
+            server.name = existing;
+        } else if !req.name.is_empty() {
+            server.name = req.name;
+        }
+    } else if !req.name.is_empty() {
+        server.name = req.name;
+    }
+
+    let server_clone = server.clone();
+    drop(servers);
+
+    // 서버 정보 DB에 저장
+    save_server_to_db(&server_clone);
+
+    // 대기 중인 차단 명령 반환
+    let pending: Vec<serde_json::Value> = PENDING_BLOCKS.read()
+        .iter()
+        .map(|(ip, cmd)| serde_json::json!({"ip": ip, "reason": &cmd.reason}))
+        .collect();
+
+    Json(serde_json::json!({
+        "status": "ok",
+        "success": true,
+        "pending_blocks": pending
+    }))
+}
+
+// ============ 블랙리스트 대기/확인 API ============
+
+async fn api_blacklist_pending(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    let pending = PENDING_BLOCKS.read();
+    let blocked = BLOCKED_SERVERS.read();
+
+    // 차단 대기 명령
+    let mut commands: Vec<serde_json::Value> = pending.iter()
+        .map(|(ip, cmd)| serde_json::json!({
+            "ip": ip,
+            "action": "block",
+            "reason": cmd.reason,
+            "timestamp": chrono::DateTime::parse_from_rfc3339(&cmd.created_at)
+                .map(|d| d.timestamp_millis()).unwrap_or(0)
+        }))
+        .collect();
+
+    // 이미 차단된 것도 포함 (에이전트가 아직 처리 안 했을 수 있음)
+    for (ip, cmd) in blocked.iter() {
+        // 해당 서버가 아직 처리 안 했으면 포함
+        commands.push(serde_json::json!({
+            "ip": ip,
+            "action": "block",
+            "reason": cmd.reason,
+            "timestamp": chrono::DateTime::parse_from_rfc3339(&cmd.created_at)
+                .map(|d| d.timestamp_millis()).unwrap_or(0)
+        }));
+    }
+
+    Json(serde_json::json!({"commands": commands}))
+}
+
+#[derive(Deserialize)]
+struct ConfirmBlockRequest {
+    ip: String,
+    #[serde(default)]
+    server_name: Option<String>,
+    #[serde(default)]
+    server_id: Option<String>,
+    #[serde(default)]
+    action: Option<String>,
+    #[serde(default)]
+    success: Option<bool>,
+}
+
+async fn api_blacklist_confirm(Json(req): Json<ConfirmBlockRequest>) -> impl IntoResponse {
+    // 서버가 차단 확인했음을 기록
+    // server_id 또는 server_name 사용
+    let server_name = req.server_id.or(req.server_name).unwrap_or_default();
+
+    if server_name.is_empty() {
+        return Json(serde_json::json!({"success": false, "error": "server_id or server_name required"}));
+    }
+
+    // 락을 짧게 유지하고 저장 여부 결정
+    let should_save = {
+        let mut pending = PENDING_BLOCKS.write();
+        let mut blocked = BLOCKED_SERVERS.write();
+
+        if let Some(mut cmd) = pending.remove(&req.ip) {
+            cmd.servers_blocked.push(server_name.clone());
+            blocked.insert(req.ip.clone(), cmd);
+            true
+        } else if let Some(cmd) = blocked.get_mut(&req.ip) {
+            if !cmd.servers_blocked.contains(&server_name) {
+                cmd.servers_blocked.push(server_name.clone());
+                true
+            } else {
+                false
+            }
+        } else {
+            return Json(serde_json::json!({"success": false, "error": "IP not found"}));
+        }
+    }; // 락 해제됨
+
+    if should_save {
+        save_blocked_list();
+    }
+    Json(serde_json::json!({"success": true}))
+}
+
+// ============ 에이전트 버전/스크립트 API ============
+
+async fn api_agent_version() -> impl IntoResponse {
+    let version = AGENT_LATEST_VERSION.read().clone();
+    Json(serde_json::json!({"version": version}))
+}
+
+async fn serve_agent_script() -> impl IntoResponse {
+    match std::fs::read_to_string("static/agent/server_agent.sh") {
+        Ok(content) => Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "text/plain")
+            .body(Body::from(content))
+            .unwrap(),
+        Err(_) => Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::from("Agent script not found"))
+            .unwrap(),
+    }
+}
+
+async fn serve_agent_checksum() -> impl IntoResponse {
+    match std::fs::read_to_string("static/agent/server_agent.sh.sha256") {
+        Ok(content) => Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "text/plain")
+            .body(Body::from(content.trim().to_string()))
+            .unwrap(),
+        Err(_) => Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::from("Checksum not found"))
+            .unwrap(),
+    }
 }

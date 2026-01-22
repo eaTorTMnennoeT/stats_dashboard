@@ -27,15 +27,18 @@
       flex-direction: column;
     }
     .sidebar h1 { font-size: 18px; color: #00d4ff; }
-    .menu { list-style: none; flex: 1; }
+    .menu { list-style: none; flex: 1; overflow-y: auto; margin: 10px 0; padding-right: 5px; }
+    .menu::-webkit-scrollbar { width: 4px; }
+    .menu::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.3); border-radius: 2px; }
+    .menu::-webkit-scrollbar-track { background: transparent; }
     .menu-item a {
       display: block;
-      padding: 12px 14px;
+      padding: 10px 14px;
       color: #888;
       text-decoration: none;
       border-radius: 8px;
-      margin-bottom: 4px;
-      font-size: 14px;
+      margin-bottom: 2px;
+      font-size: 13px;
     }
     .menu-item a:hover { background: rgba(0,212,255,0.1); color: #00d4ff; }
     .menu-item a.active { background: linear-gradient(90deg, #00d4ff, #0088ff); color: #fff; }
@@ -53,6 +56,30 @@
       transition: all 0.2s;
     }
     .settings-btn:hover { background: rgba(0,212,255,0.1); color: #00d4ff; border-color: rgba(0,212,255,0.3); }
+    .tab-btn {
+      padding: 8px 16px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      color: #888;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover { background: rgba(0,212,255,0.1); color: #00d4ff; }
+    .tab-btn.active { background: linear-gradient(90deg, #00d4ff, #0088ff); color: #fff; border-color: transparent; }
+    .server-filter-btn {
+      padding: 4px 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px;
+      color: #888;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.15s;
+    }
+    .server-filter-btn:hover { background: rgba(0,212,255,0.15); color: #00d4ff; border-color: rgba(0,212,255,0.3); }
+    .server-filter-btn.active { background: #00d4ff; color: #000; border-color: #00d4ff; font-weight: bold; }
     .main { margin-left: 220px; flex: 1; padding: 20px; overflow-x: hidden; }
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     .header h2 { font-size: 22px; }
@@ -73,21 +100,25 @@
     .status.err { background: #dc2626; }
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
       margin-bottom: 20px;
     }
     .card {
-      background: linear-gradient(135deg, #1a1a3e 0%, #2d2d5a 100%);
-      border-radius: 10px;
-      padding: 16px;
-      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(20, 20, 50, 0.8);
+      border-radius: 8px;
+      padding: 12px 14px;
+      border: 1px solid rgba(0, 212, 255, 0.2);
+      height: 75px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
-    .card h3 { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 6px; }
-    .card .val { font-size: 24px; font-weight: 700; background: linear-gradient(90deg, #00d4ff, #00ff88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .card .unit { font-size: 12px; color: #666; }
-    .card.p2p .val { background: linear-gradient(90deg, #00ff88, #88ff00); -webkit-background-clip: text; }
-    .card.http .val { background: linear-gradient(90deg, #ff6b6b, #ffa502); -webkit-background-clip: text; }
+    .card h3 { font-size: 9px; color: #888; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px; }
+    .card .val { font-size: 22px; font-weight: 600; color: #00d4ff; line-height: 1.2; }
+    .card .unit { font-size: 11px; color: #666; margin-top: 2px; }
+    .card.p2p .val { color: #00ff88; }
+    .card.http .val { color: #ff6b6b; }
     .panel { background: linear-gradient(135deg, #1a1a3e 0%, #2d2d5a 100%); border-radius: 10px; padding: 16px; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.1); }
     .panel h3 { font-size: 14px; color: #00d4ff; margin-bottom: 12px; }
     table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
@@ -106,6 +137,10 @@
     .page-nav span { color: #888; line-height: 30px; }
     canvas { max-height: 180px; }
     .section { font-size: 14px; color: #00d4ff; margin: 20px 0 10px; }
+
+    /* 서버 테이블 전용 스타일 */
+    #serversTable th, #serversTable td { text-align: center; padding: 6px 4px; font-size: 11px; }
+    #serversTable td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* Responsive Table - 14 columns */
     .responsive-table { width: 100%; table-layout: fixed; font-size: 10px; }
@@ -146,15 +181,16 @@
     /* Server Table - 9 columns with % widths */
     #serverTable { width: 100%; table-layout: fixed; font-size: 12.5px; }
     #serverTable th, #serverTable td { padding: 10px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
-    #serverTable th:nth-child(1), #serverTable td:nth-child(1) { text-align: left; width: 3%; }   /* 서버 */
-    #serverTable th:nth-child(2) { width: 12%; }  /* HTTP */
-    #serverTable th:nth-child(3) { width: 12%; }  /* P2P↓ */
-    #serverTable th:nth-child(4) { width: 12%; }  /* P2P↑ */
-    #serverTable th:nth-child(5) { width: 13%; }  /* HTTP GB/s */
-    #serverTable th:nth-child(6) { width: 13%; }  /* P2P↓ GB/s */
-    #serverTable th:nth-child(7) { width: 13%; }  /* P2P↑ GB/s */
-    #serverTable th:nth-child(8) { width: 10%; }  /* P2P% */
-    #serverTable th:nth-child(9) { width: 12%; }  /* 접속자 */
+    #serverTable th:nth-child(1), #serverTable td:nth-child(1) { text-align: left; width: 4%; }   /* 서버 */
+    #serverTable th:nth-child(2) { width: 10%; }  /* HTTP */
+    #serverTable th:nth-child(3) { width: 10%; }  /* P2P↓ */
+    #serverTable th:nth-child(4) { width: 10%; }  /* P2P↑ */
+    #serverTable th:nth-child(5) { width: 8%; }   /* P2P% */
+    #serverTable th:nth-child(6) { width: 10%; }  /* 접속자 */
+    #serverTable th:nth-child(7) { width: 12%; }  /* HTTP GB/s */
+    #serverTable th:nth-child(8) { width: 12%; }  /* P2P↓ GB/s */
+    #serverTable th:nth-child(9) { width: 12%; }  /* P2P↑ GB/s */
+    #serverTable th:nth-child(10) { width: 12%; } /* Total GB/s */
     @media (max-width: 768px) {
       #serverTable { font-size: 12px; }
       #serverTable th, #serverTable td { padding: 6px 4px; }
@@ -268,10 +304,15 @@
       background: linear-gradient(135deg, #1a1a3e 0%, #2d2d5a 100%);
       border-radius: 12px;
       padding: 24px;
-      min-width: 320px;
-      max-width: 400px;
+      width: 90%;
+      max-width: 500px;
       border: 1px solid rgba(255,255,255,0.1);
       box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    @media (max-width: 600px) {
+      .modal { padding: 16px; width: 95%; }
     }
     .modal-header {
       display: flex;
@@ -817,10 +858,96 @@
       .dash-speed-grid { grid-template-columns: 1fr; }
       .dash-servers { grid-template-columns: 1fr; }
     }
+    /* Login Overlay */
+    .login-overlay {
+      position: fixed;
+      inset: 0;
+      background: #0f0f23;
+      z-index: 10000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .login-overlay.hidden { display: none; }
+    .login-box {
+      background: linear-gradient(180deg, #1a1a3e 0%, #0d0d1f 100%);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 40px;
+      width: 360px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .login-box h2 {
+      color: #00d4ff;
+      font-size: 24px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .login-box p {
+      color: #666;
+      font-size: 13px;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .login-box input {
+      width: 100%;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      background: rgba(0,0,0,0.3);
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .login-box input:focus {
+      border-color: #00d4ff;
+    }
+    .login-box input::placeholder { color: #555; }
+    .login-box button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #00d4ff, #0088ff);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s;
+    }
+    .login-box button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(0,212,255,0.3);
+    }
+    .login-box button:active { transform: translateY(0); }
+    .login-error {
+      color: #ff6b6b;
+      font-size: 13px;
+      text-align: center;
+      margin-top: 16px;
+      min-height: 20px;
+    }
+    .app-hidden { display: none !important; }
   </style>
 </head>
 <body>
-  <aside class="sidebar">
+  <!-- Login Overlay -->
+  <div class="login-overlay" id="loginOverlay">
+    <div class="login-box">
+      <h2>🔐 P2P Stats</h2>
+      <p>관리자 로그인이 필요합니다</p>
+      <form id="loginForm">
+        <input type="text" id="loginUsername" placeholder="Username" autocomplete="username" required>
+        <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" required>
+        <button type="submit">로그인</button>
+      </form>
+      <div class="login-error" id="loginError"></div>
+    </div>
+  </div>
+
+  <aside class="sidebar app-content">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:25px">
       <h1 style="margin:0">P2P Stats</h1>
       <div style="text-align:right;font-size:11px">
@@ -842,10 +969,12 @@
       <li class="menu-item"><a href="#visitors">방문자로그</a></li>
       <li class="menu-item"><a href="#history">히스토리</a></li>
       <li class="menu-item"><a href="#tracker">트래커</a></li>
+      <li class="menu-item"><a href="#servers">외부서버</a></li>
+      <li class="menu-item"><a href="#blacklist">블랙리스트</a></li>
     </ul>
   </aside>
 
-  <main class="main" id="app"></main>
+  <main class="main app-content" id="app"></main>
 
   <!-- Settings Modal -->
   <div class="modal-overlay" id="settingsModal">
@@ -866,11 +995,166 @@
     </div>
   </div>
 
+  <!-- Server Info Modal -->
+  <div class="modal-overlay" id="serverSettingsModal" style="display:none" onclick="if(event.target===this)closeServerSettings()">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header">
+        <h3>📋 서버 정보 - <span id="settingsServerName">-</span></h3>
+        <button class="modal-close" onclick="closeServerSettings()">&times;</button>
+      </div>
+      <div class="modal-content" style="padding:20px">
+        <div style="margin-bottom:15px">
+          <label style="display:block;color:#888;font-size:12px;margin-bottom:8px">Nginx 로그 파일 (우선순위)</label>
+          <div style="padding:10px;background:#1a1a2e;border:1px solid #333;border-radius:4px;font-family:monospace">
+            <div style="color:#00d4ff">1. /var/log/nginx/vod2.log</div>
+            <div style="color:#888;margin-top:5px">2. /var/log/nginx/vod.log</div>
+          </div>
+          <div style="color:#666;font-size:11px;margin-top:5px">에이전트가 위 순서대로 파일을 찾아 수집</div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn primary" onclick="closeServerSettings()">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auto Block Settings Modal -->
+  <div class="modal-overlay" id="autoBlockModal" style="display:none" onclick="if(event.target===this)closeAutoBlockSettings()">
+    <div class="modal" style="max-width:450px">
+      <div class="modal-header">
+        <h3>🛡️ 자동 차단 설정</h3>
+        <button class="modal-close" onclick="closeAutoBlockSettings()">&times;</button>
+      </div>
+      <div class="modal-content" style="padding:20px">
+        <div style="margin-bottom:20px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input type="checkbox" id="autoBlockEnabled" style="width:18px;height:18px;cursor:pointer">
+            <span style="font-size:14px;color:#fff">자동 차단 활성화</span>
+          </label>
+          <div style="color:#666;font-size:11px;margin-top:5px;margin-left:28px">AI 탐지 점수 기준으로 자동 블랙리스트 추가</div>
+        </div>
+        <div style="margin-bottom:20px">
+          <label style="display:block;color:#888;font-size:12px;margin-bottom:8px">차단 기준 점수</label>
+          <div style="display:flex;align-items:center;gap:15px">
+            <input type="range" id="autoBlockScore" min="50" max="100" value="85" style="flex:1;cursor:pointer" oninput="document.getElementById('autoBlockScoreVal').textContent=this.value">
+            <span id="autoBlockScoreVal" style="font-size:20px;font-weight:bold;color:#ff6b6b;min-width:40px;text-align:right">85</span>
+            <span style="color:#888">점 이상</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:#555;margin-top:5px">
+            <span>50 (느슨)</span>
+            <span>75</span>
+            <span>100 (엄격)</span>
+          </div>
+        </div>
+        <div style="margin-bottom:15px">
+          <label style="display:block;color:#888;font-size:12px;margin-bottom:8px">차단 기간</label>
+          <select id="autoBlockDuration" style="width:100%;background:#1a1a2e;color:#fff;border:1px solid #333;padding:10px;border-radius:4px">
+            <option value="1h">1시간</option>
+            <option value="6h">6시간</option>
+            <option value="24h" selected>24시간</option>
+            <option value="7d">7일</option>
+            <option value="permanent">영구</option>
+          </select>
+        </div>
+        <div style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);border-radius:6px;padding:12px;margin-top:15px">
+          <div style="color:#ff6b6b;font-size:12px;font-weight:bold;margin-bottom:5px">⚠️ 주의사항</div>
+          <div style="color:#888;font-size:11px;line-height:1.5">
+            • 자동 차단된 IP는 블랙리스트 페이지에서 확인/해제 가능<br>
+            • 처음엔 높은 점수(90점)로 시작 후 점차 낮추는 것을 권장
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn secondary" onclick="closeAutoBlockSettings()">취소</button>
+        <button class="modal-btn primary" onclick="saveAutoBlockSettings()">저장</button>
+      </div>
+    </div>
+  </div>
+
 <script>
+// ============================================
+// 인증 시스템
+// ============================================
+let isAuthenticated = false;
+
+async function checkAuth() {
+  try {
+    const res = await fetch('/auth/check', { credentials: 'same-origin' });
+    const data = await res.json();
+    isAuthenticated = data.authenticated;
+    updateAuthUI();
+    return isAuthenticated;
+  } catch (e) {
+    console.error('Auth check failed:', e);
+    isAuthenticated = false;
+    updateAuthUI();
+    return false;
+  }
+}
+
+function updateAuthUI() {
+  const overlay = document.getElementById('loginOverlay');
+  const appContents = document.querySelectorAll('.app-content');
+
+  if (isAuthenticated) {
+    overlay.classList.add('hidden');
+    appContents.forEach(el => el.classList.remove('app-hidden'));
+  } else {
+    overlay.classList.remove('hidden');
+    appContents.forEach(el => el.classList.add('app-hidden'));
+  }
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const username = document.getElementById('loginUsername').value;
+  const password = document.getElementById('loginPassword').value;
+  const errorEl = document.getElementById('loginError');
+
+  try {
+    const res = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      isAuthenticated = true;
+      updateAuthUI();
+      errorEl.textContent = '';
+      // 페이지 초기화
+      init();
+    } else {
+      errorEl.textContent = data.error || '로그인 실패';
+    }
+  } catch (e) {
+    errorEl.textContent = '서버 연결 오류';
+  }
+}
+
+async function logout() {
+  try {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+  } catch (e) {}
+  isAuthenticated = false;
+  updateAuthUI();
+}
+
+// 초기 인증 체크
+document.addEventListener('DOMContentLoaded', async () => {
+  document.getElementById('loginForm').addEventListener('submit', handleLogin);
+  await checkAuth();
+  if (isAuthenticated) {
+    init();
+  }
+});
+
 const app = document.getElementById('app');
 let page = 'dashboard';
 let chart = null;
-const history = { labels: [], viewers: [], uniqueUsers: [], http: [], p2p: [] };
+const chartHistory = { labels: [], viewers: [], uniqueUsers: [], http: [], p2p: [] };
 let activeInterval = null; // 현재 활성 인터벌 트래킹
 
 // ============================================
@@ -913,6 +1197,113 @@ function formatServerDate(utcString) {
   const dayName = days[d.getUTCDay()];
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}(${dayName})`;
 }
+
+// ============================================
+// 자동 차단 설정 (기본 활성화)
+// ============================================
+let autoBlockSettings = {
+  enabled: true,
+  score: 85,
+  duration: 'permanent'
+};
+
+// 설정 로드 (버전 체크로 기본값 강제 적용)
+function loadAutoBlockSettings() {
+  const saved = localStorage.getItem('autoBlockSettings');
+  const version = localStorage.getItem('autoBlockVersion');
+  // 버전이 없거나 v2 미만이면 기본값으로 리셋 (enabled: true)
+  if (!version || version < 'v2') {
+    localStorage.setItem('autoBlockVersion', 'v2');
+    localStorage.removeItem('autoBlockSettings');
+    return; // 기본값 사용
+  }
+  if (saved) {
+    try {
+      autoBlockSettings = JSON.parse(saved);
+    } catch (e) {}
+  }
+}
+
+// 설정 저장
+function saveAutoBlockSettingsToStorage() {
+  localStorage.setItem('autoBlockSettings', JSON.stringify(autoBlockSettings));
+}
+
+// 모달 열기
+function openAutoBlockSettings() {
+  loadAutoBlockSettings();
+  document.getElementById('autoBlockEnabled').checked = autoBlockSettings.enabled;
+  document.getElementById('autoBlockScore').value = autoBlockSettings.score;
+  document.getElementById('autoBlockScoreVal').textContent = autoBlockSettings.score;
+  document.getElementById('autoBlockDuration').value = autoBlockSettings.duration;
+  document.getElementById('autoBlockModal').style.display = 'flex';
+}
+
+// 모달 닫기
+function closeAutoBlockSettings() {
+  document.getElementById('autoBlockModal').style.display = 'none';
+}
+
+// 설정 저장 버튼
+function saveAutoBlockSettings() {
+  autoBlockSettings.enabled = document.getElementById('autoBlockEnabled').checked;
+  autoBlockSettings.score = parseInt(document.getElementById('autoBlockScore').value);
+  autoBlockSettings.duration = document.getElementById('autoBlockDuration').value;
+  saveAutoBlockSettingsToStorage();
+  closeAutoBlockSettings();
+  alert('자동 차단 설정이 저장되었습니다.\n\n' +
+        (autoBlockSettings.enabled ?
+          `✅ 활성화됨\n기준: ${autoBlockSettings.score}점 이상\n기간: ${autoBlockSettings.duration}` :
+          '❌ 비활성화됨'));
+}
+
+// 자동 차단 실행 (AI탐지 로드 후 호출)
+async function executeAutoBlock(abusers) {
+  if (!autoBlockSettings.enabled) return;
+
+  // 이미 차단된 IP 제외
+  const toBlock = abusers.filter(a =>
+    a.risk_score >= autoBlockSettings.score && !a.alreadyBlocked
+  );
+  if (toBlock.length === 0) return;
+
+  console.log('[AutoBlock] Found', toBlock.length, 'IPs with score >=', autoBlockSettings.score, '(not already blocked)');
+
+  let blockedCount = 0;
+  for (const abuser of toBlock) {
+    try {
+      const serverInfo = abuser.servers && abuser.servers.length > 0 ? abuser.servers.join(',') : '';
+      const res = await fetch('/api/blacklist/block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          ip: abuser.ip,
+          reason: `[자동차단] AI탐지 ${abuser.risk_score}점 (${abuser.risk_level}) - ${(abuser.reasons || []).slice(0,2).join(', ')}`,
+          server: serverInfo
+        })
+      });
+      const data = await res.json();
+      if (data.success || data.status === 'ok') {
+        console.log('[AutoBlock] Blocked:', abuser.ip, 'score:', abuser.risk_score);
+        blockedCount++;
+        // UI에 즉시 반영
+        abuser.alreadyBlocked = true;
+      }
+    } catch (e) {
+      console.error('[AutoBlock] Failed to block:', abuser.ip, e);
+    }
+  }
+
+  if (blockedCount > 0) {
+    console.log('[AutoBlock] Total blocked:', blockedCount, 'IPs');
+    // 화면 새로고침
+    loadBlacklistData();
+  }
+}
+
+// 초기화 시 설정 로드
+loadAutoBlockSettings();
 
 // 서버시간 기준 시간 포맷 (HH:mm)
 function formatServerTime(utcString) {
@@ -967,10 +1358,7 @@ function updateServerTimeClock() {
   if (dateEl) dateEl.textContent = `${mon}/${d}`;
 }
 
-// 서버시간 초기화
-syncServerTime().then(() => updateServerTimeClock());
-setInterval(syncServerTime, 60000); // 1분마다 동기화
-setInterval(updateServerTimeClock, 1000); // 1초마다 시계 업데이트
+// 서버시간 초기화는 init()에서 수행
 
 function clearActiveInterval() {
   if (activeInterval) {
@@ -1002,7 +1390,8 @@ const defaultSettings = {
   summary: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 10 },
   analysis: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 5 },
   visitors: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 5 },
-  history: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 10 }
+  history: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 10 },
+  servers: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 5 }
 };
 
 // 설정 초기화 (v5로 버전 업)
@@ -1038,6 +1427,12 @@ function openModal(pageName) {
 
 function closeModal() {
   document.getElementById('settingsModal').classList.remove('show');
+  document.getElementById('settingsModal').style.display = '';
+  // 모드탭과 액션버튼 복원
+  const modeTabs = document.querySelector('.mode-tabs');
+  const modalActions = document.querySelector('.modal-actions');
+  if (modeTabs) modeTabs.style.display = '';
+  if (modalActions) modalActions.style.display = '';
   currentModalPage = null;
 }
 
@@ -1251,8 +1646,9 @@ function formatBytes(b) {
   return (b / Math.pow(1024, i)).toFixed(i > 2 ? 2 : 1) + ' ' + u[i];
 }
 
-function card(title, val, unit = '', cls = '') {
-  return `<div class="card ${cls}"><h3>${title}</h3><div class="val">${val}<span class="unit">${unit}</span></div></div>`;
+function card(title, val, unit = '', idOrCls = '') {
+  const idAttr = idOrCls ? `id="${idOrCls}"` : '';
+  return `<div class="card"><h3>${title}</h3><div class="val" ${idAttr}>${val}</div><div class="unit">${unit}</div></div>`;
 }
 
 const pages = {
@@ -1438,7 +1834,7 @@ const pages = {
     </div>
     <div class="panel" style="margin-top:20px">
       <h3 style="margin-bottom:15px">서버별 상세</h3>
-      <table id="serverTable"><thead><tr><th>서버</th><th>HTTP</th><th>P2P↓</th><th>P2P↑</th><th>HTTP GB/s</th><th>P2P↓ GB/s</th><th>P2P↑ GB/s</th><th>P2P%</th><th>접속자</th></tr></thead><tbody></tbody></table>
+      <table id="serverTable"><thead><tr><th>서버</th><th>HTTP</th><th>P2P↓</th><th>P2P↑</th><th>P2P%</th><th>접속자</th><th>HTTP GB/s</th><th>P2P↓ GB/s</th><th>P2P↑ GB/s</th><th>Total GB/s</th></tr></thead><tbody></tbody></table>
     </div>
   `,
   realtime: () => `
@@ -1795,7 +2191,7 @@ const pages = {
       </div>
     </div>
     <div class="panel"><h3>시청자 추이</h3><canvas id="historyChart"></canvas></div>
-    <div class="panel"><h3>트래픽 추이 (TB)</h3><canvas id="historyTrafficChart"></canvas></div>
+    <div class="panel"><h3>트래픽 추이 (GB)</h3><canvas id="historyTrafficChart"></canvas></div>
   `,
   tracker: () => `
     <div class="header">
@@ -1984,14 +2380,1964 @@ const pages = {
         <tbody></tbody>
       </table>
     </div>
+  `,
+
+  servers: () => `
+    <div class="header">
+      <h2>🖥️ 외부서버 관리</h2>
+      <div class="header-right">
+        <button class="settings-btn" onclick="openAddServerModal()">+ 서버 추가</button>
+        <button class="settings-btn" onclick="openAutoBlockSettings()" style="margin-left:5px">⚙️ 자동차단</button>
+        <div id="serversStatus" class="status ok">Connected</div>
+      </div>
+    </div>
+
+    <!-- 탭 메뉴 -->
+    <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+      <button class="tab-btn active" id="tabServers" onclick="switchServerTab('servers')">서버 관리</button>
+      <button class="tab-btn" id="tabLogs" onclick="switchServerTab('logs')">📊 로그통계</button>
+      <button class="tab-btn" id="tabLogList" onclick="switchServerTab('loglist')">📋 로그리스트</button>
+      <button class="tab-btn" id="tabAbuser" onclick="switchServerTab('abuser')" style="color:#ff6b6b">🤖 AI탐지</button>
+      <button class="tab-btn" id="tabBlacklist" onclick="switchServerTab('blacklist')" style="color:#ffa500">🚫 블랙리스트</button>
+    </div>
+
+    <!-- 서버 관리 탭 -->
+    <div id="serversTabContent">
+    <!-- 전체 요약 -->
+    <div class="stats-grid" id="serversSummary">
+      ${card('총 서버', '0', '대')}
+      ${card('온라인', '0', '대')}
+      ${card('총 CPU', '0', '%')}
+      ${card('총 메모리', '0', 'GB')}
+      ${card('총 대역폭', '0', 'Gbps')}
+      ${card('총 연결', '0', '개')}
+    </div>
+
+    <!-- 서버 목록 -->
+    <div class="panel">
+      <h3>📋 서버 목록</h3>
+      <table id="serversTable" style="table-layout:fixed;width:100%">
+        <thead>
+          <tr>
+            <th style="width:3%">상태</th>
+            <th style="width:8%">서버명</th>
+            <th style="width:4%">Ver</th>
+            <th style="width:10%">IP</th>
+            <th style="width:5%">CPU</th>
+            <th style="width:12%">메모리</th>
+            <th style="width:17%">디스크</th>
+            <th style="width:9%">RX</th>
+            <th style="width:9%">TX</th>
+            <th style="width:5%">연결</th>
+            <th style="width:5%">마지막</th>
+            <th style="width:3%">⚙️</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="12" style="text-align:center;color:#666;padding:40px">등록된 서버가 없습니다</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 서버 상세 정보 -->
+    <div class="panel" id="serverDetailPanel" style="display:none">
+      <h3>📊 서버 상세 - <span id="serverDetailName">-</span></h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:15px">
+        <div>
+          <h4 style="color:#00d4ff;font-size:12px;margin-bottom:10px">CPU 사용률</h4>
+          <canvas id="serverCpuChart" height="150"></canvas>
+        </div>
+        <div>
+          <h4 style="color:#00d4ff;font-size:12px;margin-bottom:10px">메모리 사용률</h4>
+          <canvas id="serverMemChart" height="150"></canvas>
+        </div>
+        <div>
+          <h4 style="color:#00d4ff;font-size:12px;margin-bottom:10px">네트워크 트래픽</h4>
+          <canvas id="serverNetChart" height="150"></canvas>
+        </div>
+        <div>
+          <h4 style="color:#00d4ff;font-size:12px;margin-bottom:10px">연결 수</h4>
+          <canvas id="serverConnChart" height="150"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- 최근 이벤트 -->
+    <div class="panel">
+      <h3>⚠️ 최근 이벤트</h3>
+      <div id="serverEvents" style="font-size:12px;max-height:200px;overflow-y:auto">
+        <div style="color:#666;padding:20px;text-align:center">이벤트가 없습니다</div>
+      </div>
+    </div>
+    </div>
+
+    <!-- 로그 리스트 탭 -->
+      <div id="logsListContent" style="display:none">
+        <div class="panel">
+          <!-- 필터 영역 - 상단 -->
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+            <select id="logListPeriod" onchange="loadLogList()" style="background:#1a1a2e;color:#fff;border:1px solid #333;padding:6px 10px;border-radius:4px;font-size:12px">
+              <option value="5m">5분</option>
+              <option value="15m">15분</option>
+              <option value="1h">1시간</option>
+              <option value="6h">6시간</option>
+              <option value="24h" selected>24시간</option>
+              <option value="3d">3일</option>
+              <option value="7d">7일</option>
+            </select>
+            <input type="text" id="logListSearch" placeholder="IP 또는 경로 검색..." style="flex:1;background:#1a1a2e;color:#fff;border:1px solid #333;padding:6px 10px;border-radius:4px;font-size:12px;min-width:180px">
+            <button onclick="loadLogList()" style="background:#00d4ff;color:#000;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:bold;font-size:12px">검색</button>
+            <select id="logListLimit" onchange="loadLogList()" style="background:#1a1a2e;color:#fff;border:1px solid #333;padding:6px 10px;border-radius:4px;font-size:12px">
+              <option value="100">100건</option>
+              <option value="500" selected>500건</option>
+              <option value="1000">1000건</option>
+              <option value="5000">5000건</option>
+            </select>
+            <span id="logListInfo" style="color:#888;font-size:11px;margin-left:auto">로딩 중...</span>
+          </div>
+          <!-- 서버 필터 버튼 - 하단 -->
+          <div id="logListServerBtns" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+            <button class="server-filter-btn active" data-server="" onclick="selectLogListServer(this)">전체</button>
+          </div>
+          <input type="hidden" id="logListServer" value="">
+          <div style="overflow-x:auto">
+            <table id="logListTable" style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed">
+              <thead>
+                <tr style="background:#1a1a2e">
+                  <th style="padding:10px 6px;text-align:left;border-bottom:1px solid #333;width:15%">시간</th>
+                  <th style="padding:10px 6px;text-align:center;border-bottom:1px solid #333;width:6%">서버</th>
+                  <th style="padding:10px 6px;text-align:left;border-bottom:1px solid #333;width:14%">IP</th>
+                  <th style="padding:10px 6px;text-align:center;border-bottom:1px solid #333;width:6%">상태</th>
+                  <th style="padding:10px 6px;text-align:right;border-bottom:1px solid #333;width:9%">크기</th>
+                  <th style="padding:10px 6px;text-align:left;border-bottom:1px solid #333;width:50%">경로</th>
+                </tr>
+              </thead>
+              <tbody id="logListBody">
+                <tr><td colspan="6" style="text-align:center;color:#888;padding:40px">로딩 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    <!-- 로그 통계 탭 -->
+    <div id="logsStatsContent" style="display:none">
+      <!-- 디버그 상태 표시 -->
+      <div id="logsDebug" style="background:#ff0;color:#000;padding:10px;margin-bottom:10px;display:block">
+        Debug: 로딩 중... (v4)
+      </div>
+      <!-- 로그 통계 요약 -->
+      <div class="stats-grid" id="logsSummary">
+        ${card('총 로그', '0', '건')}
+        ${card('요청/초', '0', 'req/s')}
+        ${card('2xx', '0', '건')}
+        ${card('3xx', '0', '건')}
+        ${card('4xx', '0', '건')}
+        ${card('5xx', '0', '건')}
+        ${card('전송량', '0', 'GB')}
+      </div>
+
+      <!-- 로그 필터 -->
+      <div class="panel">
+        <div style="display:flex;gap:15px;align-items:center;flex-wrap:wrap">
+          <label>기간:
+            <select id="logPeriod" onchange="loadLogs()" style="background:#1a1a2e;color:#fff;border:1px solid #333;padding:5px 10px;border-radius:4px">
+              <option value="5m">5분</option>
+              <option value="15m">15분</option>
+              <option value="1h">1시간</option>
+              <option value="6h">6시간</option>
+              <option value="24h" selected>24시간</option>
+            </select>
+          </label>
+          <label>서버:
+            <select id="logServer" onchange="loadLogs()" style="background:#1a1a2e;color:#fff;border:1px solid #333;padding:5px 10px;border-radius:4px">
+              <option value="">전체</option>
+            </select>
+          </label>
+          <label>Status:
+            <select id="logStatus" onchange="filterLogsByStatus()" style="background:#1a1a2e;color:#fff;border:1px solid #333;padding:5px 10px;border-radius:4px">
+              <option value="">전체</option>
+              <option value="2xx">2xx 성공</option>
+              <option value="3xx">3xx 리다이렉트</option>
+              <option value="4xx">4xx 클라이언트에러</option>
+              <option value="5xx">5xx 서버에러</option>
+            </select>
+          </label>
+          <button onclick="loadLogs()" style="background:#00d4ff;color:#000;border:none;padding:5px 15px;border-radius:4px;cursor:pointer">새로고침</button>
+        </div>
+      </div>
+
+      <!-- 서버별 요청 그래프 -->
+      <div class="panel">
+        <h3>📈 서버별 요청</h3>
+        <div style="margin-top:15px">
+          <canvas id="serverRequestsChart" height="250"></canvas>
+        </div>
+      </div>
+
+      <!-- 서버별 통계 -->
+      <div class="panel">
+        <h3>🖥️ 서버별 통계</h3>
+        <div id="serverStatsList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:15px;margin-top:15px">
+          <div style="color:#666;padding:20px;text-align:center">로딩 중...</div>
+        </div>
+      </div>
+
+      <!-- 서버별 일별 통계 테이블 -->
+      <div class="panel">
+        <h3>📊 서버별 일별 통계 <span style="font-size:11px;color:#888;font-weight:normal">(최근 7일)</span></h3>
+        <div style="overflow-x:auto">
+          <table id="serverDailyStatsTable" class="responsive-table" style="font-size:12px;width:100%">
+            <thead id="serverDailyStatsHead">
+              <tr><th colspan="10" style="text-align:center;color:#888">로딩 중...</th></tr>
+            </thead>
+            <tbody id="serverDailyStatsBody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 트래픽 상위 IP 테이블 -->
+      <div class="panel">
+        <h3>🚨 트래픽 상위 IP (불량 IP 탐지)</h3>
+        <div style="overflow-x:auto">
+          <table id="suspiciousIpTable" class="responsive-table" style="font-size:12px;width:100%;table-layout:fixed">
+            <thead>
+              <tr>
+                <th style="width:5%">#</th>
+                <th style="width:40%">IP 주소</th>
+                <th style="width:20%;text-align:right">요청수</th>
+                <th style="width:20%;text-align:right;color:#00d4ff">트래픽</th>
+                <th style="width:15%;text-align:right">비율</th>
+              </tr>
+            </thead>
+            <tbody id="suspiciousIpBody">
+              <tr><td colspan="5" style="text-align:center;color:#888">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 일별 통계 테이블 -->
+      <div class="panel">
+        <h3>📅 일별 통계
+          <span style="font-size:11px;color:#888;font-weight:normal">(최근 7일)</span>
+        </h3>
+        <div style="overflow-x:auto">
+          <table id="dailyStatsTable" class="responsive-table" style="font-size:12px;width:100%">
+            <thead>
+              <tr>
+                <th>날짜</th>
+                <th style="text-align:right">요청수</th>
+                <th style="text-align:right;color:#00ff88">2xx</th>
+                <th style="text-align:right;color:#ff6b6b">4xx</th>
+                <th style="text-align:right;color:#ff6b6b">5xx</th>
+                <th style="text-align:right;color:#00d4ff">트래픽</th>
+              </tr>
+            </thead>
+            <tbody id="dailyStatsBody">
+              <tr><td colspan="6" style="text-align:center;color:#888">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 시간별 통계 -->
+      <div class="panel">
+        <h3>📈 시간별 요청 추이</h3>
+        <canvas id="hourlyStatsChart" height="120"></canvas>
+      </div>
+
+      <!-- 실시간 로그 -->
+      <div class="panel">
+        <h3>📜 최근 로그 <span id="logsCount" style="color:#666;font-size:12px"></span></h3>
+        <div id="recentLogs" style="font-family:monospace;font-size:11px;max-height:400px;overflow-y:auto;background:#0a0a0f;padding:10px;border-radius:4px">
+          <div style="color:#666;padding:20px;text-align:center">로딩 중...</div>
+        </div>
+      </div>
+      </div><!-- logsStatsContent 끝 -->
+
+    <!-- AI 어뷰저 탐지 탭 -->
+    <div id="logsAbuserContent" style="display:none">
+      <!-- 헤더 + 필터 -->
+      <div class="panel" style="margin-bottom:15px;padding:15px 20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px">
+          <div style="display:flex;align-items:center;gap:15px">
+            <span style="font-size:14px;font-weight:bold">🤖 AI 어뷰저 탐지</span>
+            <span style="color:#888;font-size:12px">| VOD 다운로더 자동 탐지</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <select id="abuserPeriod" onchange="loadAbusers()" style="padding:6px 12px;background:#1a1a2e;border:1px solid #333;border-radius:4px;color:#fff;font-size:12px">
+              <option value="1h">1시간</option>
+              <option value="3h">3시간</option>
+              <option value="6h" selected>6시간</option>
+              <option value="12h">12시간</option>
+              <option value="24h">24시간</option>
+            </select>
+            <button onclick="loadAbusers()" style="padding:6px 12px;background:#2563eb;border:none;border-radius:4px;color:#fff;font-size:12px;cursor:pointer">🔄 새로고침</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 요약 카드 -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:15px">
+        <div class="panel" style="padding:15px;text-align:center">
+          <div style="font-size:24px;font-weight:bold;color:#00d4ff" id="abuserTotal">-</div>
+          <div style="font-size:11px;color:#888;margin-top:5px">탐지 IP</div>
+        </div>
+        <div class="panel" style="padding:15px;text-align:center;border-color:#ff4444">
+          <div style="font-size:24px;font-weight:bold;color:#ff4444" id="abuserCritical">-</div>
+          <div style="font-size:11px;color:#888;margin-top:5px">🔴 Critical</div>
+        </div>
+        <div class="panel" style="padding:15px;text-align:center;border-color:#ffa502">
+          <div style="font-size:24px;font-weight:bold;color:#ffa502" id="abuserHigh">-</div>
+          <div style="font-size:11px;color:#888;margin-top:5px">🟠 High</div>
+        </div>
+        <div class="panel" style="padding:15px;text-align:center;border-color:#f1c40f">
+          <div style="font-size:24px;font-weight:bold;color:#f1c40f" id="abuserMedium">-</div>
+          <div style="font-size:11px;color:#888;margin-top:5px">🟡 Medium</div>
+        </div>
+      </div>
+
+      <!-- 어뷰저 테이블 -->
+      <div class="panel">
+        <h3>🚨 VOD 다운로더 탐지 결과</h3>
+        <div style="overflow-x:auto">
+          <table id="abuserTable" style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">
+            <thead>
+              <tr style="background:#0d0d1a">
+                <th style="padding:10px;text-align:center;border-bottom:1px solid #333;width:6%">위험도</th>
+                <th style="padding:10px;text-align:left;border-bottom:1px solid #333;width:11%">IP</th>
+                <th style="padding:10px;text-align:right;border-bottom:1px solid #333;width:7%">트래픽</th>
+                <th style="padding:10px;text-align:right;border-bottom:1px solid #333;width:7%">속도</th>
+                <th style="padding:10px;text-align:right;border-bottom:1px solid #333;width:8%">avg req/s</th>
+                <th style="padding:10px;text-align:right;border-bottom:1px solid #333;width:8%">100s max</th>
+                <th style="padding:10px;text-align:center;border-bottom:1px solid #333;width:11%">활동시간</th>
+                <th style="padding:10px;text-align:center;border-bottom:1px solid #333;width:6%">서버</th>
+                <th style="padding:10px;text-align:left;border-bottom:1px solid #333;width:22%">탐지 사유</th>
+                <th style="padding:10px;text-align:center;border-bottom:1px solid #333;width:10%">액션</th>
+              </tr>
+            </thead>
+            <tbody id="abuserBody">
+              <tr><td colspan="10" style="text-align:center;padding:40px;color:#888">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 로그 모달 -->
+      <div id="logModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:1000">
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:90%;max-width:1000px;max-height:85vh;background:#1a1a2e;border-radius:8px;border:1px solid #333;display:flex;flex-direction:column">
+          <div style="padding:15px 20px;border-bottom:1px solid #333;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+            <h3 style="margin:0;font-size:16px" id="logModalTitle">IP 로그</h3>
+            <button onclick="closeLogModal()" style="background:#ff4444;border:none;color:#fff;padding:6px 16px;border-radius:4px;cursor:pointer;font-size:12px">닫기</button>
+          </div>
+          <div id="logModalContent" style="padding:15px;overflow-y:auto;flex:1;font-family:monospace;font-size:11px">
+            로딩 중...
+          </div>
+        </div>
+      </div>
+
+      <!-- 점수 산정 방식 (8패턴 v2.1) -->
+      <div class="panel" style="margin-top:15px;padding:15px 20px;font-size:11px;color:#888">
+        <div style="margin-bottom:8px"><span style="color:#00d4ff">📊 점수 산정 기준 (8패턴)</span></div>
+        <div style="line-height:1.9">
+          <div style="margin-bottom:4px">
+            <span style="color:#ff4444">①트래픽</span> 30GB+60 · 15GB+45 · 8GB+30 · 3GB+15
+            <span style="margin-left:12px;color:#ff4444">②버스트</span> 500req/100s+80 · 200+50 · 100+30
+          </div>
+          <div style="margin-bottom:4px">
+            <span style="color:#ff4444">③단일영상</span> 80%+5GB=100 · 60%+2GB=60 · 200회=30
+            <span style="margin-left:12px;color:#ff4444">④멀티서버</span> 전체+5GB=50 · 절반+3GB=25
+          </div>
+          <div style="margin-bottom:4px">
+            <span style="color:#ffa500">⑤다중UA</span> 5개+=35 · 3개+=15
+            <span style="margin-left:12px;color:#ffa500">⑥대형세그</span> 10MB/req+=25
+            <span style="margin-left:12px;color:#ffa500">⑦속도</span> 20GB/h+50 · 10+30 · 5+15
+            <span style="margin-left:12px;color:#ffcc00">⑧경로다양성</span> &lt;1%+500req=30
+          </div>
+        </div>
+        <div style="margin-top:8px;padding-top:8px;border-top:1px solid #333">
+          <span style="color:#000;background:#fff;padding:2px 6px;border-radius:3px;font-weight:bold">⚫ Confirmed 300</span>
+          <span style="margin-left:10px;color:#ff4444">🔴 Critical 150+</span>
+          <span style="margin-left:10px;color:#ffa500">🟠 High 100+</span>
+          <span style="margin-left:10px;color:#ffcc00">🟡 Medium 50+</span>
+          <span style="margin-left:10px;color:#88ff88">🟢 Low &lt;50</span>
+        </div>
+        <div style="margin-top:6px;color:#666;font-size:10px">
+          ⚫ 확정: 단일영상어뷰즈+(전체서버 or 10GB+) | 극버스트+극대용량(30GB+)
+        </div>
+      </div>
+    </div>
+
+    <!-- 블랙리스트 탭 -->
+    <div id="logsBlacklistContent" style="display:none">
+      <div class="panel" style="margin-bottom:15px;padding:15px 20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px">
+          <div style="display:flex;gap:10px;align-items:center">
+            <h3 style="margin:0">🚫 IP 차단 관리</h3>
+            <span style="color:#888;font-size:12px">차단된 IP는 모든 에이전트 서버에서 차단됨</span>
+          </div>
+          <div style="display:flex;gap:10px">
+            <button class="settings-btn" onclick="openCfSettingsModal()">⚙️ Cloudflare 설정</button>
+            <button class="settings-btn" onclick="openBlockModal()" style="background:#dc2626;border-color:#dc2626">+ IP 차단</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-grid" id="blacklistSummaryInline">
+        ${card('총 차단', '0', '개', 'blkTotal')}
+        ${card('오늘 차단', '0', '개', 'blkToday')}
+        ${card('자동 차단', '0', '개', 'blkAuto')}
+        ${card('에이전트 서버', '0', '대', 'blkServers')}
+      </div>
+
+      <div class="panel">
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">
+            <thead>
+              <tr style="background:#1a1a2e">
+                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:12%">IP 주소</th>
+                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:12%">차단 시간</th>
+                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:66%">차단 사유</th>
+                <th style="padding:10px 8px;text-align:center;border-bottom:1px solid #333;width:10%">작업</th>
+              </tr>
+            </thead>
+            <tbody id="blacklistTbodyInline">
+              <tr><td colspan="4" style="text-align:center;color:#666;padding:40px">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `,
+
+  'servers-logs': function() { return pages.servers(); },
+  'servers-loglist': function() { return pages.servers(); },
+  'servers-abuser': function() { return pages.servers(); },
+  'servers-blacklist': function() { return pages.servers(); },
+
+  blacklist: () => `
+    <div class="header">
+      <h2>🚫 블랙리스트 관리</h2>
+      <div class="header-right">
+        <button class="settings-btn" onclick="openCfSettingsModal()">⚙️ Cloudflare 설정</button>
+        <button class="settings-btn" onclick="openBlockModal()">+ IP 차단</button>
+        <div id="blacklistStatus" class="status ok">Ready</div>
+      </div>
+    </div>
+
+    <!-- 요약 -->
+    <div class="stats-grid" id="blacklistSummary">
+      ${card('총 차단', '0', '개')}
+      ${card('오늘 차단', '0', '개')}
+      ${card('Cloudflare 계정', '0', '개')}
+      ${card('에이전트 서버', '0', '대')}
+    </div>
+
+    <!-- 차단 목록 -->
+    <div class="panel">
+      <h3>📋 차단된 IP 목록</h3>
+      <table id="blacklistTable" style="table-layout:fixed;width:100%">
+        <thead>
+          <tr>
+            <th style="width:12%">IP 주소</th>
+            <th style="width:13%">차단 시간</th>
+            <th style="width:55%">차단 사유</th>
+            <th style="width:10%">차단자</th>
+            <th style="width:10%">해제</th>
+          </tr>
+        </thead>
+        <tbody id="blacklistTbody">
+          <tr><td colspan="5" style="text-align:center;color:#666;padding:40px">차단된 IP가 없습니다</td></tr>
+        </tbody>
+      </table>
+    </div>
   `
 };
+
+// 외부서버 관리 데이터
+let serversData = [];
+let serverEvents = [];
+let latestAgentVersion = '';
+let serverCharts = {};
+
+async function initServers() {
+  await loadServers();
+  const s = settings.servers || defaultSettings.servers;
+  setActiveInterval(loadServers, s.realtimeInterval);
+}
+
+async function loadServers() {
+  try {
+    const t = Date.now();
+    const res = await fetch('/api/servers?_t=' + t);
+    const data = await res.json();
+    serversData = data.servers || [];
+    serverEvents = data.events || [];
+    latestAgentVersion = data.latest_version || '';
+    renderServers();
+    renderServerEvents();
+  } catch (e) {
+    console.error('[Servers] Load error:', e);
+  }
+}
+
+function renderServers() {
+  const tbody = document.querySelector('#serversTable tbody');
+  if (!tbody) return;
+
+  if (serversData.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#666;padding:40px">등록된 서버가 없습니다</td></tr>';
+    return;
+  }
+
+  // 요약 통계
+  let totalCpu = 0, totalMem = 0, totalMemMax = 0, totalDisk = 0, totalDiskMax = 0, totalRx = 0, totalTx = 0, totalConn = 0, onlineCount = 0;
+  serversData.forEach(s => {
+    if (s.online) {
+      onlineCount++;
+      totalCpu += s.cpu || 0;
+      totalMem += s.memory_used || 0;
+      totalMemMax += s.memory_total || 0;
+      totalDisk += s.disk_used || 0;
+      totalDiskMax += s.disk_total || 0;
+      totalRx += s.rx_bytes || 0;
+      totalTx += s.tx_bytes || 0;
+      totalConn += s.connections || 0;
+    }
+  });
+
+  const summaryEl = document.getElementById('serversSummary');
+  if (summaryEl) {
+    const avgCpu = onlineCount > 0 ? (totalCpu / onlineCount).toFixed(1) : '0';
+    const diskPctTotal = totalDiskMax > 0 ? (totalDisk / totalDiskMax * 100).toFixed(1) : '0';
+    const memPctTotal = totalMemMax > 0 ? (totalMem / totalMemMax * 100).toFixed(1) : '0';
+    summaryEl.innerHTML =
+      card('서버', onlineCount + ' / ' + serversData.length, 'online') +
+      card('평균 CPU', avgCpu, '%') +
+      card('메모리', memPctTotal + '%', formatBytes(totalMem) + ' / ' + formatBytes(totalMemMax)) +
+      card('디스크', diskPctTotal + '%', formatBytes(totalDisk) + ' / ' + formatBytes(totalDiskMax)) +
+      card('송신', formatBits(totalTx) + '/s', '↑ Upload') +
+      card('수신', formatBits(totalRx) + '/s', '↓ Download') +
+      card('연결', totalConn.toLocaleString(), '개');
+  }
+
+  // 테이블 렌더링
+  tbody.innerHTML = serversData.map(s => {
+    const statusColor = s.online ? '#00ff88' : '#ff6b6b';
+    const statusIcon = s.online ? '●' : '○';
+    const cpuColor = s.cpu > 80 ? '#ff6b6b' : s.cpu > 60 ? '#ffa502' : '#00ff88';
+    const memPct = s.memory_total > 0 ? (s.memory_used / s.memory_total * 100).toFixed(1) : 0;
+    const memColor = memPct > 80 ? '#ff6b6b' : memPct > 60 ? '#ffa502' : '#00ff88';
+    const diskPct = s.disk_total > 0 ? (s.disk_used / s.disk_total * 100).toFixed(1) : 0;
+    const diskColor = diskPct > 90 ? '#ff6b6b' : diskPct > 70 ? '#ffa502' : '#00ff88';
+    const lastSeen = s.last_seen ? formatTimeAgo(s.last_seen) : '-';
+    const uptime = s.uptime ? formatUptime(s.uptime) : '-';
+
+    return '<tr style="cursor:pointer">' +
+      '<td style="color:' + statusColor + ';font-size:16px" onclick="selectServer(\'' + s.id + '\')">' + statusIcon + '</td>' +
+      '<td style="font-weight:bold" onclick="editServerName(event, \'' + s.id + '\', \'' + (s.name || s.id).replace(/'/g, "\\'") + '\')" title="클릭하여 이름 수정">' + (s.name || s.id) + ' <span style="color:#666;font-size:10px">✎</span></td>' +
+      '<td style="color:#888;font-size:11px">v' + (s.version || '-') + '</td>' +
+      '<td style="color:#888;font-family:monospace">' + (s.ip || '-') + '</td>' +
+      '<td style="color:' + cpuColor + '">' + (s.cpu?.toFixed(1) || '-') + '%</td>' +
+      '<td><span style="color:' + memColor + '">' + formatBytes(s.memory_used || 0) + '</span><span style="color:#666">/' + formatBytes(s.memory_total || 0) + '</span></td>' +
+      '<td><span style="color:' + diskColor + '">' + formatBytes(s.disk_used || 0) + '/' + formatBytes(s.disk_total || 0) + ' (' + diskPct + '%)</span></td>' +
+      '<td style="color:#00d4ff">' + formatBits(s.rx_bytes || 0) + '/s</td>' +
+      '<td style="color:#ff6b6b">' + formatBits(s.tx_bytes || 0) + '/s</td>' +
+      '<td>' + (s.connections?.toLocaleString() || '-') + '</td>' +
+      '<td style="color:#666;font-size:11px">' + lastSeen + '</td>' +
+      '<td><button onclick="openServerSettings(event, \'' + s.id + '\', \'' + (s.name || s.id).replace(/'/g, "\\'") + '\')" style="background:none;border:none;cursor:pointer;font-size:14px" title="서버 정보">⚙️</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function formatBits(bytes) {
+  const bits = bytes * 8;
+  if (bits >= 1e12) return (bits / 1e12).toFixed(2) + ' Tbps';
+  if (bits >= 1e9) return (bits / 1e9).toFixed(2) + ' Gbps';
+  if (bits >= 1e6) return (bits / 1e6).toFixed(2) + ' Mbps';
+  if (bits >= 1e3) return (bits / 1e3).toFixed(2) + ' Kbps';
+  return bits + ' bps';
+}
+
+function formatUptime(seconds) {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return d + '일 ' + h + '시간';
+  if (h > 0) return h + '시간 ' + m + '분';
+  return m + '분';
+}
+
+function formatTimeAgo(timestamp) {
+  const diff = (Date.now() - timestamp) / 1000;
+  if (diff < 60) return Math.floor(diff) + '초 전';
+  if (diff < 3600) return Math.floor(diff / 60) + '분 전';
+  if (diff < 86400) return Math.floor(diff / 3600) + '시간 전';
+  return Math.floor(diff / 86400) + '일 전';
+}
+
+// 서버 정보 모달
+function openServerSettings(event, serverId, serverName) {
+  event.stopPropagation();
+  const modal = document.getElementById('serverSettingsModal');
+  if (!modal) return;
+
+  document.getElementById('settingsServerName').textContent = serverName;
+  modal.style.display = 'flex';
+}
+
+function closeServerSettings() {
+  const modal = document.getElementById('serverSettingsModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function renderServerEvents() {
+  const el = document.getElementById('serverEvents');
+  if (!el) return;
+
+  if (serverEvents.length === 0) {
+    el.innerHTML = '<div style="color:#666;padding:20px;text-align:center">이벤트가 없습니다</div>';
+    return;
+  }
+
+  // 최신순 정렬 (timestamp 내림차순)
+  const sorted = [...serverEvents].sort((a, b) => b.timestamp - a.timestamp);
+
+  el.innerHTML = sorted.map(ev => {
+    const time = new Date(ev.timestamp).toLocaleString('ko-KR', {
+      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+    return '<div style="padding:6px 0;border-bottom:1px solid #333">' +
+      '<span style="color:#666;font-size:10px">' + time + '</span> ' +
+      '<span style="color:#00d4ff">' + ev.message + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+function selectServer(serverId) {
+  const server = serversData.find(s => s.id === serverId);
+  if (!server) return;
+
+  document.getElementById('serverDetailPanel').style.display = 'block';
+  document.getElementById('serverDetailName').textContent = server.name || server.id;
+
+  // TODO: 차트 초기화 및 히스토리 데이터 로드
+}
+
+function openAddServerModal() {
+  alert('서버 추가 기능은 API 구현 후 활성화됩니다.\n\n에이전트 설치 명령어:\ncurl -sSL http://서버IP:8080/agent/install.sh | bash');
+}
+
+async function editServerName(event, serverId, currentName) {
+  event.stopPropagation();
+  const newName = prompt('서버 이름 수정:', currentName);
+  if (newName && newName !== currentName) {
+    try {
+      const res = await fetch('/api/servers/' + serverId + '/name', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      if (res.ok) {
+        loadServers();
+      } else {
+        alert('서버 이름 수정 실패');
+      }
+    } catch (e) {
+      console.error('Server name update error:', e);
+      alert('서버 이름 수정 실패: ' + e.message);
+    }
+  }
+}
+
+// ========== 로깅 관리 ==========
+let logsData = [];
+let logsStats = { total: 0, s2xx: 0, s3xx: 0, s4xx: 0, s5xx: 0, bytes: 0 };
+let logsCharts = {};
+let currentLogTab = 'servers';
+
+async function switchServerTab(tab) {
+  console.log('[Tab] Switching to:', tab);
+  currentLogTab = tab;
+
+  // 모든 탭 버튼 비활성화
+  document.getElementById('tabServers')?.classList.remove('active');
+  document.getElementById('tabLogs')?.classList.remove('active');
+  document.getElementById('tabLogList')?.classList.remove('active');
+  document.getElementById('tabAbuser')?.classList.remove('active');
+  document.getElementById('tabBlacklist')?.classList.remove('active');
+
+  // 모든 콘텐츠 숨기기
+  const serversContent = document.getElementById('serversTabContent');
+  const logsContent = document.getElementById('logsStatsContent');
+  const logListContent = document.getElementById('logsListContent');
+  const abuserContent = document.getElementById('logsAbuserContent');
+  const blacklistContent = document.getElementById('logsBlacklistContent');
+
+  if (serversContent) serversContent.style.display = 'none';
+  if (logsContent) logsContent.style.display = 'none';
+  if (logListContent) logListContent.style.display = 'none';
+  if (abuserContent) abuserContent.style.display = 'none';
+  if (blacklistContent) blacklistContent.style.display = 'none';
+
+  // 선택된 탭 활성화
+  if (tab === 'servers') {
+    document.getElementById('tabServers')?.classList.add('active');
+    if (serversContent) serversContent.style.display = 'block';
+    history.replaceState(null, '', '#servers');
+  } else if (tab === 'logs') {
+    document.getElementById('tabLogs')?.classList.add('active');
+    if (logsContent) logsContent.style.display = 'block';
+    history.replaceState(null, '', '#servers-logs');
+    await initLogsTab();
+  } else if (tab === 'loglist') {
+    document.getElementById('tabLogList')?.classList.add('active');
+    if (logListContent) logListContent.style.display = 'block';
+    history.replaceState(null, '', '#servers-loglist');
+    // 서버 목록이 없으면 먼저 로드
+    if (serversData.length === 0) {
+      await loadServers();
+    }
+    // 서버 필터 버튼 생성
+    const serverBtns = document.getElementById('logListServerBtns');
+    if (serverBtns && serversData.length > 0) {
+      serverBtns.innerHTML = '<button class="server-filter-btn active" data-server="" onclick="selectLogListServer(this)">전체</button>' +
+        serversData.map(s => '<button class="server-filter-btn" data-server="' + s.id + '" onclick="selectLogListServer(this)">' + s.name + '</button>').join('');
+    }
+    document.getElementById('logListServer').value = '';
+    loadLogList();
+  } else if (tab === 'abuser') {
+    document.getElementById('tabAbuser')?.classList.add('active');
+    if (abuserContent) abuserContent.style.display = 'block';
+    history.replaceState(null, '', '#servers-abuser');
+    loadAbusers();
+  } else if (tab === 'blacklist') {
+    document.getElementById('tabBlacklist')?.classList.add('active');
+    if (blacklistContent) blacklistContent.style.display = 'block';
+    history.replaceState(null, '', '#servers-blacklist');
+    loadBlacklistInline();
+  }
+}
+
+async function initLogsTab() {
+  console.log('[initLogsTab] Starting... (v5)');
+  // 디버그 표시 (v5 - 새버전 확인용)
+  const debugEl = document.getElementById('logsDebug');
+  if (debugEl) {
+    debugEl.style.display = 'block';
+    debugEl.textContent = '[v5] initLogsTab 시작...';
+  } else {
+    console.error('[initLogsTab] DEBUG ELEMENT NOT FOUND!');
+    alert('Debug element not found - logsStatsContent may not be visible');
+  }
+
+  // 서버 데이터가 없으면 먼저 로드
+  if (serversData.length === 0) {
+    console.log('[initLogsTab] Loading servers first...');
+    await loadServers();
+  }
+
+  // 서버 목록으로 필터 채우기 (통계 탭)
+  const serverSelect = document.getElementById('logServer');
+  console.log('[initLogsTab] serverSelect exists:', !!serverSelect, 'serversData.length:', serversData.length);
+  if (serverSelect && serversData.length > 0) {
+    serverSelect.innerHTML = '<option value="">전체</option>' +
+      serversData.map(s => '<option value="' + s.id + '">' + s.name + '</option>').join('');
+  }
+
+  // 서버 목록으로 필터 채우기 (로그 리스트 탭 - 버튼 방식)
+  const logListServerBtns = document.getElementById('logListServerBtns');
+  if (logListServerBtns && serversData.length > 0) {
+    logListServerBtns.innerHTML = '<button class="server-filter-btn active" data-server="" onclick="selectLogListServer(this)">전체</button>' +
+      serversData.map(s => '<button class="server-filter-btn" data-server="' + s.id + '" onclick="selectLogListServer(this)">' + s.name + '</button>').join('');
+  }
+
+  // 검색창 엔터키 이벤트
+  const searchInput = document.getElementById('logListSearch');
+  if (searchInput) {
+    searchInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') loadLogList();
+    });
+  }
+
+  console.log('[initLogsTab] Calling loadLogs...');
+  if (debugEl) debugEl.textContent = '[v5] loadLogs 호출중...';
+  try {
+    await loadLogs();
+    console.log('[initLogsTab] loadLogs completed');
+    if (debugEl) debugEl.textContent = '[v5] 완료! logsData.length=' + logsData.length;
+  } catch (e) {
+    console.error('[initLogsTab] loadLogs error:', e);
+    if (debugEl) debugEl.textContent = '[v5] 오류: ' + e.message;
+  }
+}
+
+// 서버 필터 버튼 클릭
+function selectLogListServer(btn) {
+  document.querySelectorAll('#logListServerBtns .server-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('logListServer').value = btn.dataset.server || '';
+  loadLogList();
+}
+
+// 로그 리스트 로드
+// API returns: timestamp(0), client_ip(1), status(2), bytes_sent(3), path(4), user_agent(5), server_id(6)
+async function loadLogList() {
+  const infoEl = document.getElementById('logListInfo');
+  const tbody = document.getElementById('logListBody');
+
+  if (infoEl) infoEl.textContent = '로딩 중...';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;padding:40px">로딩 중...</td></tr>';
+
+  const period = document.getElementById('logListPeriod')?.value || '24h';
+  const serverId = document.getElementById('logListServer')?.value || '';
+  const search = document.getElementById('logListSearch')?.value || '';
+  const limit = document.getElementById('logListLimit')?.value || '500';
+
+  let url = `/api/servers/logs?period=${period}&limit=${limit}`;
+  if (serverId) url += `&server_id=${encodeURIComponent(serverId)}`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    const logs = data.dataset || [];
+
+    // 검색 시 추가 정보 계산
+    if (logs.length > 0 && search) {
+      const totalBytes = logs.reduce((sum, row) => sum + (row[3] || 0), 0);
+      const lastTime = new Date(logs[0][0]);  // 최신 (내림차순이라 첫번째)
+      const firstTime = new Date(logs[logs.length - 1][0]);  // 최초 (마지막)
+      const formatTime = (d) => d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const formatSize = (b) => b >= 1073741824 ? (b / 1073741824).toFixed(2) + ' GB' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1024).toFixed(1) + ' KB';
+      if (infoEl) infoEl.innerHTML = `총 <b style="color:#00d4ff">${logs.length.toLocaleString()}건</b> | 최초: <b style="color:#ffa502">${formatTime(firstTime)}</b> | 최근: <b style="color:#00ff88">${formatTime(lastTime)}</b> | 트래픽: <b style="color:#ff6b6b">${formatSize(totalBytes)}</b>`;
+    } else {
+      if (infoEl) infoEl.textContent = `총 ${logs.length.toLocaleString()}건 (최신순)`;
+    }
+
+    if (logs.length === 0) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;padding:40px">검색 결과가 없습니다</td></tr>';
+      return;
+    }
+
+    const html = logs.map(row => {
+      // row: [timestamp, client_ip, status, bytes_sent, path, user_agent, server_id]
+      const time = new Date(row[0]).toLocaleString('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      const status = row[2] || 0;
+      const bytes = row[3] || 0;
+      const statusColor = status >= 200 && status < 300 ? '#00ff88' :
+                          status >= 300 && status < 400 ? '#00d4ff' :
+                          status >= 400 ? '#ff6b6b' : '#888';
+      const size = bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + 'MB' :
+                   bytes >= 1024 ? (bytes / 1024).toFixed(1) + 'KB' : bytes + 'B';
+      const serverId = row[6] || '-';
+      const serverInfo = serversData.find(s => s.id === serverId);
+      const serverName = serverInfo ? serverInfo.name : (serverId !== '-' ? serverId.substring(0, 6) : '-');
+      return `<tr style="border-bottom:1px solid #222">
+        <td style="padding:4px 6px;color:#888;white-space:nowrap">${time}</td>
+        <td style="padding:4px 6px;color:#00d4ff;text-align:center">${serverName}</td>
+        <td style="padding:4px 6px;color:#fff">${row[1] || '-'}</td>
+        <td style="padding:4px 6px;text-align:center;color:${statusColor}">${status}</td>
+        <td style="padding:4px 6px;text-align:right;color:#ffa502">${size}</td>
+        <td style="padding:4px 6px;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row[4] || ''}">${row[4] || '/'}</td>
+      </tr>`;
+    }).join('');
+
+    if (tbody) tbody.innerHTML = html;
+  } catch (e) {
+    if (infoEl) infoEl.textContent = '로드 실패: ' + e.message;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#ff6b6b;padding:40px">로드 실패: ${e.message}</td></tr>`;
+  }
+}
+
+async function loadLogs() {
+  const debugEl = document.getElementById('logsDebug');
+  const showDebug = (msg, isError) => {
+    if (debugEl) {
+      debugEl.style.display = 'block';
+      debugEl.style.background = isError ? '#f55' : '#ff0';
+      debugEl.textContent = msg;
+    }
+  };
+
+  showDebug('로딩 시작...');
+
+  const periodEl = document.getElementById('logPeriod');
+  const serverEl = document.getElementById('logServer');
+  const period = periodEl ? periodEl.value : '24h';
+  const serverId = serverEl ? serverEl.value : '';
+  const limit = 1000;
+
+  console.log('[Logs] periodEl:', periodEl, 'periodEl.value:', periodEl?.value, 'using period:', period);
+  showDebug('Period: ' + period + ', periodEl.value: ' + (periodEl?.value || 'null'));
+
+  let url = '/api/servers/logs?period=' + period + '&limit=' + limit;
+  if (serverId) url += '&server_id=' + serverId;
+
+  console.log('[Logs] Fetching:', url);
+  showDebug('Fetching: ' + url);
+
+  try {
+    const res = await fetch(url);
+    showDebug('Response received, parsing JSON...');
+    const data = await res.json();
+    console.log('[Logs] Response:', data);
+    console.log('[Logs] Response keys:', Object.keys(data));
+    console.log('[Logs] dataset exists:', !!data.dataset);
+    console.log('[Logs] dataset length:', data.dataset?.length);
+
+    logsData = data.dataset || [];
+    console.log('[Logs] logsData set, length:', logsData.length);
+    showDebug('데이터 로드 완료: ' + logsData.length + '건');
+
+    // Debug: 첫 번째 로우 구조 확인
+    // API returns: timestamp(0), client_ip(1), status(2), bytes_sent(3), path(4), user_agent(5), server_id(6)
+    if (logsData.length > 0) {
+      console.log('[Logs] First row:', JSON.stringify(logsData[0]));
+      console.log('[Logs] First row status (row[2]):', logsData[0][2], typeof logsData[0][2]);
+    }
+
+    renderLogs();
+    calculateStatsFromData();
+    renderServerStats();
+    loadSuspiciousIps();
+    loadHourlyStats();
+    loadDailyStats();
+    loadServerDailyStats();
+
+    // 성공 시 디버그 숨김
+    if (debugEl) debugEl.style.display = 'none';
+  } catch (e) {
+    console.error('[Logs] Load error:', e);
+    console.error('[Logs] Error stack:', e.stack);
+    showDebug('에러: ' + e.message, true);
+  }
+}
+
+async function calculateStatsFromData() {
+  const periodEl = document.getElementById('logPeriod');
+  const serverEl = document.getElementById('logServer');
+  const period = periodEl ? periodEl.value : '24h';
+  const serverId = serverEl ? serverEl.value : '';
+
+  let url = '/api/servers/logs/stats?period=' + period;
+  if (serverId) url += '&server_id=' + serverId;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.status === 'error') {
+      console.error('[Stats] API error:', data.message);
+      return;
+    }
+
+    const { total, s2xx, s3xx, s4xx, s5xx, total_bytes } = data;
+    logsStats = { total, s2xx, s3xx, s4xx, s5xx, bytes: total_bytes };
+
+    const periodSecs = { '5m': 300, '15m': 900, '1h': 3600, '6h': 21600, '24h': 86400 };
+    const secs = periodSecs[period] || 3600;
+    const reqPerSec = (total / secs).toFixed(2);
+
+    const el = document.getElementById('logsSummary');
+    if (el) {
+      el.innerHTML =
+        card('총 로그', total.toLocaleString(), '건') +
+        card('요청/초', reqPerSec, 'req/s') +
+        card('2xx', s2xx.toLocaleString(), '건') +
+        card('3xx', s3xx.toLocaleString(), '건') +
+        card('4xx', s4xx.toLocaleString(), '건') +
+        card('5xx', s5xx.toLocaleString(), '건') +
+        card('전송량', formatBytes(total_bytes), '');
+    }
+    renderStatusChart();
+  } catch (e) {
+    console.error('[Stats] Fetch error:', e);
+  }
+}
+
+function renderLogs() {
+  const el = document.getElementById('recentLogs');
+  const countEl = document.getElementById('logsCount');
+  if (!el) return;
+
+  if (countEl) countEl.textContent = '(' + logsData.length + '건)';
+
+  if (logsData.length === 0) {
+    el.innerHTML = '<div style="color:#666;padding:20px;text-align:center">로그가 없습니다</div>';
+    return;
+  }
+
+  const statusFilter = document.getElementById('logStatus')?.value || '';
+
+  const filtered = logsData.filter(row => {
+    if (!statusFilter) return true;
+    const status = row[2];  // status is at index 2
+    if (statusFilter === '2xx') return status >= 200 && status < 300;
+    if (statusFilter === '3xx') return status >= 300 && status < 400;
+    if (statusFilter === '4xx') return status >= 400 && status < 500;
+    if (statusFilter === '5xx') return status >= 500;
+    return true;
+  });
+
+  // 서버별로 그룹핑 후 라운드로빈으로 섞기
+  const byServer = {};
+  filtered.forEach(row => {
+    const sid = row[6] || 'unknown';  // server_id is at index 6
+    if (!byServer[sid]) byServer[sid] = [];
+    byServer[sid].push(row);
+  });
+  const serverIds = Object.keys(byServer);
+  const mixed = [];
+  let idx = 0;
+  while (mixed.length < 100 && idx < 1000) {
+    for (const sid of serverIds) {
+      if (byServer[sid].length > 0 && mixed.length < 100) {
+        mixed.push(byServer[sid].shift());
+      }
+    }
+    idx++;
+  }
+
+  // API returns: timestamp(0), client_ip(1), status(2), bytes_sent(3), path(4), user_agent(5), server_id(6)
+  el.innerHTML = mixed.map(row => {
+    const ts = new Date(row[0]).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const serverId = row[6] || '-';
+    const serverInfo = serversData.find(s => s.id === serverId);
+    const serverName = serverInfo ? serverInfo.name : serverId.substring(0, 6);
+    const ip = row[1] || '-';
+    const path = (row[4] || '/').substring(0, 50);
+    const status = row[2] || 0;
+    const bytes = row[3] || 0;
+
+    let statusColor = '#00ff88';
+    if (status >= 400) statusColor = '#ff6b6b';
+    else if (status >= 300) statusColor = '#ffa502';
+
+    return '<div style="padding:4px 0;border-bottom:1px solid #1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
+      '<span style="color:#666">' + ts + '</span> ' +
+      '<span style="color:#ffa502;font-size:10px;margin:0 4px">[' + serverName + ']</span> ' +
+      '<span style="color:' + statusColor + ';font-weight:bold">' + status + '</span> ' +
+      '<span style="color:#00d4ff">' + path + '</span> ' +
+      '<span style="color:#666">' + formatBytes(bytes) + '</span> ' +
+      '<span style="color:#555">' + ip + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+function filterLogsByStatus() {
+  renderLogs();
+}
+
+async function loadSuspiciousIps() {
+  const tbody = document.getElementById('suspiciousIpBody');
+  if (!tbody) return;
+
+  const period = document.getElementById('logPeriod')?.value || '24h';
+
+  try {
+    const res = await fetch('/api/servers/logs/stats/ips?period=' + period + '&limit=20');
+    const data = await res.json();
+    const dataset = data.dataset || [];
+
+    if (dataset.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888">데이터가 없습니다</td></tr>';
+      return;
+    }
+
+    // API returns: [ip, requests, bytes]
+    const maxReqs = dataset[0][1];
+    const totalReqs = dataset.reduce((sum, r) => sum + r[1], 0);
+    const totalBytes = dataset.reduce((sum, r) => sum + r[2], 0);
+
+    const rows = dataset.map(([ip, requests, bytes], i) => {
+      const pct = (requests / totalReqs * 100).toFixed(1);
+      const isHigh = requests > maxReqs * 0.5;
+      const color = isHigh ? '#ff6b6b' : requests > maxReqs * 0.2 ? '#ffa502' : '#00ff88';
+      return `<tr>
+        <td style="color:#666">${i + 1}</td>
+        <td style="color:${color};font-weight:${isHigh ? 'bold' : 'normal'}">${ip}</td>
+        <td style="text-align:right;color:#fff">${requests.toLocaleString()}</td>
+        <td style="text-align:right;color:#00d4ff">${formatBytes(bytes)}</td>
+        <td style="text-align:right;color:${color}">${pct}%</td>
+      </tr>`;
+    }).join('');
+
+    const sumRow = `<tr style="background:#1a1a2e;font-weight:bold;border-top:2px solid #444">
+      <td colspan="2">합계 (Top 20)</td>
+      <td style="text-align:right;color:#fff">${totalReqs.toLocaleString()}</td>
+      <td style="text-align:right;color:#00d4ff">${formatBytes(totalBytes)}</td>
+      <td style="text-align:right">100%</td>
+    </tr>`;
+
+    tbody.innerHTML = rows + sumRow;
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ff6b6b">로드 실패</td></tr>';
+  }
+}
+
+async function loadAbusers() {
+  const tbody = document.getElementById('abuserBody');
+  if (!tbody) return;
+
+  const period = document.getElementById('abuserPeriod')?.value || '6h';
+
+  try {
+    // 블랙리스트 먼저 로드
+    const blRes = await fetch('/api/blacklist');
+    const blData = await blRes.json();
+    const blockedIPs = new Set((blData.blacklist || []).map(b => b.ip));
+
+    const res = await fetch('/api/servers/logs/abusers?period=' + period + '&limit=30');
+    const data = await res.json();
+    const abusers = data.abusers || [];
+
+    if (abusers.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#888">데이터가 없습니다</td></tr>';
+      return;
+    }
+
+    // 시간 포맷팅 함수 (ISO 문자열 → KST)
+    const formatTime = (ts) => {
+      if (!ts) return '-';
+      const d = new Date(ts); // ISO string
+      return d.toLocaleString('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).replace('. ', '/').replace('. ', ' ');
+    };
+
+    // 위험도 있는 것만 필터링 (score > 0) 또는 전체 표시
+    const rows = abusers.map((a, i) => {
+      const levelColors = {
+        critical: { bg: '#ff000030', text: '#ff4444', icon: '🔴' },
+        high: { bg: '#ff660030', text: '#ff8800', icon: '🟠' },
+        medium: { bg: '#ffff0020', text: '#ffcc00', icon: '🟡' },
+        low: { bg: 'transparent', text: '#00ff88', icon: '🟢' }
+      };
+      const level = levelColors[a.risk_level] || levelColors.low;
+
+      // AI 분석 - 줄바꿈으로 표시 (최대 2줄)
+      const reasons = a.reasons && a.reasons.length > 0
+        ? a.reasons.slice(0, 2).join('<br>')
+        : '정상 패턴';
+
+      // 버스트 표시 (100초 최대 요청 기준)
+      let burstInfo = '';
+      const max100s = parseInt(a.max_req_100s) || 0;
+      if (max100s >= 300) {
+        burstInfo = `<span style="color:#ff4444;font-size:9px">⚡</span>`;
+      } else if (max100s >= 150) {
+        burstInfo = `<span style="color:#ff8800;font-size:9px">🔥</span>`;
+      }
+
+      // 평균 요청률 강조
+      const avgColor = parseFloat(a.avg_req_per_sec) >= 2.0 ? '#ff6b6b' :
+                       parseFloat(a.avg_req_per_sec) >= 1.0 ? '#ffcc00' : '#888';
+
+      // 활동시간 표시 (최초~마지막)
+      const firstTime = formatTime(a.first_seen);
+      const lastTime = formatTime(a.last_seen);
+      const activityTime = `${firstTime}<br>~${lastTime}`;
+
+      // 서버 목록 표시 (숫자만, 여러개면 세로)
+      const servers = a.servers && a.servers.length > 0
+        ? a.servers.map(s => `<span style="display:inline-block;background:#1e3a5f;color:#5eb3f5;padding:1px 5px;border-radius:3px;font-size:10px;margin:1px">${s.replace(/SERVER/gi, '')}</span>`).join('')
+        : '<span style="color:#666">-</span>';
+
+      // 100초 최대 요청 색상
+      const max100sColor = max100s >= 200 ? '#ff6b6b' : max100s >= 100 ? '#ffcc00' : '#888';
+
+      // 이미 차단된 IP인지 확인
+      const isBlocked = blockedIPs.has(a.ip);
+      const rowStyle = isBlocked ? 'opacity:0.5;background:#1a0a0a' : `background:${level.bg}`;
+      const blockBtn = isBlocked
+        ? `<button disabled style="background:#333;border:none;color:#888;padding:3px 6px;border-radius:3px;font-size:10px">차단됨</button>`
+        : `<button onclick="blockAbuserIP('${a.ip}', '${(a.reasons || []).slice(0,2).join(', ').replace(/'/g, "\\'")}', '${(a.servers || []).join(',')}')" style="background:#dc2626;border:none;color:#fff;padding:3px 6px;border-radius:3px;cursor:pointer;font-size:10px">차단</button>`;
+
+      return `<tr style="${rowStyle};border-bottom:1px solid #222">
+        <td style="padding:6px;text-align:center;vertical-align:middle">${level.icon}<br><span style="font-size:10px;color:${level.text}">${a.risk_score}점</span></td>
+        <td style="padding:6px;color:${level.text};font-weight:${a.risk_score >= 50 ? 'bold' : 'normal'};vertical-align:middle;font-size:11px">${a.ip}${isBlocked ? ' <span style="color:#ff4444;font-size:9px">🚫</span>' : ''}</td>
+        <td style="padding:6px;text-align:right;color:#00d4ff;vertical-align:middle">${a.gb}GB</td>
+        <td style="padding:6px;text-align:right;color:${parseFloat(a.gb_per_hour) > 15 ? '#ff6b6b' : '#fff'};vertical-align:middle">${a.gb_per_hour}</td>
+        <td style="padding:6px;text-align:right;vertical-align:middle"><span style="color:${avgColor}">${a.avg_req_per_sec}</span> ${burstInfo}</td>
+        <td style="padding:6px;text-align:right;vertical-align:middle;color:${max100sColor}">${max100s > 0 ? max100s : '-'}</td>
+        <td style="padding:6px;text-align:center;color:#888;vertical-align:middle;font-size:10px;line-height:1.4">${activityTime}</td>
+        <td style="padding:6px;text-align:center;vertical-align:middle">${servers}</td>
+        <td style="padding:6px;font-size:11px;color:${level.text};vertical-align:middle;line-height:1.5">${reasons}</td>
+        <td style="padding:6px;text-align:center;vertical-align:middle">
+          <button onclick="openLogModal('${a.ip}')" style="background:#2563eb;border:none;color:#fff;padding:3px 6px;border-radius:3px;cursor:pointer;font-size:10px;margin-right:3px">로그</button>
+          ${blockBtn}
+        </td>
+      </tr>`;
+    }).join('');
+
+    tbody.innerHTML = rows;
+
+    // 요약 카드 업데이트
+    const criticalCount = abusers.filter(a => a.risk_level === 'critical').length;
+    const highCount = abusers.filter(a => a.risk_level === 'high').length;
+    const mediumCount = abusers.filter(a => a.risk_level === 'medium').length;
+    const el = (id) => document.getElementById(id);
+    if (el('abuserTotal')) el('abuserTotal').textContent = abusers.length;
+    if (el('abuserCritical')) el('abuserCritical').textContent = criticalCount;
+    if (el('abuserHigh')) el('abuserHigh').textContent = highCount;
+    if (el('abuserMedium')) el('abuserMedium').textContent = mediumCount;
+
+    // 자동 차단 실행
+    await executeAutoBlock(abusers);
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#ff6b6b">로드 실패: ' + e.message + '</td></tr>';
+  }
+}
+
+// 어뷰저 IP 차단
+async function blockAbuserIP(ip, reason, server) {
+  if (!confirm(`${ip}를 차단하시겠습니까?\n\n사유: ${reason || '어뷰저 탐지'}`)) return;
+
+  try {
+    const res = await fetch('/api/blacklist/block', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ ip, reason: reason || '어뷰저 탐지', server: server || '' })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const cfStatus = data.cf_blocked ? '✓ 차단됨' : '✗ 실패';
+      const serverCount = data.servers_pending || data.servers_blocked?.length || 0;
+      alert(`✅ ${ip} 차단 완료\n\nCloudflare: ${cfStatus}\n에이전트 서버: ${serverCount}대 대기중 (폴링으로 처리)`);
+      // 해당 행 차단됨 표시
+      const rows = document.querySelectorAll('#abuserBody tr');
+      rows.forEach(row => {
+        if (row.textContent.includes(ip)) {
+          row.style.opacity = '0.5';
+          row.style.background = '#1a0a0a';
+          // 차단 버튼을 "차단됨"으로 변경
+          const btn = row.querySelector('button[onclick*="blockAbuserIP"]');
+          if (btn) {
+            btn.textContent = '차단됨';
+            btn.disabled = true;
+            btn.style.background = '#333';
+          }
+        }
+      });
+      // 블랙리스트 새로고침
+      loadBlacklistInline();
+    } else {
+      alert('차단 실패: ' + (data.error || data.message || 'Unknown error'));
+    }
+  } catch (e) {
+    alert('차단 오류: ' + e.message);
+  }
+}
+
+// 인라인 블랙리스트 로드 (서버 페이지 탭용)
+async function loadBlacklistInline() {
+  const tbody = document.getElementById('blacklistTbodyInline');
+  if (!tbody) return;
+
+  // Cloudflare 설정 로드
+  await loadCfSettings();
+
+  try {
+    const res = await fetch('/api/blacklist');
+    const data = await res.json();
+    const blacklist = data.blacklist || [];
+
+    if (!data.blacklist) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ff6b6b;padding:40px">로드 실패</td></tr>';
+      return;
+    }
+
+    // 요약 카드 업데이트
+    const el = (id) => document.getElementById(id);
+    const today = new Date().toISOString().split('T')[0];
+    const todayCount = blacklist.filter(item => item.blocked_at && item.blocked_at.startsWith(today)).length;
+    const autoCount = blacklist.filter(item => item.blocked_by === 'auto' || item.reason?.includes('자동')).length;
+
+    if (el('blkTotal')) el('blkTotal').textContent = blacklist.length;
+    if (el('blkToday')) el('blkToday').textContent = todayCount;
+    if (el('blkAuto')) el('blkAuto').textContent = autoCount;
+    if (el('blkServers')) el('blkServers').textContent = serversData?.length || 0;
+
+    if (blacklist.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#666;padding:40px">차단된 IP가 없습니다</td></tr>';
+      return;
+    }
+
+    // ISP 정보 조회
+    const ips = blacklist.map(item => item.ip);
+    await fetchIspInfo(ips);
+
+    // 서버 ID -> 이름 매핑 함수
+    const getServerName = (id) => {
+      const server = serversData.find(s => s.id === id);
+      return server ? server.name : id;
+    };
+
+    tbody.innerHTML = blacklist.map(item => {
+      const blockedAt = item.blocked_at ? new Date(item.blocked_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
+      const cfStatus = item.cf_blocked ? '✓' : '✗';
+      const cfColor = item.cf_blocked ? '#00ff88' : '#ff6b6b';
+      const blockedServers = item.blocked_servers || [];
+      const serverCount = blockedServers.length;
+      // 서버 ID를 이름으로 변환하고 숫자순 정렬
+      const serverNames = blockedServers.map(getServerName).sort((a, b) => {
+        const numA = parseInt(a), numB = parseInt(b);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return a.localeCompare(b);
+      });
+      const serverList = serverCount > 0 ? serverNames.join(', ') : '-';
+      const serverColor = serverCount > 0 ? '#00d4ff' : '#666';
+      const isp = ispCache[item.ip] || '';
+      return `
+        <tr style="border-bottom:1px solid #1a1a2e">
+          <td style="padding:10px 8px;font-family:monospace;font-weight:bold;color:#ff6b6b;vertical-align:top;font-size:12px">
+            ${item.ip}
+            ${isp ? `<div style="font-size:9px;color:#888;font-weight:normal;margin-top:2px">${isp}</div>` : ''}
+          </td>
+          <td style="padding:10px 8px;color:#888;font-size:11px;vertical-align:top">${blockedAt}</td>
+          <td style="padding:10px 8px;color:#ccc;font-size:11px;vertical-align:top;word-break:break-word">
+            ${item.reason || '-'}
+            <div style="margin-top:5px;font-size:10px;color:#555">CF: <span style="color:${cfColor}">${cfStatus}</span> · 서버(${serverCount}): <span style="color:${serverColor}">${serverList}</span></div>
+          </td>
+          <td style="padding:10px 8px;text-align:center;vertical-align:top">
+            <button onclick="unblockIPInline('${item.ip}')" style="background:#dc2626;border:none;color:#fff;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px">해제</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ff6b6b;padding:40px">로드 실패: ' + e.message + '</td></tr>';
+  }
+}
+
+// 인라인 블랙리스트에서 차단 해제
+async function unblockIPInline(ip) {
+  if (!confirm(`${ip} 차단을 해제하시겠습니까?`)) return;
+
+  try {
+    const res = await fetch('/api/blacklist/unblock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ ip })
+    });
+    const data = await res.json();
+    if (data.success || data.status === 'ok') {
+      alert(`✅ ${ip} 차단 해제 완료`);
+      loadBlacklistInline();
+    } else {
+      alert('해제 실패: ' + (data.message || 'Unknown error'));
+    }
+  } catch (e) {
+    alert('해제 오류: ' + e.message);
+  }
+}
+
+// 로그 모달 열기
+async function openLogModal(ip) {
+  const modal = document.getElementById('logModal');
+  const title = document.getElementById('logModalTitle');
+  const content = document.getElementById('logModalContent');
+
+  modal.style.display = 'block';
+  title.textContent = `📋 ${ip} 로그`;
+  content.innerHTML = '<div style="text-align:center;padding:40px;color:#888">로딩 중...</div>';
+
+  try {
+    const period = document.getElementById('abuserPeriod')?.value || '6h';
+    const res = await fetch(`/api/servers/logs/ip/${encodeURIComponent(ip)}?period=${period}&limit=500`);
+    const data = await res.json();
+    const logs = data.logs || [];
+
+    if (logs.length === 0) {
+      content.innerHTML = '<div style="text-align:center;padding:40px;color:#888">로그가 없습니다</div>';
+      return;
+    }
+
+    // 로그 테이블 생성
+    const tableHtml = `
+      <div style="margin-bottom:10px;color:#888;font-size:11px">총 ${logs.length}건 (최대 500건)</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed">
+        <thead>
+          <tr style="background:#1a1a2e;position:sticky;top:-15px;z-index:10">
+            <th style="padding:10px 6px;text-align:left;border-bottom:1px solid #333;background:#1a1a2e;width:18%">시간</th>
+            <th style="padding:10px 6px;text-align:left;border-bottom:1px solid #333;background:#1a1a2e;width:6%">서버</th>
+            <th style="padding:10px 6px;text-align:center;border-bottom:1px solid #333;background:#1a1a2e;width:7%">상태</th>
+            <th style="padding:10px 6px;text-align:right;border-bottom:1px solid #333;background:#1a1a2e;width:9%">크기</th>
+            <th style="padding:10px 6px;text-align:left;border-bottom:1px solid #333;background:#1a1a2e;width:60%">경로</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${logs.map(log => {
+            const time = new Date(log.timestamp).toLocaleString('ko-KR', {
+              timeZone: 'Asia/Seoul',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit'
+            });
+            const statusColor = log.status === 200 ? '#00ff88' : log.status === 206 ? '#00d4ff' : '#ff6b6b';
+            const bytes = log.bytes_sent || 0;
+            const size = bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + 'MB' :
+                         bytes >= 1024 ? (bytes / 1024).toFixed(1) + 'KB' : bytes + 'B';
+            const path = log.path && log.path.length > 60 ? '...' + log.path.slice(-57) : (log.path || '-');
+            const serverId = log.server_id || '-';
+            const serverInfo = serversData.find(s => s.id === serverId);
+            const serverName = serverInfo ? serverInfo.name : (serverId.length > 6 ? serverId.slice(0,6) : serverId);
+            return `<tr style="border-bottom:1px solid #1a1a2e">
+              <td style="padding:4px 6px;color:#888;white-space:nowrap">${time}</td>
+              <td style="padding:4px 6px;color:#00d4ff;text-align:center">${serverName}</td>
+              <td style="padding:4px 6px;text-align:center;color:${statusColor}">${log.status}</td>
+              <td style="padding:4px 6px;text-align:right;color:#ffa502">${size}</td>
+              <td style="padding:4px 6px;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${log.path || ''}">${path}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+    content.innerHTML = tableHtml;
+  } catch (e) {
+    content.innerHTML = `<div style="text-align:center;padding:40px;color:#ff6b6b">로드 실패: ${e.message}</div>`;
+  }
+}
+
+// 로그 모달 닫기
+function closeLogModal() {
+  document.getElementById('logModal').style.display = 'none';
+}
+
+
+let hourlyChart = null;
+async function loadHourlyStats() {
+  const canvas = document.getElementById('hourlyStatsChart');
+  if (!canvas) return;
+
+  const period = document.getElementById('logPeriod')?.value || '24h';
+
+  try {
+    const res = await fetch('/api/servers/logs/stats/timeline?period=' + period);
+    const data = await res.json();
+    const dataset = data.dataset || [];
+
+    if (dataset.length === 0) return;
+
+    const labels = dataset.map(r => {
+      const d = new Date(r[0]);
+      return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' });
+    });
+    const requests = dataset.map(r => r[1]);
+    const bytes = dataset.map(r => r[2] / 1024 / 1024);
+
+    if (hourlyChart) hourlyChart.destroy();
+    hourlyChart = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: '요청 수', data: requests, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.1)', fill: true, tension: 0.3, yAxisID: 'y' },
+          { label: '트래픽 (MB)', data: bytes, borderColor: '#ffa502', backgroundColor: 'rgba(255,165,2,0.1)', fill: true, tension: 0.3, yAxisID: 'y1' }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#888' } } },
+        scales: {
+          x: { ticks: { color: '#666' }, grid: { color: '#1a1a2e' } },
+          y: { position: 'left', ticks: { color: '#00d4ff' }, grid: { color: '#1a1a2e' } },
+          y1: { position: 'right', ticks: { color: '#ffa502' }, grid: { display: false } }
+        }
+      }
+    });
+  } catch (e) {
+    console.error('시간별 통계 로드 실패:', e);
+  }
+}
+
+async function loadDailyStats() {
+  const tbody = document.getElementById('dailyStatsBody');
+  if (!tbody) return;
+
+  try {
+    const res = await fetch('/api/servers/logs/stats/daily?limit=7');
+    const data = await res.json();
+    const dataset = data.dataset || [];
+
+    if (dataset.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888">데이터가 없습니다</td></tr>';
+      return;
+    }
+
+    let sumTotal = 0, sum2xx = 0, sum4xx = 0, sum5xx = 0, sumBytes = 0;
+
+    const rows = dataset.map(row => {
+      const [dateStr, total, s2xx, s4xx, s5xx, bytes] = row;
+      const d = new Date(dateStr);
+      const dateLabel = d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short' });
+
+      sumTotal += total; sum2xx += s2xx; sum4xx += s4xx; sum5xx += s5xx; sumBytes += bytes;
+
+      return `<tr>
+        <td style="color:#00d4ff">${dateLabel}</td>
+        <td style="text-align:right;color:#fff">${total.toLocaleString()}</td>
+        <td style="text-align:right;color:#00ff88">${s2xx.toLocaleString()}</td>
+        <td style="text-align:right;color:#ffa502">${s4xx.toLocaleString()}</td>
+        <td style="text-align:right;color:#ff6b6b">${s5xx.toLocaleString()}</td>
+        <td style="text-align:right;color:#00d4ff">${formatBytes(bytes)}</td>
+      </tr>`;
+    }).join('');
+
+    const sumRow = `<tr style="background:#1a1a2e;font-weight:bold;border-top:2px solid #444">
+      <td>합계</td>
+      <td style="text-align:right;color:#fff">${sumTotal.toLocaleString()}</td>
+      <td style="text-align:right;color:#00ff88">${sum2xx.toLocaleString()}</td>
+      <td style="text-align:right;color:#ffa502">${sum4xx.toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b6b">${sum5xx.toLocaleString()}</td>
+      <td style="text-align:right;color:#00d4ff">${formatBytes(sumBytes)}</td>
+    </tr>`;
+
+    tbody.innerHTML = rows + sumRow;
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#ff6b6b">로드 실패</td></tr>';
+  }
+}
+
+let serverDailyDrillDate = null; // 현재 드릴다운 중인 날짜
+
+async function loadServerDailyStats() {
+  const thead = document.getElementById('serverDailyStatsHead');
+  const tbody = document.getElementById('serverDailyStatsBody');
+  if (!thead || !tbody) return;
+
+  // 서버 데이터가 없으면 먼저 로드
+  if (serversData.length === 0) {
+    await loadServers();
+  }
+
+  // 드릴다운 상태면 시간별 통계 표시
+  if (serverDailyDrillDate) {
+    await loadServerHourlyStats(serverDailyDrillDate);
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/servers/logs/stats/daily/servers?days=7');
+    const data = await res.json();
+    const dataset = data.dataset || [];
+
+    if (dataset.length === 0) {
+      thead.innerHTML = '<tr><th colspan="10" style="text-align:center;color:#888">데이터가 없습니다</th></tr>';
+      tbody.innerHTML = '';
+      return;
+    }
+
+    // 데이터 구조: [timestamp, server_id, requests, s2xx, s4xx, s5xx, bytes]
+    // 날짜별, 서버별로 그룹화
+    const dateServerMap = {};
+    const serverIds = new Set();
+    const dates = [];
+    const dateToIso = {};
+
+    dataset.forEach(row => {
+      const [dateStr, serverId, requests, s2xx, s4xx, s5xx, bytes] = row;
+      const d = new Date(dateStr);
+      const dateKey = d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short' });
+      const isoDate = dateStr.split('T')[0];
+
+      if (!dateToIso[dateKey]) {
+        dates.push(dateKey);
+        dateToIso[dateKey] = isoDate;
+      }
+      serverIds.add(serverId);
+
+      if (!dateServerMap[dateKey]) dateServerMap[dateKey] = {};
+      dateServerMap[dateKey][serverId] = { requests, s2xx, s4xx, s5xx, bytes };
+    });
+
+    const sortedDates = dates.reverse(); // 최신 날짜가 위로
+    const sortedServerIds = Array.from(serverIds);
+
+    // 서버 ID -> 이름 매핑
+    const serverNames = sortedServerIds.map(id => {
+      const server = serversData.find(s => s.id === id);
+      return server ? server.name : id.substring(0, 6);
+    });
+
+    // 헤더 생성
+    thead.innerHTML = `<tr>
+      <th>날짜</th>
+      ${serverNames.map(name => `<th style="text-align:right;color:#00d4ff">${name}</th>`).join('')}
+      <th style="text-align:right;color:#fff;font-weight:bold">합계</th>
+    </tr>`;
+
+    // 합계 행
+    const serverTotals = sortedServerIds.map(serverId => {
+      let total = 0;
+      sortedDates.forEach(dateKey => {
+        total += dateServerMap[dateKey]?.[serverId]?.requests || 0;
+      });
+      return total;
+    });
+    const grandTotal = serverTotals.reduce((a, b) => a + b, 0);
+
+    const sumRow = `<tr style="background:#1a1a2e;font-weight:bold;border-top:2px solid #444">
+      <td>합계</td>
+      ${serverTotals.map(t => `<td style="text-align:right;color:#fff">${t.toLocaleString()}</td>`).join('')}
+      <td style="text-align:right;color:#ffa502">${grandTotal.toLocaleString()}</td>
+    </tr>`;
+
+    // 요청수와 트래픽을 번갈아 표시
+    let combinedRows = '';
+    for (let i = 0; i < sortedDates.length; i++) {
+      const dateKey = sortedDates[i];
+      const isoDate = dateToIso[dateKey];
+      let dayReqTotal = 0;
+      let dayBytesTotal = 0;
+
+      const reqCells = sortedServerIds.map(serverId => {
+        const data = dateServerMap[dateKey]?.[serverId];
+        const requests = data?.requests || 0;
+        dayReqTotal += requests;
+        return `<td style="text-align:right;color:#fff">${requests > 0 ? requests.toLocaleString() : '-'}</td>`;
+      }).join('');
+
+      const byteCells = sortedServerIds.map(serverId => {
+        const data = dateServerMap[dateKey]?.[serverId];
+        const bytes = data?.bytes || 0;
+        dayBytesTotal += bytes;
+        return `<td style="text-align:right;color:#00d4ff;font-size:10px">${bytes > 0 ? formatBytes(bytes) : '-'}</td>`;
+      }).join('');
+
+      combinedRows += `<tr>
+        <td rowspan="2" class="clickable" onclick="drillServerHourly('${isoDate}')" style="color:#00d4ff;font-weight:bold;vertical-align:middle;cursor:pointer">${dateKey}</td>
+        ${reqCells}
+        <td style="text-align:right;color:#ffa502;font-weight:bold">${dayReqTotal.toLocaleString()}</td>
+      </tr>
+      <tr style="background:rgba(0,212,255,0.05);border-bottom:1px solid #333">
+        ${byteCells}
+        <td style="text-align:right;color:#00d4ff;font-size:10px;font-weight:bold">${formatBytes(dayBytesTotal)}</td>
+      </tr>`;
+    }
+
+    tbody.innerHTML = combinedRows + sumRow;
+  } catch (e) {
+    console.error('서버별 일별 통계 로드 실패:', e);
+    thead.innerHTML = '<tr><th colspan="10" style="text-align:center;color:#ff6b6b">로드 실패</th></tr>';
+    tbody.innerHTML = '';
+  }
+}
+
+// 날짜 클릭 시 시간별 통계로 드릴다운
+window.drillServerHourly = function(isoDate) {
+  serverDailyDrillDate = isoDate;
+  loadServerDailyStats();
+};
+
+// 드릴다운에서 돌아가기
+window.backToServerDaily = function() {
+  serverDailyDrillDate = null;
+  loadServerDailyStats();
+};
+
+// 시간별 서버 통계 로드
+async function loadServerHourlyStats(date) {
+  const thead = document.getElementById('serverDailyStatsHead');
+  const tbody = document.getElementById('serverDailyStatsBody');
+  if (!thead || !tbody) return;
+
+  try {
+    const res = await fetch('/api/servers/logs/stats/hourly?date=' + date);
+    const data = await res.json();
+    const dataset = data.dataset || [];
+
+    const d = new Date(date + 'T00:00:00+09:00');
+    const dateLabel = d.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+
+    if (dataset.length === 0) {
+      thead.innerHTML = `<tr>
+        <th colspan="10">
+          <span class="clickable" onclick="backToServerDaily()" style="cursor:pointer;color:#00d4ff">← 일별 통계</span>
+          &nbsp;&nbsp;${dateLabel} - 데이터 없음
+        </th>
+      </tr>`;
+      tbody.innerHTML = '';
+      return;
+    }
+
+    // 데이터 구조: [timestamp, server_id, requests, s2xx, s4xx, s5xx, bytes]
+    const hourServerMap = {};
+    const serverIds = new Set();
+    const hours = [];
+
+    dataset.forEach(row => {
+      const [timeStr, serverId, requests, s2xx, s4xx, s5xx, bytes] = row;
+      const t = new Date(timeStr);
+      const hourKey = t.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false });
+
+      if (!hourServerMap[hourKey]) {
+        hours.push(hourKey);
+        hourServerMap[hourKey] = {};
+      }
+      serverIds.add(serverId);
+      hourServerMap[hourKey][serverId] = { requests, s2xx, s4xx, s5xx, bytes };
+    });
+
+    const sortedServerIds = Array.from(serverIds);
+    const serverNames = sortedServerIds.map(id => {
+      const server = serversData.find(s => s.id === id);
+      return server ? server.name : id.substring(0, 6);
+    });
+
+    thead.innerHTML = `<tr>
+      <th>
+        <span class="clickable" onclick="backToServerDaily()" style="cursor:pointer;color:#00d4ff">← 돌아가기</span>
+      </th>
+      ${serverNames.map(name => `<th style="text-align:right;color:#00d4ff">${name}</th>`).join('')}
+      <th style="text-align:right;color:#fff;font-weight:bold">합계</th>
+    </tr>
+    <tr style="background:#1a1a2e"><th colspan="${serverNames.length + 2}" style="text-align:center;color:#ffa502">${dateLabel} 시간별 통계</th></tr>`;
+
+    let combinedRows = '';
+    let grandTotalReq = 0;
+    const serverTotals = sortedServerIds.map(() => 0);
+
+    hours.forEach(hourKey => {
+      let hourReqTotal = 0;
+
+      const reqCells = sortedServerIds.map((serverId, idx) => {
+        const data = hourServerMap[hourKey]?.[serverId];
+        const requests = data?.requests || 0;
+        hourReqTotal += requests;
+        serverTotals[idx] += requests;
+        return `<td style="text-align:right;color:#fff">${requests > 0 ? requests.toLocaleString() : '-'}</td>`;
+      }).join('');
+
+      grandTotalReq += hourReqTotal;
+
+      combinedRows += `<tr>
+        <td style="color:#00d4ff;font-weight:bold">${hourKey}</td>
+        ${reqCells}
+        <td style="text-align:right;color:#ffa502;font-weight:bold">${hourReqTotal.toLocaleString()}</td>
+      </tr>`;
+    });
+
+    const sumRow = `<tr style="background:#1a1a2e;font-weight:bold;border-top:2px solid #444">
+      <td>합계</td>
+      ${serverTotals.map(t => `<td style="text-align:right;color:#fff">${t.toLocaleString()}</td>`).join('')}
+      <td style="text-align:right;color:#ffa502">${grandTotalReq.toLocaleString()}</td>
+    </tr>`;
+
+    tbody.innerHTML = combinedRows + sumRow;
+  } catch (e) {
+    console.error('시간별 서버 통계 로드 실패:', e);
+    thead.innerHTML = '<tr><th colspan="10" style="text-align:center;color:#ff6b6b">로드 실패</th></tr>';
+    tbody.innerHTML = '';
+  }
+}
+
+async function renderServerStats() {
+  const tbody = document.getElementById('serverStatsBody');
+  const cardList = document.getElementById('serverStatsList');
+
+  const period = document.getElementById('logPeriod')?.value || '24h';
+
+  try {
+    const res = await fetch('/api/servers/logs/stats/servers?period=' + period);
+    const data = await res.json();
+    const dataset = data.dataset || [];
+
+    if (dataset.length === 0) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888">데이터가 없습니다</td></tr>';
+      if (cardList) cardList.innerHTML = '<div style="color:#666;padding:20px;text-align:center">데이터가 없습니다</div>';
+      return;
+    }
+
+    let sumTotal = 0, sum2xx = 0, sum4xx = 0, sum5xx = 0, sumBytes = 0;
+
+    // 카드 형태 렌더링
+    const cards = dataset.map(row => {
+      const [id, total, s2xx, s4xx, s5xx, bytes] = row;
+      const serverInfo = serversData.find(s => s.id === id);
+      const name = serverInfo ? serverInfo.name : id.substring(0, 8);
+      const errorRate = total > 0 ? ((s4xx + s5xx) / total * 100).toFixed(1) : '0';
+      const errorColor = errorRate > 5 ? '#ff6b6b' : errorRate > 1 ? '#ffa502' : '#00ff88';
+
+      return `<div style="background:#1a1a2e;border-radius:8px;padding:15px;border-left:3px solid #00d4ff">
+        <div style="font-weight:bold;color:#00d4ff;margin-bottom:10px;font-size:14px">${name}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+          <div><span style="color:#888">요청:</span> <span style="color:#fff">${total.toLocaleString()}</span></div>
+          <div><span style="color:#888">트래픽:</span> <span style="color:#00d4ff">${formatBytes(bytes)}</span></div>
+          <div><span style="color:#888">2xx:</span> <span style="color:#00ff88">${s2xx.toLocaleString()}</span></div>
+          <div><span style="color:#888">에러율:</span> <span style="color:${errorColor};font-weight:bold">${errorRate}%</span></div>
+        </div>
+      </div>`;
+    }).join('');
+
+    if (cardList) cardList.innerHTML = cards;
+
+    // 테이블 형태 렌더링
+    const rows = dataset.map(row => {
+      const [id, total, s2xx, s4xx, s5xx, bytes] = row;
+      const serverInfo = serversData.find(s => s.id === id);
+      const name = serverInfo ? serverInfo.name : id.substring(0, 8);
+      const errorRate = total > 0 ? ((s4xx + s5xx) / total * 100).toFixed(2) : '0';
+      const errorColor = errorRate > 5 ? '#ff6b6b' : errorRate > 1 ? '#ffa502' : '#00ff88';
+
+      sumTotal += total; sum2xx += s2xx; sum4xx += s4xx; sum5xx += s5xx; sumBytes += bytes;
+
+      return `<tr>
+        <td style="color:#00d4ff;font-weight:bold">${name}</td>
+        <td style="text-align:right;color:#fff">${total.toLocaleString()}</td>
+        <td style="text-align:right;color:#00ff88">${s2xx.toLocaleString()}</td>
+        <td style="text-align:right;color:#ffa502">${s4xx.toLocaleString()}</td>
+        <td style="text-align:right;color:#ff6b6b">${s5xx.toLocaleString()}</td>
+        <td style="text-align:right;color:${errorColor};font-weight:bold">${errorRate}%</td>
+        <td style="text-align:right;color:#00d4ff">${formatBytes(bytes)}</td>
+      </tr>`;
+    }).join('');
+
+    const sumErrorRate = sumTotal > 0 ? ((sum4xx + sum5xx) / sumTotal * 100).toFixed(2) : '0';
+    const sumRow = `<tr style="background:#1a1a2e;font-weight:bold;border-top:2px solid #444">
+      <td>합계</td>
+      <td style="text-align:right;color:#fff">${sumTotal.toLocaleString()}</td>
+      <td style="text-align:right;color:#00ff88">${sum2xx.toLocaleString()}</td>
+      <td style="text-align:right;color:#ffa502">${sum4xx.toLocaleString()}</td>
+      <td style="text-align:right;color:#ff6b6b">${sum5xx.toLocaleString()}</td>
+      <td style="text-align:right;color:#ffa502">${sumErrorRate}%</td>
+      <td style="text-align:right;color:#00d4ff">${formatBytes(sumBytes)}</td>
+    </tr>`;
+
+    if (tbody) tbody.innerHTML = rows + sumRow;
+  } catch (e) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ff6b6b">로드 실패</td></tr>';
+    if (cardList) cardList.innerHTML = '<div style="color:#ff6b6b;padding:20px;text-align:center">로드 실패</div>';
+  }
+}
+
+function renderTopReferrers() {
+  const el = document.getElementById('topReferersList');
+  if (!el) return;
+
+  // Referer data is not currently available in the API
+  el.innerHTML = '<div style="color:#666;padding:20px;text-align:center">리퍼러 데이터 없음</div>';
+}
+
+function renderTopUserAgents() {
+  const el = document.getElementById('topUAList');
+  if (!el) return;
+
+  const uas = {};
+  logsData.forEach(row => {
+    const ua = row[5] || '-';  // user_agent is at index 5
+    // UA 파싱 - 간단한 분류
+    let device = 'Other';
+    if (ua.includes('Mobile')) device = 'Mobile';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) device = 'iOS';
+    else if (ua.includes('Android')) device = 'Android';
+    else if (ua.includes('Windows')) device = 'Windows';
+    else if (ua.includes('Mac')) device = 'Mac';
+    else if (ua.includes('Linux')) device = 'Linux';
+    else if (ua.includes('bot') || ua.includes('Bot') || ua.includes('crawl')) device = 'Bot';
+
+    uas[device] = (uas[device] || 0) + 1;
+  });
+
+  const sorted = Object.entries(uas).sort((a, b) => b[1] - a[1]);
+
+  if (sorted.length === 0) {
+    el.innerHTML = '<div style="color:#666;padding:20px;text-align:center">데이터가 없습니다</div>';
+    return;
+  }
+
+  const total = sorted.reduce((sum, [_, cnt]) => sum + cnt, 0);
+  const colors = { 'Mobile': '#ff6b6b', 'iOS': '#ffa502', 'Android': '#00ff88', 'Windows': '#00d4ff', 'Mac': '#a55eea', 'Linux': '#26de81', 'Bot': '#888', 'Other': '#555' };
+
+  el.innerHTML = sorted.map(([device, hits]) => {
+    const pct = (hits / total * 100).toFixed(1);
+    const color = colors[device] || '#888';
+    return '<div style="padding:8px 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;align-items:center">' +
+      '<span style="color:' + color + ';font-weight:bold">' + device + '</span>' +
+      '<span style="color:#888">' + hits.toLocaleString() + ' (' + pct + '%)</span>' +
+    '</div>';
+  }).join('');
+}
+
+async function renderStatusChart() {
+  // 서버별 요청 그래프 렌더링
+  const ctx = document.getElementById('serverRequestsChart');
+  if (!ctx) return;
+
+  const period = document.getElementById('logPeriod')?.value || '24h';
+
+  try {
+    const res = await fetch('/api/servers/logs/stats/servers?period=' + period);
+    const data = await res.json();
+    const dataset = data.dataset || [];
+
+    if (dataset.length === 0) return;
+
+    const labels = dataset.map(row => {
+      const serverInfo = serversData.find(s => s.id === row[0]);
+      return serverInfo ? serverInfo.name : row[0].substring(0, 8);
+    });
+    const requests = dataset.map(row => row[1]);
+    const colors = ['#00d4ff', '#00ff88', '#ffa502', '#ff6b6b', '#a855f7', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+
+    if (logsCharts.serverRequests) logsCharts.serverRequests.destroy();
+
+    logsCharts.serverRequests = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: '요청 수',
+          data: requests,
+          backgroundColor: colors.slice(0, labels.length),
+          borderWidth: 0
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#888', callback: v => v >= 1000000 ? (v/1000000).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'K' : v },
+            grid: { color: '#222' }
+          },
+          y: { ticks: { color: '#fff' }, grid: { display: false } }
+        }
+      }
+    });
+  } catch (e) {
+    console.error('[ServerRequests] Error:', e);
+  }
+}
 
 function nav(p) {
   console.log('[nav] Navigating to:', p);
   clearActiveInterval(); // 페이지 전환 시 인터벌 정리
   page = p;
-  document.querySelectorAll('.menu-item a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + p));
+  // servers-* 패턴은 servers 메뉴 활성화
+  const menuPage = p.startsWith('servers-') ? 'servers' : p;
+  document.querySelectorAll('.menu-item a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + menuPage));
   if (!pages[p]) {
     console.error('[nav] Page not found:', p);
     p = 'dashboard';
@@ -2003,6 +4349,12 @@ function nav(p) {
     return;
   }
   if (p === 'dashboard') initDashboard();
+  else if (p === 'abuser') {
+    // abuser는 이제 servers-abuser 탭으로 이동
+    history.replaceState(null, '', '#servers-abuser');
+    initServers().then(() => switchServerTab('abuser'));
+    return;
+  }
   else if (p === 'traffic') initTraffic();
   else if (p === 'realtime') initRealtime();
   else if (p === 'sessions') initSessions();
@@ -2015,6 +4367,310 @@ function nav(p) {
   else if (p === 'visitors') initVisitors();
   else if (p === 'history') initHistory();
   else if (p === 'tracker') initTracker();
+  else if (p === 'servers') initServers();
+  else if (p === 'servers-logs') {
+    initServers().then(() => switchServerTab('logs'));
+  }
+  else if (p === 'servers-loglist') {
+    initServers().then(() => switchServerTab('loglist'));
+  }
+  else if (p === 'servers-abuser') {
+    initServers().then(() => switchServerTab('abuser'));
+  }
+  else if (p === 'servers-blacklist') {
+    initServers().then(() => switchServerTab('blacklist'));
+  }
+  else if (p === 'blacklist') initBlacklist();
+}
+
+// ============================================
+// 블랙리스트 관리
+// ============================================
+let blacklistData = [];
+let cfAccounts = [];
+
+async function initBlacklist() {
+  await loadBlacklist();
+  await loadCfSettings();
+  updateBlacklistSummary();
+}
+
+async function loadBlacklist() {
+  try {
+    const res = await fetch('/api/blacklist');
+    const data = await res.json();
+    if (data.blacklist) {
+      blacklistData = data.blacklist;
+      await renderBlacklist();
+    }
+  } catch (e) {
+    console.error('Failed to load blacklist:', e);
+  }
+}
+
+async function loadCfSettings() {
+  try {
+    const res = await fetch('/api/settings/cloudflare');
+    const data = await res.json();
+    if (data.success || data.status === 'ok') {
+      cfAccounts = data.accounts || [];
+    }
+  } catch (e) {
+    console.error('Failed to load CF settings:', e);
+  }
+}
+
+// ISP 캐시
+const ispCache = {};
+
+// ISP 정보 조회 (ip-api.com 배치)
+async function fetchIspInfo(ips) {
+  const uncached = ips.filter(ip => !ispCache[ip]);
+  if (uncached.length === 0) return;
+
+  try {
+    // ip-api.com 배치 API (최대 100개)
+    const batch = uncached.slice(0, 100);
+    const res = await fetch('http://ip-api.com/batch?fields=query,isp,org,as', {
+      method: 'POST',
+      body: JSON.stringify(batch)
+    });
+    const data = await res.json();
+    data.forEach(info => {
+      if (info.query) {
+        ispCache[info.query] = info.isp || info.org || info.as || 'Unknown';
+      }
+    });
+  } catch (e) {
+    console.error('ISP lookup failed:', e);
+  }
+}
+
+async function renderBlacklist() {
+  const tbody = document.getElementById('blacklistTbody');
+  if (!tbody) return;
+
+  if (blacklistData.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#666;padding:40px">차단된 IP가 없습니다</td></tr>';
+    return;
+  }
+
+  // ISP 정보 먼저 조회
+  const ips = blacklistData.map(item => item.ip);
+  await fetchIspInfo(ips);
+
+  // 서버 ID -> 이름 매핑 함수
+  const getServerName = (id) => {
+    const server = serversData.find(s => s.id === id);
+    return server ? server.name : id;
+  };
+
+  tbody.innerHTML = blacklistData.map(item => {
+    const blockedAt = new Date(item.blocked_at).toLocaleString('ko-KR', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const cfStatus = item.cf_blocked ? '✓' : '✗';
+    const cfColor = item.cf_blocked ? '#00ff88' : '#ff6b6b';
+    const blockedServers = item.blocked_servers || [];
+    const serverCount = blockedServers.length;
+    // 서버 ID를 이름으로 변환하고 숫자순 정렬
+    const serverNames = blockedServers.map(getServerName).sort((a, b) => {
+      const numA = parseInt(a), numB = parseInt(b);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    });
+    const serverList = serverCount > 0 ? serverNames.join(', ') : '-';
+    const serverColor = serverCount > 0 ? '#00d4ff' : '#666';
+    const isp = ispCache[item.ip] || '';
+    return `
+      <tr>
+        <td style="font-family:monospace;font-weight:bold;color:#ff6b6b;word-break:break-all">
+          ${item.ip}
+          ${isp ? `<div style="font-size:10px;color:#888;font-weight:normal;margin-top:2px">${isp}</div>` : ''}
+        </td>
+        <td style="white-space:nowrap;font-size:12px">${blockedAt}</td>
+        <td style="word-break:break-word;font-size:12px;line-height:1.4">
+          ${item.reason || '-'}
+          <div style="margin-top:4px;font-size:11px;color:#666">CF: <span style="color:${cfColor}">${cfStatus}</span> · 서버(${serverCount}): <span style="color:${serverColor}">${serverList}</span></div>
+        </td>
+        <td style="text-align:center">${item.blocked_by || 'admin'}</td>
+        <td style="text-align:center"><button class="btn-small btn-danger" onclick="unblockIP('${item.ip}')">해제</button></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function updateBlacklistSummary() {
+  const summary = document.getElementById('blacklistSummary');
+  if (!summary) return;
+
+  const today = new Date().toDateString();
+  const todayCount = blacklistData.filter(item => new Date(item.blocked_at).toDateString() === today).length;
+  const serverCount = Object.keys(serversData).length || 0;
+
+  summary.innerHTML = `
+    ${card('총 차단', blacklistData.length.toLocaleString(), '개')}
+    ${card('오늘 차단', todayCount.toLocaleString(), '개')}
+    ${card('Cloudflare 계정', cfAccounts.length.toLocaleString(), '개')}
+    ${card('에이전트 서버', serverCount.toLocaleString(), '대')}
+  `;
+}
+
+async function blockIP(ip, reason) {
+  if (!ip) return;
+  try {
+    const res = await fetch('/api/blacklist/block', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ ip, reason: reason || '수동 차단' })
+    });
+    const data = await res.json();
+    if (data.success || data.status === 'ok') {
+      alert(`IP ${ip} 차단 완료`);
+      await loadBlacklist();
+      updateBlacklistSummary();
+    } else {
+      alert('차단 실패: ' + (data.message || 'Unknown error'));
+    }
+  } catch (e) {
+    alert('차단 오류: ' + e.message);
+  }
+}
+
+async function unblockIP(ip) {
+  if (!confirm(`${ip} 차단을 해제하시겠습니까?`)) return;
+  try {
+    const res = await fetch('/api/blacklist/unblock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ ip })
+    });
+    const data = await res.json();
+    if (data.success || data.status === 'ok') {
+      alert(`IP ${ip} 차단 해제 완료`);
+      await loadBlacklist();
+      updateBlacklistSummary();
+    } else {
+      alert('해제 실패: ' + (data.message || 'Unknown error'));
+    }
+  } catch (e) {
+    alert('해제 오류: ' + e.message);
+  }
+}
+
+function openBlockModal() {
+  const html = `
+    <div style="padding:15px">
+      <div class="form-group" style="margin-bottom:15px">
+        <label style="display:block;color:#888;font-size:12px;margin-bottom:8px">차단할 IP 주소</label>
+        <input type="text" id="blockIpInput" class="form-input" placeholder="예: 1.2.3.4" style="width:100%;padding:10px;background:#1a1a2e;border:1px solid #333;border-radius:4px;color:#fff" />
+      </div>
+      <div class="form-group" style="margin-bottom:15px">
+        <label style="display:block;color:#888;font-size:12px;margin-bottom:8px">차단 사유</label>
+        <input type="text" id="blockReasonInput" class="form-input" placeholder="차단 사유 입력" style="width:100%;padding:10px;background:#1a1a2e;border:1px solid #333;border-radius:4px;color:#fff" />
+      </div>
+      <button class="modal-btn primary" onclick="submitBlock()" style="width:100%;background:#dc2626;border-color:#dc2626">🚫 차단하기</button>
+    </div>
+  `;
+  document.getElementById('modalTitle').textContent = '🚫 IP 차단';
+  document.getElementById('modalContent').innerHTML = html;
+  // 모드탭 숨기기
+  document.querySelector('.mode-tabs').style.display = 'none';
+  document.querySelector('.modal-actions').style.display = 'none';
+  document.getElementById('settingsModal').classList.add('show');
+}
+
+async function submitBlock() {
+  const ip = document.getElementById('blockIpInput').value.trim();
+  const reason = document.getElementById('blockReasonInput').value.trim();
+  if (!ip) { alert('IP 주소를 입력하세요'); return; }
+  closeModal();
+  await blockIP(ip, reason);
+}
+
+function openCfSettingsModal() {
+  const accountsHtml = cfAccounts.map((acc, i) => `
+    <div class="cf-account-row" style="margin-bottom:12px;padding:12px;background:#1a1a2e;border:1px solid #333;border-radius:8px">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input type="text" class="form-input cf-name" value="${acc.name}" placeholder="계정명" style="width:80px;padding:8px;background:#0f0f23;border:1px solid #333;border-radius:4px;color:#fff;font-size:13px" />
+        <input type="email" class="form-input cf-email" value="${acc.email}" placeholder="이메일" style="flex:1;padding:8px;background:#0f0f23;border:1px solid #333;border-radius:4px;color:#fff;font-size:13px" />
+      </div>
+      <div style="display:flex;gap:8px">
+        <input type="text" class="form-input cf-key" value="" placeholder="API Key (변경시 입력)" style="flex:1;padding:8px;background:#0f0f23;border:1px solid #333;border-radius:4px;color:#fff;font-size:13px" />
+        <button onclick="this.closest('.cf-account-row').remove()" style="background:#dc2626;border:none;padding:8px 12px;border-radius:4px;color:#fff;cursor:pointer;font-size:12px">삭제</button>
+      </div>
+    </div>
+  `).join('');
+
+  const html = `
+    <div style="padding:10px">
+      <p style="color:#888;margin-bottom:15px;font-size:12px">Cloudflare 계정을 등록하면 IP 차단 시 자동으로 Cloudflare 방화벽에도 추가됩니다.</p>
+      <div id="cfAccountsList">${accountsHtml || '<p style="color:#666;text-align:center;padding:20px">등록된 계정이 없습니다</p>'}</div>
+      <button class="modal-btn secondary" onclick="addCfAccountRow()" style="width:100%;margin-top:10px">+ 계정 추가</button>
+      <button class="modal-btn primary" onclick="saveCfSettings()" style="width:100%;margin-top:10px">저장</button>
+    </div>
+  `;
+  document.getElementById('modalTitle').textContent = '⚙️ Cloudflare 설정';
+  document.getElementById('modalContent').innerHTML = html;
+  // 모드탭과 기본 액션버튼 숨기기
+  document.querySelector('.mode-tabs').style.display = 'none';
+  document.querySelector('.modal-actions').style.display = 'none';
+  document.getElementById('settingsModal').classList.add('show');
+}
+
+function addCfAccountRow() {
+  const list = document.getElementById('cfAccountsList');
+  if (list.querySelector('p')) list.innerHTML = '';
+  const row = document.createElement('div');
+  row.className = 'cf-account-row';
+  row.style = 'margin-bottom:12px;padding:12px;background:#1a1a2e;border:1px solid #333;border-radius:8px';
+  row.innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input type="text" class="form-input cf-name" placeholder="계정명" style="width:80px;padding:8px;background:#0f0f23;border:1px solid #333;border-radius:4px;color:#fff;font-size:13px" />
+      <input type="email" class="form-input cf-email" placeholder="이메일" style="flex:1;padding:8px;background:#0f0f23;border:1px solid #333;border-radius:4px;color:#fff;font-size:13px" />
+    </div>
+    <div style="display:flex;gap:8px">
+      <input type="text" class="form-input cf-key" placeholder="API Key" style="flex:1;padding:8px;background:#0f0f23;border:1px solid #333;border-radius:4px;color:#fff;font-size:13px" />
+      <button onclick="this.closest('.cf-account-row').remove()" style="background:#dc2626;border:none;padding:8px 12px;border-radius:4px;color:#fff;cursor:pointer;font-size:12px">삭제</button>
+    </div>
+  `;
+  list.appendChild(row);
+}
+
+async function saveCfSettings() {
+  const rows = document.querySelectorAll('.cf-account-row');
+  const accounts = [];
+  rows.forEach((row, i) => {
+    const name = row.querySelector('.cf-name').value.trim();
+    const email = row.querySelector('.cf-email').value.trim();
+    const key = row.querySelector('.cf-key').value.trim();
+    if (email) {
+      accounts.push({
+        name: name || `계정${i+1}`,
+        email,
+        api_key: key || (cfAccounts[i] ? cfAccounts[i].api_key : '')
+      });
+    }
+  });
+
+  try {
+    const res = await fetch('/api/settings/cloudflare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accounts })
+    });
+    const data = await res.json();
+    if (data.success || data.status === 'ok') {
+      alert('Cloudflare 설정 저장 완료');
+      closeModal();
+      await loadCfSettings();
+      updateBlacklistSummary();
+    } else {
+      alert('저장 실패: ' + (data.message || 'Unknown error'));
+    }
+  } catch (e) {
+    alert('저장 오류: ' + e.message);
+  }
 }
 
 async function initDashboard() {
@@ -2043,7 +4699,12 @@ async function initDashboard() {
       if (el('heroPeersSub')) el('heroPeersSub').textContent = `HTTP: ${formatBytes(d.total?.httpBytes || 0)}`;
       if (el('heroSwarms')) el('heroSwarms').textContent = formatNum(d.activeSwarms);
       if (el('heroSwarmsSub')) el('heroSwarmsSub').textContent = `P2P: ${formatBytes(d.total?.p2pBytes || 0)}`;
-      if (el('heroRatio')) el('heroRatio').textContent = (d.total?.p2pRatio || '0') + '%';
+      // P2P 비율은 실시간 속도 값으로 계산 (변동하는 값)
+      const rHttp = (d.player1?.rHttpBytes || 0) + (d.player2?.rHttpBytes || 0);
+      const rP2p = (d.player1?.rP2pBytes || 0) + (d.player2?.rP2pBytes || 0);
+      const rTotal = rHttp + rP2p;
+      const heroP2pRatio = rTotal > 0 ? ((rP2p / rTotal) * 100).toFixed(1) : '0';
+      if (el('heroRatio')) el('heroRatio').textContent = heroP2pRatio + '%';
       if (el('heroRatioSub')) el('heroRatioSub').textContent = `업로드: ${formatBytes(d.total?.p2pUpBytes || 0)}`;
 
       // 오늘 vs 어제 비교
@@ -2079,16 +4740,21 @@ async function initDashboard() {
       // 플레이어별 현황
       const p1 = d.player1 || {};
       const p2 = d.player2 || {};
-      if (el('p1Viewers')) el('p1Viewers').textContent = formatNum(p1.viewers);
+      if (el('p1Viewers')) el('p1Viewers').textContent = formatNum(p1.uniqueUsers);
       if (el('p1Http')) el('p1Http').textContent = formatBytes(p1.httpBytes || 0);
       if (el('p1P2p')) el('p1P2p').textContent = formatBytes(p1.p2pBytes || 0);
       if (el('p1P2pUp')) el('p1P2pUp').textContent = formatBytes(p1.p2pUpBytes || 0);
-      if (el('p1Ratio')) el('p1Ratio').textContent = p1.p2pRatio || '0';
-      if (el('p2Viewers')) el('p2Viewers').textContent = formatNum(p2.viewers);
+      // P2P 비율은 실시간 속도 값으로 계산
+      const p1RTotal = (p1.rHttpBytes || 0) + (p1.rP2pBytes || 0);
+      const p1Ratio = p1RTotal > 0 ? ((p1.rP2pBytes || 0) / p1RTotal * 100).toFixed(1) : '0';
+      if (el('p1Ratio')) el('p1Ratio').textContent = p1Ratio;
+      if (el('p2Viewers')) el('p2Viewers').textContent = formatNum(p2.uniqueUsers);
       if (el('p2Http')) el('p2Http').textContent = formatBytes(p2.httpBytes || 0);
       if (el('p2P2p')) el('p2P2p').textContent = formatBytes(p2.p2pBytes || 0);
       if (el('p2P2pUp')) el('p2P2pUp').textContent = formatBytes(p2.p2pUpBytes || 0);
-      if (el('p2Ratio')) el('p2Ratio').textContent = p2.p2pRatio || '0';
+      const p2RTotal = (p2.rHttpBytes || 0) + (p2.rP2pBytes || 0);
+      const p2Ratio = p2RTotal > 0 ? ((p2.rP2pBytes || 0) / p2RTotal * 100).toFixed(1) : '0';
+      if (el('p2Ratio')) el('p2Ratio').textContent = p2Ratio;
 
       // 디바이스 분포
       const devices = d.devices || {};
@@ -2112,12 +4778,12 @@ async function initDashboard() {
       if (el('speedP2p')) el('speedP2p').textContent = speedData.p2pGbps;
       if (el('speedP2pUp')) el('speedP2pUp').textContent = speedData.p2pUpGbps;
 
-      // 서버별 접속자 (상위 9개)
-      const servers = (d.servers || []).slice(0, 9);
+      // 서버별 접속자 (접속자 많은 순, 상위 9개)
+      const servers = (d.servers || []).sort((a, b) => (b.uniqueUsers || 0) - (a.uniqueUsers || 0)).slice(0, 9);
       if (el('dashServers')) el('dashServers').innerHTML = servers.map(s => `
         <div class="dash-server">
-          <span class="dash-server-name">${s.name}</span>
-          <span class="dash-server-count">${formatNum(s.viewers)}</span>
+          <span class="dash-server-name">${s.name.replace(/^every/, '')}</span>
+          <span class="dash-server-count">${formatNum(s.uniqueUsers)}</span>
         </div>
       `).join('') || '<div style="color:#666;text-align:center;padding:20px">서버 데이터 없음</div>';
 
@@ -2125,19 +4791,19 @@ async function initDashboard() {
       const now = getServerTime();
       const kst = new Date(now.getTime() + serverTimeOffset * 60 * 1000);
       const t = String(kst.getUTCHours()).padStart(2,'0') + ':' + String(kst.getUTCMinutes()).padStart(2,'0') + ':' + String(kst.getUTCSeconds()).padStart(2,'0');
-      history.labels.push(t);
-      history.viewers.push(d.total?.viewers || 0);
-      history.uniqueUsers.push(d.total?.uniqueUsers || 0);
-      history.http.push((d.total?.httpBytes || 0) / 1024 / 1024 / 1024 / 1024);
-      history.p2p.push((d.total?.p2pBytes || 0) / 1024 / 1024 / 1024 / 1024);
-      if (history.labels.length > 30) { history.labels.shift(); history.viewers.shift(); history.uniqueUsers.shift(); history.http.shift(); history.p2p.shift(); }
-      console.log('[Dashboard] Chart data:', history.labels.length, 'points, chart exists:', !!chart);
+      chartHistory.labels.push(t);
+      chartHistory.viewers.push(d.total?.viewers || 0);
+      chartHistory.uniqueUsers.push(d.total?.uniqueUsers || 0);
+      chartHistory.http.push((d.total?.httpBytes || 0) / 1024 / 1024 / 1024 / 1024);
+      chartHistory.p2p.push((d.total?.p2pBytes || 0) / 1024 / 1024 / 1024 / 1024);
+      if (chartHistory.labels.length > 30) { chartHistory.labels.shift(); chartHistory.viewers.shift(); chartHistory.uniqueUsers.shift(); chartHistory.http.shift(); chartHistory.p2p.shift(); }
+      console.log('[Dashboard] Chart data:', chartHistory.labels.length, 'points, chart exists:', !!chart);
       if (chart) {
         // 데이터 직접 할당 후 업데이트
-        chart.data.labels = history.labels;
-        chart.data.datasets[0].data = history.uniqueUsers;
-        chart.data.datasets[1].data = history.http;
-        chart.data.datasets[2].data = history.p2p;
+        chart.data.labels = chartHistory.labels;
+        chart.data.datasets[0].data = chartHistory.uniqueUsers;
+        chart.data.datasets[1].data = chartHistory.http;
+        chart.data.datasets[2].data = chartHistory.p2p;
         chart.update('none');
       } else {
         console.error('[Dashboard] chart is null!');
@@ -2171,7 +4837,7 @@ async function initDashboard() {
 
   // 기존 차트 정리 & history 초기화 (페이지 재진입 시)
   if (chart) { try { chart.destroy(); } catch(e){} chart = null; }
-  history.labels = []; history.viewers = []; history.uniqueUsers = []; history.http = []; history.p2p = [];
+  chartHistory.labels = []; chartHistory.viewers = []; chartHistory.uniqueUsers = []; chartHistory.http = []; chartHistory.p2p = [];
 
   // Chart 생성 (Chart.js 로드 대기)
   function createChart() {
@@ -2186,10 +4852,10 @@ async function initDashboard() {
       if (chart) { chart.destroy(); chart = null; }
       chart = new Chart(canvas, {
         type: 'line',
-        data: { labels: history.labels, datasets: [
-          { label: '고유 유저', data: history.uniqueUsers, borderColor: '#00d4ff', tension: 0.3, yAxisID: 'y1' },
-          { label: 'HTTP (TB)', data: history.http, borderColor: '#ff6b6b', tension: 0.3, yAxisID: 'y' },
-          { label: 'P2P (TB)', data: history.p2p, borderColor: '#00ff88', tension: 0.3, yAxisID: 'y' }
+        data: { labels: chartHistory.labels, datasets: [
+          { label: '고유 유저', data: chartHistory.uniqueUsers, borderColor: '#00d4ff', tension: 0.3, yAxisID: 'y1' },
+          { label: 'HTTP (TB)', data: chartHistory.http, borderColor: '#ff6b6b', tension: 0.3, yAxisID: 'y' },
+          { label: 'P2P (TB)', data: chartHistory.p2p, borderColor: '#00ff88', tension: 0.3, yAxisID: 'y' }
         ]},
         options: {
           responsive: true,
@@ -2237,11 +4903,11 @@ function initTraffic() {
     // 요약 카드 - 실시간이면 현재 상태, 아니면 기간 총합
     if (isRealtime && realtimeData) {
       const rt = realtimeData;
-      const httpBytes = (rt.player1?.httpBytes || 0) + (rt.player2?.httpBytes || 0);
-      const p2pBytes = (rt.player1?.p2pBytes || 0) + (rt.player2?.p2pBytes || 0);
-      const p2pUpBytes = (rt.player1?.p2pUpBytes || 0) + (rt.player2?.p2pUpBytes || 0);
-      const totalTraffic = httpBytes + p2pBytes;
-      const p2pRatio = totalTraffic > 0 ? ((p2pBytes / totalTraffic) * 100).toFixed(1) : '0';
+      // P2P 비율은 실시간 속도 값으로 계산 (변동하는 값)
+      const rHttp = (rt.player1?.rHttpBytes || 0) + (rt.player2?.rHttpBytes || 0);
+      const rP2p = (rt.player1?.rP2pBytes || 0) + (rt.player2?.rP2pBytes || 0);
+      const rTotal = rHttp + rP2p;
+      const p2pRatio = rTotal > 0 ? ((rP2p / rTotal) * 100).toFixed(1) : '0';
       const httpGbps = totals.httpGbps || '0';
       const p2pGbps = totals.p2pGbps || '0';
       const p2pUpGbps = totals.p2pUpGbps || '0';
@@ -2294,6 +4960,10 @@ function initTraffic() {
     const httpData = timeline.map(t => (t.httpBytes || 0) / 1024 / 1024 / 1024 / 1024); // TB
     const p2pData = timeline.map(t => (t.p2pBytes || 0) / 1024 / 1024 / 1024 / 1024);
     const viewersData = timeline.map(t => t.viewers || 0);
+    const p2pRatioData = timeline.map(t => {
+      const total = (t.httpBytes || 0) + (t.p2pBytes || 0);
+      return total > 0 ? ((t.p2pBytes || 0) / total * 100) : 0;
+    });
 
     if (!trafficLineChart) {
       trafficLineChart = new Chart(document.getElementById('trafficChart'), {
@@ -2303,6 +4973,7 @@ function initTraffic() {
           datasets: [
             { label: 'HTTP (TB)', data: httpData, borderColor: '#ff6b6b', backgroundColor: 'rgba(255,107,107,.1)', fill: true, tension: 0.4, yAxisID: 'y' },
             { label: 'P2P (TB)', data: p2pData, borderColor: '#00ff88', backgroundColor: 'rgba(0,255,136,.1)', fill: true, tension: 0.4, yAxisID: 'y' },
+            { label: 'P2P 비율 (%)', data: p2pRatioData, borderColor: '#ffd93d', borderWidth: 2, borderDash: [3,3], fill: false, tension: 0.4, yAxisID: 'y2', pointRadius: 0 },
             { label: '시청자', data: viewersData, borderColor: '#00d4ff', borderDash: [5,5], fill: false, tension: 0.4, yAxisID: 'y1' }
           ]
         },
@@ -2313,7 +4984,8 @@ function initTraffic() {
           scales: {
             x: { ticks: { color: '#888', maxRotation: 0 }, grid: { color: '#333' } },
             y: { type: 'linear', position: 'left', ticks: { color: '#888' }, grid: { color: '#333' }, title: { display: true, text: 'TB', color: '#888' } },
-            y1: { type: 'linear', position: 'right', ticks: { color: '#00d4ff' }, grid: { drawOnChartArea: false }, title: { display: true, text: '시청자', color: '#00d4ff' } }
+            y1: { type: 'linear', position: 'right', ticks: { color: '#00d4ff' }, grid: { drawOnChartArea: false }, title: { display: true, text: '시청자', color: '#00d4ff' } },
+            y2: { type: 'linear', position: 'right', min: 0, max: 100, ticks: { color: '#ffd93d', callback: v => v + '%' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'P2P%', color: '#ffd93d' } }
           }
         }
       });
@@ -2321,7 +4993,8 @@ function initTraffic() {
       trafficLineChart.data.labels = labels;
       trafficLineChart.data.datasets[0].data = httpData;
       trafficLineChart.data.datasets[1].data = p2pData;
-      trafficLineChart.data.datasets[2].data = viewersData;
+      trafficLineChart.data.datasets[2].data = p2pRatioData;
+      trafficLineChart.data.datasets[3].data = viewersData;
       trafficLineChart.update('none');
     }
 
@@ -2387,8 +5060,16 @@ function initTraffic() {
       serverBarChart.update('none');
     }
 
-    // 서버별 테이블 - 접속자순 정렬
-    const sortedServers = [...servers].sort((a, b) => (b.viewers || b.visitors || 0) - (a.viewers || a.visitors || 0));
+    // 서버별 테이블 - 실시간이면 realtimeData.servers에서 uniqueUsers 가져옴
+    const rtServerMap = {};
+    if (isRealtime && realtimeData && realtimeData.servers) {
+      realtimeData.servers.forEach(s => { rtServerMap[s.name] = s.uniqueUsers || 0; });
+    }
+    const mergedServers = servers.map(s => ({
+      ...s,
+      uniqueUsers: rtServerMap[s.server] || rtServerMap['every' + s.server] || s.visitors || s.uniqueUsers || 0
+    }));
+    const sortedServers = [...mergedServers].sort((a, b) => (b.uniqueUsers || 0) - (a.uniqueUsers || 0));
     let totalHttp = 0, totalP2p = 0, totalP2pUp = 0, totalViewers = 0;
     let totalHttpGbps = 0, totalP2pGbps = 0, totalP2pUpGbps = 0;
     const rows = sortedServers.map(s => {
@@ -2400,14 +5081,16 @@ function initTraffic() {
       const hasTraffic = total > 0;
       const p2pRatio = hasTraffic ? (p2p / total * 100).toFixed(1) : 0;
       const color = isPlayer ? '#ffa500' : '#8a2be2';
-      const viewers = s.viewers || s.visitors || 0;
+      const viewers = s.uniqueUsers || 0;
       totalHttp += http; totalP2p += p2p; totalP2pUp += p2pUp; totalViewers += viewers;
       totalHttpGbps += httpGbps; totalP2pGbps += p2pGbps; totalP2pUpGbps += p2pUpGbps;
-      return `<tr><td><b style="color:${color}">${displayName}</b></td><td style="color:#ff6b6b">${hasTraffic ? formatBytes(http) : '-'}</td><td style="color:#00ff88">${hasTraffic ? formatBytes(p2p) : '-'}</td><td style="color:#88ff00">${p2pUp > 0 ? formatBytes(p2pUp) : '-'}</td><td style="color:#ff6b6b">${httpGbps.toFixed(2)} GB/s</td><td style="color:#00ff88">${p2pGbps.toFixed(2)} GB/s</td><td style="color:#88ff00">${p2pUpGbps.toFixed(2)} GB/s</td><td style="color:#00ff88;font-weight:bold">${hasTraffic ? p2pRatio + '%' : '-'}</td><td style="color:#00d4ff">${viewers.toLocaleString()}</td></tr>`;
+      const totalGbps = httpGbps + p2pGbps;
+      return `<tr><td><b style="color:${color}">${displayName}</b></td><td style="color:#ff6b6b">${hasTraffic ? formatBytes(http) : '-'}</td><td style="color:#00ff88">${hasTraffic ? formatBytes(p2p) : '-'}</td><td style="color:#88ff00">${p2pUp > 0 ? formatBytes(p2pUp) : '-'}</td><td style="color:#00ff88;font-weight:bold">${hasTraffic ? p2pRatio + '%' : '-'}</td><td style="color:#00d4ff">${viewers.toLocaleString()}</td><td style="color:#ff6b6b">${httpGbps.toFixed(2)}</td><td style="color:#00ff88">${p2pGbps.toFixed(2)}</td><td style="color:#88ff00">${p2pUpGbps.toFixed(2)}</td><td style="color:#00d4ff;font-weight:bold">${totalGbps.toFixed(2)}</td></tr>`;
     }).join('');
     const totalP2pRatio = (totalHttp + totalP2p) > 0 ? (totalP2p / (totalHttp + totalP2p) * 100).toFixed(1) : 0;
-    const totalRow = servers.length > 0 ? `<tr style="background:rgba(0,212,255,0.1);font-weight:bold;border-top:2px solid rgba(255,255,255,0.3)"><td>합계</td><td style="color:#ff6b6b">${formatBytes(totalHttp)}</td><td style="color:#00ff88">${formatBytes(totalP2p)}</td><td style="color:#88ff00">${formatBytes(totalP2pUp)}</td><td style="color:#ff6b6b">${totalHttpGbps.toFixed(2)} GB/s</td><td style="color:#00ff88">${totalP2pGbps.toFixed(2)} GB/s</td><td style="color:#88ff00">${totalP2pUpGbps.toFixed(2)} GB/s</td><td style="color:#00ff88">${totalP2pRatio}%</td><td style="color:#00d4ff">${totalViewers.toLocaleString()}</td></tr>` : '';
-    document.querySelector('#serverTable tbody').innerHTML = (rows + totalRow) || '<tr><td colspan="9" style="text-align:center">데이터 없음</td></tr>';
+    const totalDownGbps = totalHttpGbps + totalP2pGbps;
+    const totalRow = servers.length > 0 ? `<tr style="background:rgba(0,212,255,0.1);font-weight:bold;border-top:2px solid rgba(255,255,255,0.3)"><td>합계</td><td style="color:#ff6b6b">${formatBytes(totalHttp)}</td><td style="color:#00ff88">${formatBytes(totalP2p)}</td><td style="color:#88ff00">${formatBytes(totalP2pUp)}</td><td style="color:#00ff88">${totalP2pRatio}%</td><td style="color:#00d4ff">${totalViewers.toLocaleString()}</td><td style="color:#ff6b6b">${totalHttpGbps.toFixed(2)}</td><td style="color:#00ff88">${totalP2pGbps.toFixed(2)}</td><td style="color:#88ff00">${totalP2pUpGbps.toFixed(2)}</td><td style="color:#00d4ff">${totalDownGbps.toFixed(2)}</td></tr>` : '';
+    document.querySelector('#serverTable tbody').innerHTML = (rows + totalRow) || '<tr><td colspan="10" style="text-align:center">데이터 없음</td></tr>';
   }
 
   async function load() {
@@ -3341,6 +6024,13 @@ function initSummary() {
         tab.style.borderBottomColor = '#00d4ff';
         st.cardTab = tab.dataset.tab;
         renderCards(st.allData);
+        // "오늘" 탭 클릭 시 시간별 드릴다운
+        if (tab.dataset.tab === 'today') {
+          const { month, day } = getServerYearMonth();
+          st.drillMonth = month;
+          st.drillDay = day;
+          render();
+        }
       };
     });
   }
@@ -3906,7 +6596,7 @@ function initAnalysis() {
     document.getElementById('analysisCards').style.gridTemplateColumns = 'repeat(5,1fr)';
     const thead = document.getElementById('analysisTableHead');
     if (period === 'realtime') {
-      thead.innerHTML = '<tr><th style="text-align:left;width:3%">#</th><th style="text-align:left;width:12%">IP</th><th style="text-align:right;width:5%">세션</th><th style="text-align:center;width:4%">서버</th><th style="text-align:left;width:22%">제목</th><th style="text-align:right;width:10%">HTTP</th><th style="text-align:right;width:10%">P2P Down</th><th style="text-align:right;width:10%">P2P Up</th><th style="text-align:right;width:14%">합계</th></tr>';
+      thead.innerHTML = '<tr><th style="text-align:left;width:3%">#</th><th style="text-align:left;width:11%">IP</th><th style="text-align:right;width:4%">세션</th><th style="text-align:center;width:4%">서버</th><th style="text-align:left;width:18%">제목</th><th style="text-align:right;width:6%">활성</th><th style="text-align:right;width:10%">HTTP</th><th style="text-align:right;width:10%">P2P Down</th><th style="text-align:right;width:10%">P2P Up</th><th style="text-align:right;width:14%">합계</th></tr>';
     } else {
       thead.innerHTML = '<tr><th style="text-align:left;width:4%">#</th><th style="text-align:left;width:14%">IP</th><th style="text-align:right;width:7%">세션</th><th style="text-align:center;width:6%">서버</th><th style="text-align:right;width:12%">HTTP</th><th style="text-align:right;width:12%">P2P Down</th><th style="text-align:right;width:12%">P2P Up</th><th style="text-align:right;width:16%">합계</th></tr>';
     }
@@ -3922,15 +6612,23 @@ function initAnalysis() {
     document.getElementById('analysisTotalP2pUp').textContent = formatBytes(totals.totalP2pUp || 0);
     document.getElementById('analysisCount').textContent = `상위 ${ips.length}개`;
     const tbody = document.querySelector('#analysisTable tbody');
-    if (ips.length === 0) { tbody.innerHTML = `<tr><td colspan="${period === 'realtime' ? 9 : 8}" style="text-align:center;color:#888">데이터 없음</td></tr>`; return; }
+    if (ips.length === 0) { tbody.innerHTML = `<tr><td colspan="${period === 'realtime' ? 10 : 8}" style="text-align:center;color:#888">데이터 없음</td></tr>`; return; }
     const totalTraffic = (totals.totalHttp || 0) + (totals.totalP2p || 0);
+    // 마지막 활성시간 포맷 (초 -> "Ns", "Nm", "Nh")
+    const formatActive = (secs) => {
+      if (secs < 60) return secs + '초';
+      if (secs < 3600) return Math.floor(secs / 60) + '분';
+      return Math.floor(secs / 3600) + '시간';
+    };
     tbody.innerHTML = ips.map((ip, i) => {
       const serverNum = ip.server ? (ip.server.match(/every(\d+)/) || [])[1] || '-' : '-';
       const pct = totalTraffic > 0 ? ((ip.totalBytes / totalTraffic) * 100).toFixed(2) : 0;
       const filename = ip.filename || '-';
       const shortFilename = filename.length > 30 ? filename.slice(0, 30) + '...' : filename;
+      const lastActive = ip.lastActiveSecs !== undefined ? formatActive(ip.lastActiveSecs) : '-';
+      const activeColor = (ip.lastActiveSecs || 0) < 10 ? '#00ff88' : (ip.lastActiveSecs || 0) < 60 ? '#ffd93d' : '#ff6b6b';
       if (period === 'realtime') {
-        return `<tr><td style="color:#666">${i + 1}</td><td class="copy-ip" data-ip="${ip.ip}" style="font-family:monospace;font-size:11px;cursor:pointer" title="클릭하여 복사">${ip.ip}</td><td style="text-align:right;color:#fd9644">${ip.sessions}</td><td style="text-align:center;color:#00d4ff" title="${ip.server||''}">${serverNum}</td><td style="color:#aaa;font-size:11px" title="${filename}">${shortFilename}</td><td style="text-align:right;color:#ff6b6b">${formatBytes(ip.httpBytes)}</td><td style="text-align:right;color:#00ff88">${formatBytes(ip.p2pBytes)}</td><td style="text-align:right;color:#26de81">${formatBytes(ip.p2pUpBytes)}</td><td style="text-align:right;color:#fff;font-weight:bold">${formatBytes(ip.totalBytes)} <span style="color:#666;font-size:10px">(${pct}%)</span></td></tr>`;
+        return `<tr><td style="color:#666">${i + 1}</td><td class="copy-ip" data-ip="${ip.ip}" style="font-family:monospace;font-size:11px;cursor:pointer" title="클릭하여 복사">${ip.ip}</td><td style="text-align:right;color:#fd9644">${ip.sessions}</td><td style="text-align:center;color:#00d4ff" title="${ip.server||''}">${serverNum}</td><td style="color:#aaa;font-size:11px" title="${filename}">${shortFilename}</td><td style="text-align:right;color:${activeColor};font-size:11px">${lastActive}</td><td style="text-align:right;color:#ff6b6b">${formatBytes(ip.httpBytes)}</td><td style="text-align:right;color:#00ff88">${formatBytes(ip.p2pBytes)}</td><td style="text-align:right;color:#26de81">${formatBytes(ip.p2pUpBytes)}</td><td style="text-align:right;color:#fff;font-weight:bold">${formatBytes(ip.totalBytes)} <span style="color:#666;font-size:10px">(${pct}%)</span></td></tr>`;
       } else {
         return `<tr><td style="color:#666">${i + 1}</td><td class="copy-ip" data-ip="${ip.ip}" style="font-family:monospace;font-size:11px;cursor:pointer" title="클릭하여 복사">${ip.ip}</td><td style="text-align:right;color:#fd9644">${ip.sessions}</td><td style="text-align:center;color:#00d4ff" title="${ip.server||''}">${serverNum}</td><td style="text-align:right;color:#ff6b6b">${formatBytes(ip.httpBytes)}</td><td style="text-align:right;color:#00ff88">${formatBytes(ip.p2pBytes)}</td><td style="text-align:right;color:#26de81">${formatBytes(ip.p2pUpBytes)}</td><td style="text-align:right;color:#fff;font-weight:bold">${formatBytes(ip.totalBytes)} <span style="color:#666;font-size:10px">(${pct}%)</span></td></tr>`;
       }
@@ -4025,8 +6723,8 @@ async function loadHistory() {
     });
     const viewers = rows.map(r => r[1] || 0);
     const uniqueUsers = rows.map(r => r[2] || 0);
-    const httpTB = rows.map(r => (r[3] || 0) / 1024 / 1024 / 1024 / 1024);
-    const p2pTB = rows.map(r => (r[4] || 0) / 1024 / 1024 / 1024 / 1024);
+    const httpGB = rows.map(r => (r[3] || 0) / 1024 / 1024 / 1024);
+    const p2pGB = rows.map(r => (r[4] || 0) / 1024 / 1024 / 1024);
 
     // Destroy old charts
     if (historyChart) historyChart.destroy();
@@ -4058,8 +6756,8 @@ async function loadHistory() {
       data: {
         labels,
         datasets: [
-          { label: 'HTTP', data: httpTB, borderColor: '#ff6b6b', tension: 0.3, fill: false },
-          { label: 'P2P Down', data: p2pTB, borderColor: '#00ff88', tension: 0.3, fill: false }
+          { label: 'HTTP (GB)', data: httpGB, borderColor: '#ff6b6b', tension: 0.3, fill: false },
+          { label: 'P2P (GB)', data: p2pGB, borderColor: '#00ff88', tension: 0.3, fill: false }
         ]
       },
       options: {
@@ -4631,23 +7329,33 @@ async function showSwarmDetail(infoHash) {
 document.querySelectorAll('.menu-item a').forEach(a => {
   a.onclick = e => {
     e.preventDefault();
+    if (!isAuthenticated) return;
     const href = a.getAttribute('href');
-    const page = href.slice(1);
-    console.log('[menu click] href:', href, 'page:', page);
-    window.location.hash = page;
+    const pg = href.slice(1);
+    console.log('[menu click] href:', href, 'page:', pg);
+    window.location.hash = pg;
   };
 });
 window.onhashchange = () => {
+  if (!isAuthenticated) return;
   const newPage = location.hash.slice(1) || 'dashboard';
   console.log('[hashchange] Hash changed to:', location.hash, '-> page:', newPage);
   nav(newPage);
 };
-nav(location.hash.slice(1) || 'dashboard');
 
 // Close modal when clicking outside
 document.getElementById('settingsModal').onclick = (e) => {
   if (e.target.id === 'settingsModal') closeModal();
 };
+
+// 초기화 함수 - 인증 후 호출됨
+function init() {
+  syncServerTime().then(() => updateServerTimeClock());
+  setInterval(syncServerTime, 60000);
+  setInterval(updateServerTimeClock, 1000);
+  nav(location.hash.slice(1) || 'dashboard');
+}
 </script>
+<!-- VERSION: 2026-01-22-v6 -->
 </body>
 </html>
