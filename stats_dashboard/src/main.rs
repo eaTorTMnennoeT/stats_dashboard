@@ -25,7 +25,7 @@ use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 
 const SIMPLE_WS_URL: &str = "http://127.0.0.1:8444";
-const QUESTDB_URL: &str = "http://127.0.0.1:9002";
+const CLICKHOUSE_URL: &str = "http://127.0.0.1:8123";
 const DRAGONFLY_URL: &str = "redis://127.0.0.1:6379";
 
 // 캐시 엔트리
@@ -134,16 +134,16 @@ async fn verify_credentials(username: &str, password: &str) -> bool {
     let client = reqwest::Client::new();
     let password_hash = hash_password(password);
     let query = format!(
-        "SELECT password_hash FROM dashboard_users WHERE username = '{}' LIMIT 1",
+        "SELECT password_hash FROM dashboard_users WHERE username = '{}' LIMIT 1 FORMAT JSON",
         username.replace("'", "''")
     );
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&query));
 
     if let Ok(res) = client.get(&url).send().await {
         if let Ok(data) = res.json::<serde_json::Value>().await {
-            if let Some(rows) = data.get("dataset").and_then(|d| d.as_array()) {
+            if let Some(rows) = data.get("data").and_then(|d| d.as_array()) {
                 if let Some(row) = rows.first() {
-                    if let Some(stored_hash) = row.get(0).and_then(|v| v.as_str()) {
+                    if let Some(stored_hash) = row.get("password_hash").and_then(|v| v.as_str()) {
                         return stored_hash == password_hash;
                     }
                 }
@@ -156,16 +156,16 @@ async fn verify_credentials(username: &str, password: &str) -> bool {
 // 사용자 테이블 초기화
 async fn ensure_users_table(client: &Client) {
     let create_query = "CREATE TABLE IF NOT EXISTS dashboard_users (username STRING, password_hash STRING, created_at TIMESTAMP) timestamp(created_at)";
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(create_query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(create_query));
     let _ = client.get(&url).send().await;
 
     // admin 계정 확인
     let check_query = "SELECT count() FROM dashboard_users WHERE username = 'admin'";
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(check_query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(check_query));
 
     if let Ok(res) = client.get(&url).send().await {
         if let Ok(data) = res.json::<serde_json::Value>().await {
-            if let Some(count) = data.get("dataset").and_then(|d| d.as_array()).and_then(|a| a.first()).and_then(|r| r.get(0)).and_then(|v| v.as_i64()) {
+            if let Some(count) = data.get("data").and_then(|d| d.as_array()).and_then(|a| a.first()).and_then(|r| r.get(0)).and_then(|v| v.as_i64()) {
                 if count == 0 {
                     let pw_hash = hash_password("tlqkf123@");
                     let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ");
@@ -173,7 +173,7 @@ async fn ensure_users_table(client: &Client) {
                         "INSERT INTO dashboard_users VALUES('admin', '{}', '{}')",
                         pw_hash, now
                     );
-                    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&insert));
+                    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&insert));
                     let _ = client.get(&url).send().await;
                 }
             }
@@ -184,23 +184,23 @@ async fn ensure_users_table(client: &Client) {
 // 서버 이벤트 테이블 초기화
 async fn ensure_server_events_table(client: &Client) {
     let create_query = "CREATE TABLE IF NOT EXISTS server_events (timestamp TIMESTAMP, server STRING, message STRING) timestamp(timestamp)";
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(create_query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(create_query));
     let _ = client.get(&url).send().await;
 }
 
 // 에이전트 설정 테이블 초기화
 async fn ensure_agent_settings_table(client: &Client) {
     let create_query = "CREATE TABLE IF NOT EXISTS agent_settings (key STRING, value STRING, updated_at TIMESTAMP) timestamp(updated_at)";
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(create_query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(create_query));
     let _ = client.get(&url).send().await;
 
     // 기본 시크릿 생성
     let check_query = "SELECT count() FROM agent_settings WHERE key = 'secret'";
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(check_query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(check_query));
 
     if let Ok(res) = client.get(&url).send().await {
         if let Ok(data) = res.json::<serde_json::Value>().await {
-            if let Some(count) = data.get("dataset").and_then(|d| d.as_array()).and_then(|a| a.first()).and_then(|r| r.get(0)).and_then(|v| v.as_i64()) {
+            if let Some(count) = data.get("data").and_then(|d| d.as_array()).and_then(|a| a.first()).and_then(|r| r.get(0)).and_then(|v| v.as_i64()) {
                 if count == 0 {
                     let secret = format!("{:x}", rand::random::<u128>());
                     let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ");
@@ -208,7 +208,7 @@ async fn ensure_agent_settings_table(client: &Client) {
                         "INSERT INTO agent_settings VALUES('secret', '{}', '{}')",
                         secret, now
                     );
-                    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&insert));
+                    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&insert));
                     let _ = client.get(&url).send().await;
                 }
             }
@@ -219,11 +219,11 @@ async fn ensure_agent_settings_table(client: &Client) {
 // 에이전트 시크릿 로드
 async fn load_agent_secret(client: &Client) {
     let query = "SELECT value FROM agent_settings WHERE key = 'secret' LIMIT 1";
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(query));
 
     if let Ok(res) = client.get(&url).send().await {
         if let Ok(data) = res.json::<serde_json::Value>().await {
-            if let Some(secret) = data.get("dataset").and_then(|d| d.as_array()).and_then(|a| a.first()).and_then(|r| r.get(0)).and_then(|v| v.as_str()) {
+            if let Some(secret) = data.get("data").and_then(|d| d.as_array()).and_then(|a| a.first()).and_then(|r| r.get(0)).and_then(|v| v.as_str()) {
                 let mut s = AGENT_SECRET.write();
                 *s = secret.to_string();
             }
@@ -255,7 +255,7 @@ async fn ensure_servers_table(client: &Client) {
     let create_query = "CREATE TABLE IF NOT EXISTS dashboard_servers (\
         server_id STRING, name STRING, ip STRING, url STRING, version STRING, \
         updated_at TIMESTAMP) timestamp(updated_at) PARTITION BY MONTH";
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(create_query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(create_query));
     let _ = client.get(&url).send().await;
 }
 
@@ -263,21 +263,21 @@ async fn ensure_servers_table(client: &Client) {
 async fn ensure_sessions_table(client: &Client) {
     let create_query = "CREATE TABLE IF NOT EXISTS dashboard_sessions (\
         session_id STRING, username STRING, created_at TIMESTAMP) timestamp(created_at) PARTITION BY MONTH";
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(create_query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(create_query));
     let _ = client.get(&url).send().await;
 }
 
 // 세션 로드 (DB에서) - 최근 7일 세션만
 async fn load_sessions_from_db(client: &Client) {
     let query = "SELECT session_id, username FROM dashboard_sessions \
-        WHERE created_at > dateadd('d', -7, now())";
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(query));
+        WHERE created_at > now() - INTERVAL 7 DAY";
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(query));
 
     match client.get(&url).send().await {
         Ok(res) => {
             match res.json::<serde_json::Value>().await {
                 Ok(data) => {
-                    if let Some(rows) = data.get("dataset").and_then(|d| d.as_array()) {
+                    if let Some(rows) = data.get("data").and_then(|d| d.as_array()) {
                         let mut sessions = SESSIONS.write();
                         for row in rows {
                             let session_id = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -311,7 +311,7 @@ fn save_session_to_db(session_id: &str, username: &str) {
             username.replace("'", "''"),
             now
         );
-        let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&query));
+        let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&query));
         let _ = client.get(&url).send().await;
     });
 }
@@ -319,11 +319,11 @@ fn save_session_to_db(session_id: &str, username: &str) {
 // 서버 목록 로드 (DB에서)
 async fn load_servers_from_db(client: &Client) {
     let query = "SELECT server_id, name, ip, url, version FROM dashboard_servers LATEST BY server_id";
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(query));
 
     if let Ok(res) = client.get(&url).send().await {
         if let Ok(data) = res.json::<serde_json::Value>().await {
-            if let Some(rows) = data.get("dataset").and_then(|d| d.as_array()) {
+            if let Some(rows) = data.get("data").and_then(|d| d.as_array()) {
                 let mut server_map = EXTERNAL_SERVERS.write();
                 for row in rows {
                     let server_id = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -370,7 +370,7 @@ fn save_server_to_db(server: &ExternalServer) {
             version.replace("'", "''"),
             now
         );
-        let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&query));
+        let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&query));
         let _ = client.get(&url).send().await;
     });
 }
@@ -408,7 +408,7 @@ fn add_server_event(server: &str, message: &str) {
             "INSERT INTO server_events VALUES({}000, '{}', '{}')",
             timestamp, srv, msg
         );
-        let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&query));
+        let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&query));
         let _ = reqwest::Client::new().get(&url).send().await;
     });
 }
@@ -507,22 +507,22 @@ async fn main() {
             let daily_agg_query = r#"
                 INSERT INTO nginx_daily_agg
                 SELECT
-                    timestamp_floor('d', timestamp) as day,
+                    toStartOfDay(timestamp) as day,
                     client_ip,
                     count() as total_requests,
                     sum(bytes_sent) as total_bytes,
-                    count_distinct(path) as unique_paths,
-                    count_distinct(server_id) as server_count,
+                    uniqExact(path) as unique_paths,
+                    uniqExact(server_id) as server_count,
                     0 as max_burst,
                     min(timestamp) as first_seen,
                     max(timestamp) as last_seen
                 FROM nginx_logs
-                WHERE timestamp >= dateadd('d', -2, timestamp_floor('d', now()))
-                  AND timestamp < timestamp_floor('d', now())
+                WHERE timestamp >= toStartOfDay(now()) - INTERVAL 2 DAY
+                  AND timestamp < toStartOfDay(now())
                 GROUP BY day, client_ip
             "#;
 
-            if let Ok(resp) = agg_client.get("http://localhost:9002/exec")
+            if let Ok(resp) = agg_client.get("http://localhost:8123")
                 .query(&[("query", daily_agg_query)])
                 .timeout(Duration::from_secs(300))
                 .send()
@@ -535,7 +535,7 @@ async fn main() {
 
             // 2. 2일 이상 된 파티션 삭제 (집계 완료된 데이터)
             let partitions_query = "SELECT name FROM table_partitions('nginx_logs')";
-            if let Ok(resp) = agg_client.get("http://localhost:9002/exec")
+            if let Ok(resp) = agg_client.get("http://localhost:8123")
                 .query(&[("query", partitions_query)])
                 .timeout(Duration::from_secs(30))
                 .send()
@@ -553,7 +553,7 @@ async fn main() {
                                     let drop_query = format!(
                                         "ALTER TABLE nginx_logs DROP PARTITION LIST '{}'", name
                                     );
-                                    if let Ok(_) = agg_client.get("http://localhost:9002/exec")
+                                    if let Ok(_) = agg_client.get("http://localhost:8123")
                                         .query(&[("query", &drop_query)])
                                         .timeout(Duration::from_secs(60))
                                         .send()
@@ -821,7 +821,7 @@ async fn ensure_hourly_stats_table(client: &Client) {
         p2p_bytes LONG, p2p_up_bytes LONG, peers LONG, swarms LONG, \
         plays LONG, unique_visitors LONG, tvmon LONG, tvwiki LONG, \
         tvhot LONG, mobile LONG, pc LONG) timestamp(ts) PARTITION BY DAY";
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(create_query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(create_query));
     let _ = client.get(&url).send().await;
 }
 
@@ -831,10 +831,10 @@ async fn has_hourly_stats_for_date(client: &Client, date: &str) -> bool {
         "SELECT count() FROM hourly_stats WHERE ts >= '{}T00:00:00Z' AND ts < '{}T00:00:00Z' + 86400000000L",
         date, date
     );
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&query));
     if let Ok(resp) = client.get(&url).send().await {
         if let Ok(json) = resp.json::<serde_json::Value>().await {
-            if let Some(count) = json.get("dataset")
+            if let Some(count) = json.get("data")
                 .and_then(|d| d.as_array())
                 .and_then(|a| a.first())
                 .and_then(|r| r.as_array())
@@ -855,12 +855,12 @@ async fn store_hourly_stats(client: &Client, date: &str) -> bool {
         "DELETE FROM hourly_stats WHERE ts >= '{}T00:00:00Z' AND ts < '{}T00:00:00Z' + 86400000000L",
         date, date
     );
-    let delete_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&delete_query));
+    let delete_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&delete_query));
     let _ = client.get(&delete_url).send().await;
 
     // 일별 데이터 조회 후 INSERT
     if let Some(day_data) = query_daily_stats(client, date).await {
-        if let Some(dataset) = day_data.get("dataset").and_then(|d| d.as_array()) {
+        if let Some(dataset) = day_data.get("data").and_then(|d| d.as_array()) {
             for row in dataset {
                 if let Some(arr) = row.as_array() {
                     // ts, viewers, unique_users, http_bytes, p2p_bytes, p2p_up_bytes, peers, swarms, plays, unique_visitors, tvmon, tvwiki, tvhot, mobile, pc
@@ -885,7 +885,7 @@ async fn store_hourly_stats(client: &Client, date: &str) -> bool {
                         ts, viewers, unique_users, http_bytes, p2p_bytes, p2p_up_bytes,
                         peers, swarms, plays, unique_visitors, tvmon, tvwiki, tvhot, mobile, pc
                     );
-                    let insert_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&insert_query));
+                    let insert_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&insert_query));
                     let _ = client.get(&insert_url).send().await;
                 }
             }
@@ -904,7 +904,7 @@ async fn query_hourly_stats_range(client: &Client, start_date: &str, end_date: &
          ORDER BY ts",
         start_date, end_date
     );
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&query));
     if let Ok(resp) = client.get(&url).send().await {
         if let Ok(json) = resp.json::<serde_json::Value>().await {
             return Some(json);
@@ -923,16 +923,16 @@ async fn query_daily_stats(
 
     // r_* 필드로 델타 합산 (누적값 first/last 대신)
     let stats_query = format!(
-        "SELECT ts, last(viewers) as viewers, last(unique_users) as unique_users, \
+        "SELECT ts, anyLast(viewers) as viewers, anyLast(unique_users) as unique_users, \
          sum(r_http_bytes) as http_bytes, sum(r_p2p_bytes) as p2p_bytes, \
-         sum(r_p2p_up_bytes) as p2p_up_bytes, last(peers) as peers, last(swarms) as swarms \
+         sum(r_p2p_up_bytes) as p2p_up_bytes, anyLast(peers) as peers, anyLast(swarms) as swarms \
          FROM p2p_stats WHERE ts >= {} AND ts <= {} \
          SAMPLE BY 1h ALIGN TO CALENDAR",
         start, end
     );
 
     let visits_query = format!(
-        "SELECT timestamp as ts, count() as plays, count_distinct(ip) as unique_visitors \
+        "SELECT timestamp as ts, count() as plays, uniqExact(ip) as unique_visitors \
          FROM visitor_logs WHERE timestamp >= {} AND timestamp <= {} \
          SAMPLE BY 1h ALIGN TO CALENDAR",
         start, end
@@ -940,35 +940,35 @@ async fn query_daily_stats(
 
     // 고유 방문자(UV) 기준 - 5개 쿼리 병렬 실행
     let tvmon_query = format!(
-        "SELECT timestamp as ts, count_distinct(ip) as cnt FROM visitor_logs \
+        "SELECT timestamp as ts, uniqExact(ip) as cnt FROM visitor_logs \
          WHERE timestamp >= {} AND timestamp <= {} AND referrer ~ 'tvmon' SAMPLE BY 1h ALIGN TO CALENDAR", start, end);
     let tvwiki_query = format!(
-        "SELECT timestamp as ts, count_distinct(ip) as cnt FROM visitor_logs \
+        "SELECT timestamp as ts, uniqExact(ip) as cnt FROM visitor_logs \
          WHERE timestamp >= {} AND timestamp <= {} AND referrer ~ 'tvwiki' SAMPLE BY 1h ALIGN TO CALENDAR", start, end);
     let tvhot_query = format!(
-        "SELECT timestamp as ts, count_distinct(ip) as cnt FROM visitor_logs \
+        "SELECT timestamp as ts, uniqExact(ip) as cnt FROM visitor_logs \
          WHERE timestamp >= {} AND timestamp <= {} AND referrer ~ 'tvhot' SAMPLE BY 1h ALIGN TO CALENDAR", start, end);
     let mobile_query = format!(
-        "SELECT timestamp as ts, count_distinct(ip) as cnt FROM visitor_logs \
+        "SELECT timestamp as ts, uniqExact(ip) as cnt FROM visitor_logs \
          WHERE timestamp >= {} AND timestamp <= {} AND device !~ 'PC' SAMPLE BY 1h ALIGN TO CALENDAR", start, end);
     let pc_query = format!(
-        "SELECT timestamp as ts, count_distinct(ip) as cnt FROM visitor_logs \
+        "SELECT timestamp as ts, uniqExact(ip) as cnt FROM visitor_logs \
          WHERE timestamp >= {} AND timestamp <= {} AND device ~ 'PC' SAMPLE BY 1h ALIGN TO CALENDAR", start, end);
 
     let (stats_result, visits_result, tvmon_result, tvwiki_result, tvhot_result, mobile_result, pc_result) = tokio::join!(
-        questdb_query_json(client, &stats_query),
-        questdb_query_json(client, &visits_query),
-        questdb_query_json(client, &tvmon_query),
-        questdb_query_json(client, &tvwiki_query),
-        questdb_query_json(client, &tvhot_query),
-        questdb_query_json(client, &mobile_query),
-        questdb_query_json(client, &pc_query)
+        clickhouse_query_json(client, &stats_query),
+        clickhouse_query_json(client, &visits_query),
+        clickhouse_query_json(client, &tvmon_query),
+        clickhouse_query_json(client, &tvwiki_query),
+        clickhouse_query_json(client, &tvhot_query),
+        clickhouse_query_json(client, &mobile_query),
+        clickhouse_query_json(client, &pc_query)
     );
 
     if let (Ok(mut stats_json), Ok(visits_json)) = (stats_result, visits_result) {
         let mut plays_map: HashMap<String, i64> = HashMap::new();
         let mut visitors_map: HashMap<String, i64> = HashMap::new();
-        if let Some(data) = visits_json.get("dataset").and_then(|d| d.as_array()) {
+        if let Some(data) = visits_json.get("data").and_then(|d| d.as_array()) {
             for row in data {
                 if let Some(arr) = row.as_array() {
                     if let Some(ts) = arr.get(0).and_then(|v| v.as_str()) {
@@ -983,7 +983,7 @@ async fn query_daily_stats(
         fn extract_map(result: &Result<serde_json::Value, String>) -> HashMap<String, i64> {
             let mut map = HashMap::new();
             if let Ok(json) = result {
-                if let Some(data) = json.get("dataset").and_then(|d| d.as_array()) {
+                if let Some(data) = json.get("data").and_then(|d| d.as_array()) {
                     for row in data {
                         if let Some(arr) = row.as_array() {
                             if let Some(ts) = arr.get(0).and_then(|v| v.as_str()) {
@@ -1046,7 +1046,7 @@ async fn history_stats(
 
         // 1. 과거 데이터 (어제까지): hourly_stats 테이블에서 조회
         if let Some(hist_data) = query_hourly_stats_range(&state.client, &start_date, &yesterday).await {
-            if let Some(dataset) = hist_data.get("dataset").and_then(|d| d.as_array()) {
+            if let Some(dataset) = hist_data.get("data").and_then(|d| d.as_array()) {
                 all_data.extend(dataset.clone());
             }
         }
@@ -1073,7 +1073,7 @@ async fn history_stats(
         }
 
         if let Some(td) = today_data {
-            if let Some(dataset) = td.get("dataset").and_then(|d| d.as_array()) {
+            if let Some(dataset) = td.get("data").and_then(|d| d.as_array()) {
                 all_data.extend(dataset.clone());
             }
         }
@@ -1119,49 +1119,49 @@ async fn history_stats(
 
     // r_* 필드로 델타 합산
     let stats_query = format!(
-        "SELECT ts, last(viewers) as viewers, last(unique_users) as unique_users, \
+        "SELECT ts, anyLast(viewers) as viewers, anyLast(unique_users) as unique_users, \
          sum(r_http_bytes) as http_bytes, sum(r_p2p_bytes) as p2p_bytes, \
-         sum(r_p2p_up_bytes) as p2p_up_bytes, last(peers) as peers, last(swarms) as swarms \
+         sum(r_p2p_up_bytes) as p2p_up_bytes, anyLast(peers) as peers, anyLast(swarms) as swarms \
          FROM p2p_stats WHERE ts > systimestamp() - {}L SAMPLE BY {} ALIGN TO CALENDAR",
         micros, sample
     );
     let visits_query = format!(
-        "SELECT timestamp as ts, count() as plays, count_distinct(ip) as unique_visitors \
+        "SELECT timestamp as ts, count() as plays, uniqExact(ip) as unique_visitors \
          FROM visitor_logs WHERE timestamp > systimestamp() - {}L SAMPLE BY {} ALIGN TO CALENDAR",
         micros, sample
     );
     // 고유 방문자(UV) 기준 - 5개 쿼리 병렬 실행
     let tvmon_query = format!(
-        "SELECT timestamp as ts, count_distinct(ip) as cnt FROM visitor_logs \
+        "SELECT timestamp as ts, uniqExact(ip) as cnt FROM visitor_logs \
          WHERE timestamp > systimestamp() - {}L AND referrer ~ 'tvmon' SAMPLE BY {} ALIGN TO CALENDAR", micros, sample);
     let tvwiki_query = format!(
-        "SELECT timestamp as ts, count_distinct(ip) as cnt FROM visitor_logs \
+        "SELECT timestamp as ts, uniqExact(ip) as cnt FROM visitor_logs \
          WHERE timestamp > systimestamp() - {}L AND referrer ~ 'tvwiki' SAMPLE BY {} ALIGN TO CALENDAR", micros, sample);
     let tvhot_query = format!(
-        "SELECT timestamp as ts, count_distinct(ip) as cnt FROM visitor_logs \
+        "SELECT timestamp as ts, uniqExact(ip) as cnt FROM visitor_logs \
          WHERE timestamp > systimestamp() - {}L AND referrer ~ 'tvhot' SAMPLE BY {} ALIGN TO CALENDAR", micros, sample);
     let mobile_query = format!(
-        "SELECT timestamp as ts, count_distinct(ip) as cnt FROM visitor_logs \
+        "SELECT timestamp as ts, uniqExact(ip) as cnt FROM visitor_logs \
          WHERE timestamp > systimestamp() - {}L AND device !~ 'PC' SAMPLE BY {} ALIGN TO CALENDAR", micros, sample);
     let pc_query = format!(
-        "SELECT timestamp as ts, count_distinct(ip) as cnt FROM visitor_logs \
+        "SELECT timestamp as ts, uniqExact(ip) as cnt FROM visitor_logs \
          WHERE timestamp > systimestamp() - {}L AND device ~ 'PC' SAMPLE BY {} ALIGN TO CALENDAR", micros, sample);
 
     let (stats_result, visits_result, tvmon_result, tvwiki_result, tvhot_result, mobile_result, pc_result) = tokio::join!(
-        questdb_query_json(&state.client, &stats_query),
-        questdb_query_json(&state.client, &visits_query),
-        questdb_query_json(&state.client, &tvmon_query),
-        questdb_query_json(&state.client, &tvwiki_query),
-        questdb_query_json(&state.client, &tvhot_query),
-        questdb_query_json(&state.client, &mobile_query),
-        questdb_query_json(&state.client, &pc_query)
+        clickhouse_query_json(&state.client, &stats_query),
+        clickhouse_query_json(&state.client, &visits_query),
+        clickhouse_query_json(&state.client, &tvmon_query),
+        clickhouse_query_json(&state.client, &tvwiki_query),
+        clickhouse_query_json(&state.client, &tvhot_query),
+        clickhouse_query_json(&state.client, &mobile_query),
+        clickhouse_query_json(&state.client, &pc_query)
     );
 
     match (stats_result, visits_result) {
         (Ok(mut stats_json), Ok(visits_json)) => {
             let mut plays_map: HashMap<String, i64> = HashMap::new();
             let mut visitors_map: HashMap<String, i64> = HashMap::new();
-            if let Some(data) = visits_json.get("dataset").and_then(|d| d.as_array()) {
+            if let Some(data) = visits_json.get("data").and_then(|d| d.as_array()) {
                 for row in data {
                     if let Some(arr) = row.as_array() {
                         if let Some(ts) = arr.get(0).and_then(|v| v.as_str()) {
@@ -1176,7 +1176,7 @@ async fn history_stats(
             fn extract_map2(result: &Result<serde_json::Value, String>) -> HashMap<String, i64> {
                 let mut map = HashMap::new();
                 if let Ok(json) = result {
-                    if let Some(data) = json.get("dataset").and_then(|d| d.as_array()) {
+                    if let Some(data) = json.get("data").and_then(|d| d.as_array()) {
                         for row in data {
                             if let Some(arr) = row.as_array() {
                                 if let Some(ts) = arr.get(0).and_then(|v| v.as_str()) {
@@ -1254,7 +1254,7 @@ async fn history_swarms(
         micros, limit
     );
 
-    questdb_query(&state.client, &query).await
+    clickhouse_query(&state.client, &query).await
 }
 
 // 시간대별 히트맵용 API
@@ -1277,7 +1277,7 @@ async fn history_hourly(
         micros
     );
 
-    questdb_query(&state.client, &query).await
+    clickhouse_query(&state.client, &query).await
 }
 
 // 인기파일 API (고유 IP + 트래픽) - 캐싱 및 최적화
@@ -1317,12 +1317,12 @@ async fn api_popular(
 
     // 1단계: 조회수 상위 swarm_id 조회 (최적화: LIMIT만 적용)
     let views_query = format!(
-        "SELECT swarm_id, last(filename) as filename, count_distinct(ip) as views \
+        "SELECT swarm_id, anyLast(filename) as filename, uniqExact(ip) as views \
          FROM visitor_logs {} GROUP BY swarm_id ORDER BY views DESC LIMIT {}, {}",
         time_filter, offset, limit
     );
 
-    let views_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&views_query));
+    let views_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&views_query));
     let views_data: serde_json::Value = match state.client.get(&views_url).send().await {
         Ok(r) => r.json().await.unwrap_or(serde_json::json!({})),
         Err(_) => serde_json::json!({}),
@@ -1331,7 +1331,7 @@ async fn api_popular(
     // swarm_id 목록 추출
     let mut swarm_ids: Vec<String> = Vec::new();
     let mut views_map: HashMap<String, (String, i64)> = HashMap::new();
-    if let Some(dataset) = views_data.get("dataset").and_then(|d| d.as_array()) {
+    if let Some(dataset) = views_data.get("data").and_then(|d| d.as_array()) {
         for row in dataset {
             if let Some(arr) = row.as_array() {
                 let swarm_id = arr.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -1353,10 +1353,10 @@ async fn api_popular(
             "SELECT swarm_id, max(http_bytes), max(p2p_bytes) FROM p2p_swarms WHERE swarm_id IN ({}) GROUP BY swarm_id",
             ids_str
         );
-        let traffic_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&traffic_query));
+        let traffic_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&traffic_query));
         if let Ok(resp) = state.client.get(&traffic_url).send().await {
             if let Ok(data) = resp.json::<serde_json::Value>().await {
-                if let Some(dataset) = data.get("dataset").and_then(|d| d.as_array()) {
+                if let Some(dataset) = data.get("data").and_then(|d| d.as_array()) {
                     for row in dataset {
                         if let Some(arr) = row.as_array() {
                             let sid = arr.get(0).and_then(|v| v.as_str()).unwrap_or("");
@@ -1421,30 +1421,30 @@ async fn api_summary(State(state): State<AppState>) -> Response {
 
     // p2p_stats에서 피크값, 트래픽
     let today_query = "SELECT max(viewers) as max_viewers, max(unique_users) as max_users, \
-        last(http_bytes) as http_bytes, last(p2p_bytes) as p2p_bytes, last(swarms) as swarms \
-        FROM p2p_stats WHERE ts >= timestamp_floor('d', now())";
+        anyLast(http_bytes) as http_bytes, anyLast(p2p_bytes) as p2p_bytes, anyLast(swarms) as swarms \
+        FROM p2p_stats WHERE ts >= toStartOfDay(now())";
 
     let yesterday_query = "SELECT max(viewers) as max_viewers, max(unique_users) as max_users, \
-        last(http_bytes) as http_bytes, last(p2p_bytes) as p2p_bytes, last(swarms) as swarms \
-        FROM p2p_stats WHERE ts >= dateadd('d', -1, timestamp_floor('d', now())) AND ts < timestamp_floor('d', now())";
+        anyLast(http_bytes) as http_bytes, anyLast(p2p_bytes) as p2p_bytes, anyLast(swarms) as swarms \
+        FROM p2p_stats WHERE ts >= toStartOfDay(now()) - INTERVAL 1 DAY AND ts < toStartOfDay(now())";
 
     // hourly_stats에서 오늘/어제 재생수, 순방문자 (GROUP BY로 중복 제거 후 합산)
     let today_hourly_query = "SELECT sum(plays) as plays, sum(unique_visitors) as unique_visitors \
-        FROM (SELECT ts, max(plays) as plays, max(unique_visitors) as unique_visitors FROM hourly_stats WHERE ts >= timestamp_floor('d', now()) GROUP BY ts)";
+        FROM (SELECT ts, max(plays) as plays, max(unique_visitors) as unique_visitors FROM hourly_stats WHERE ts >= toStartOfDay(now()) GROUP BY ts)";
 
     let yesterday_hourly_query = "SELECT sum(plays) as plays, sum(unique_visitors) as unique_visitors \
-        FROM (SELECT ts, max(plays) as plays, max(unique_visitors) as unique_visitors FROM hourly_stats WHERE ts >= dateadd('d', -1, timestamp_floor('d', now())) AND ts < timestamp_floor('d', now()) GROUP BY ts)";
+        FROM (SELECT ts, max(plays) as plays, max(unique_visitors) as unique_visitors FROM hourly_stats WHERE ts >= toStartOfDay(now()) - INTERVAL 1 DAY AND ts < toStartOfDay(now()) GROUP BY ts)";
 
     let (today_res, yesterday_res, today_hourly_res, yesterday_hourly_res) = tokio::join!(
-        questdb_query_json(&state.client, today_query),
-        questdb_query_json(&state.client, yesterday_query),
-        questdb_query_json(&state.client, today_hourly_query),
-        questdb_query_json(&state.client, yesterday_hourly_query)
+        clickhouse_query_json(&state.client, today_query),
+        clickhouse_query_json(&state.client, yesterday_query),
+        clickhouse_query_json(&state.client, today_hourly_query),
+        clickhouse_query_json(&state.client, yesterday_hourly_query)
     );
 
     // QuestDB 응답에서 첫 번째 행 추출 헬퍼
     fn extract_row(json: &serde_json::Value) -> Option<&Vec<serde_json::Value>> {
-        json.get("dataset")?.as_array()?.first()?.as_array()
+        json.get("data")?.as_array()?.first()?.as_array()
     }
 
     // 오늘 데이터 파싱
@@ -1517,12 +1517,12 @@ async fn api_visitors(
 
     // 기간별 시간 문자열 (QuestDB dateadd 사용)
     let time_filter = match period {
-        "1h" => "dateadd('h', -1, now())",
-        "6h" => "dateadd('h', -6, now())",
-        "1d" => "dateadd('d', -1, now())",
-        "7d" => "dateadd('d', -7, now())",
-        "30d" => "dateadd('d', -30, now())",
-        _ => "dateadd('h', -1, now())",
+        "1h" => "now() - INTERVAL 1 HOUR",
+        "6h" => "now() - INTERVAL 6 HOUR",
+        "1d" => "now() - INTERVAL 1 DAY",
+        "7d" => "now() - INTERVAL 7 DAY",
+        "30d" => "now() - INTERVAL 30 DAY",
+        _ => "now() - INTERVAL 1 HOUR",
     };
 
     // QuestDB 최적화: designated timestamp + LIMIT 활용
@@ -1535,13 +1535,17 @@ async fn api_visitors(
         time_filter, ip_condition, offset, limit
     );
 
-    questdb_query(&state.client, &query).await
+    clickhouse_query(&state.client, &query).await
 }
 
-async fn questdb_query(client: &Client, query: &str) -> Response {
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&query));
+async fn clickhouse_query(client: &Client, query: &str) -> Response {
+    let query_with_format = if query.trim().to_uppercase().starts_with("SELECT") {
+        format!("{} FORMAT JSON", query)
+    } else {
+        query.to_string()
+    };
 
-    match client.get(&url).send().await {
+    match client.post(CLICKHOUSE_URL).body(query_with_format).send().await {
         Ok(resp) => {
             let body = resp.bytes().await.unwrap_or_default();
             Response::builder()
@@ -1558,10 +1562,14 @@ async fn questdb_query(client: &Client, query: &str) -> Response {
     }
 }
 
-async fn questdb_query_json(client: &Client, query: &str) -> Result<serde_json::Value, String> {
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&query));
+async fn clickhouse_query_json(client: &Client, query: &str) -> Result<serde_json::Value, String> {
+    let query_with_format = if query.trim().to_uppercase().starts_with("SELECT") {
+        format!("{} FORMAT JSON", query)
+    } else {
+        query.to_string()
+    };
 
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let resp = client.post(CLICKHOUSE_URL).body(query_with_format).send().await.map_err(|e| e.to_string())?;
     let body = resp.text().await.map_err(|e| e.to_string())?;
     serde_json::from_str(&body).map_err(|e| e.to_string())
 }
@@ -1572,28 +1580,28 @@ async fn api_init_data(State(state): State<AppState>) -> Response {
 
     // 오늘/어제 summary (p2p_stats에서 피크값, 트래픽)
     let today_query = "SELECT max(viewers) as max_viewers, max(unique_users) as max_users, \
-        last(http_bytes) as http_bytes, last(p2p_bytes) as p2p_bytes, last(swarms) as swarms \
-        FROM p2p_stats WHERE ts >= timestamp_floor('d', now())";
+        anyLast(http_bytes) as http_bytes, anyLast(p2p_bytes) as p2p_bytes, anyLast(swarms) as swarms \
+        FROM p2p_stats WHERE ts >= toStartOfDay(now())";
     let yesterday_query = "SELECT max(viewers) as max_viewers, max(unique_users) as max_users, \
-        last(http_bytes) as http_bytes, last(p2p_bytes) as p2p_bytes, last(swarms) as swarms \
-        FROM p2p_stats WHERE ts >= dateadd('d', -1, timestamp_floor('d', now())) AND ts < timestamp_floor('d', now())";
+        anyLast(http_bytes) as http_bytes, anyLast(p2p_bytes) as p2p_bytes, anyLast(swarms) as swarms \
+        FROM p2p_stats WHERE ts >= toStartOfDay(now()) - INTERVAL 1 DAY AND ts < toStartOfDay(now())";
 
     // hourly_stats에서 오늘/어제 재생수, 순방문자 (GROUP BY로 중복 제거 후 합산)
     let today_hourly_query = "SELECT sum(plays) as plays, sum(unique_visitors) as unique_visitors \
-        FROM (SELECT ts, max(plays) as plays, max(unique_visitors) as unique_visitors FROM hourly_stats WHERE ts >= timestamp_floor('d', now()) GROUP BY ts)";
+        FROM (SELECT ts, max(plays) as plays, max(unique_visitors) as unique_visitors FROM hourly_stats WHERE ts >= toStartOfDay(now()) GROUP BY ts)";
     let yesterday_hourly_query = "SELECT sum(plays) as plays, sum(unique_visitors) as unique_visitors \
-        FROM (SELECT ts, max(plays) as plays, max(unique_visitors) as unique_visitors FROM hourly_stats WHERE ts >= dateadd('d', -1, timestamp_floor('d', now())) AND ts < timestamp_floor('d', now()) GROUP BY ts)";
+        FROM (SELECT ts, max(plays) as plays, max(unique_visitors) as unique_visitors FROM hourly_stats WHERE ts >= toStartOfDay(now()) - INTERVAL 1 DAY AND ts < toStartOfDay(now()) GROUP BY ts)";
 
     let (today_res, yesterday_res, today_visitors_res, yesterday_visitors_res) = tokio::join!(
-        questdb_query_json(client, today_query),
-        questdb_query_json(client, yesterday_query),
-        questdb_query_json(client, today_hourly_query),
-        questdb_query_json(client, yesterday_hourly_query)
+        clickhouse_query_json(client, today_query),
+        clickhouse_query_json(client, yesterday_query),
+        clickhouse_query_json(client, today_hourly_query),
+        clickhouse_query_json(client, yesterday_hourly_query)
     );
 
     // QuestDB 응답에서 첫 번째 행 추출 헬퍼
     fn extract_row(json: &serde_json::Value) -> Option<&Vec<serde_json::Value>> {
-        json.get("dataset")?.as_array()?.first()?.as_array()
+        json.get("data")?.as_array()?.first()?.as_array()
     }
 
     // 오늘 데이터 파싱: [max_viewers, max_users, http_bytes, p2p_bytes, swarms]
@@ -1634,15 +1642,15 @@ async fn api_init_data(State(state): State<AppState>) -> Response {
         max(http_bytes) as http_bytes, max(p2p_bytes) as p2p_bytes, max(p2p_up_bytes) as p2p_up_bytes, \
         max(peers) as peers, max(swarms) as swarms, max(plays) as plays, max(unique_visitors) as unique_visitors, \
         max(tvmon) as tvmon, max(tvwiki) as tvwiki, max(tvhot) as tvhot, max(mobile) as mobile, max(pc) as pc \
-        FROM hourly_stats WHERE ts >= dateadd('d', -30, now()) GROUP BY ts ORDER BY ts";
-    let daily_stats = questdb_query_json(client, daily_query).await.unwrap_or(serde_json::json!({}));
+        FROM hourly_stats WHERE ts >= now() - INTERVAL 30 DAY GROUP BY ts ORDER BY ts";
+    let daily_stats = clickhouse_query_json(client, daily_query).await.unwrap_or(serde_json::json!({}));
 
     // 월별 통계 - 서브쿼리로 중복 제거 후 집계
-    let monthly_query = "SELECT timestamp_floor('M', ts) as month, \
+    let monthly_query = "SELECT toStartOfMonth(ts) as month, \
         max(viewers) as peak_viewers, max(unique_users) as peak_users, \
         sum(http_bytes) as total_http, sum(p2p_bytes) as total_p2p \
         FROM (SELECT ts, max(viewers) as viewers, max(unique_users) as unique_users, max(http_bytes) as http_bytes, max(p2p_bytes) as p2p_bytes FROM hourly_stats GROUP BY ts) GROUP BY month ORDER BY month DESC LIMIT 12";
-    let monthly_stats = questdb_query_json(client, monthly_query).await.unwrap_or(serde_json::json!({}));
+    let monthly_stats = clickhouse_query_json(client, monthly_query).await.unwrap_or(serde_json::json!({}));
 
     Response::builder()
         .status(StatusCode::OK)
@@ -1677,13 +1685,13 @@ async fn api_traffic(
 
     // 기간별 설정 (7d: 1시간별, 30d: 6시간별)
     let (time_filter, sample_interval) = match period {
-        "realtime" => ("ts > dateadd('m', -10, now())", "10s"),
-        "1h" => ("ts > dateadd('h', -1, now())", "1m"),
-        "6h" => ("ts > dateadd('h', -6, now())", "5m"),
-        "24h" => ("ts > dateadd('d', -1, now())", "10m"),
-        "7d" => ("ts > dateadd('d', -7, now())", "1h"),
-        "30d" => ("ts > dateadd('d', -30, now())", "6h"),
-        _ => ("ts > dateadd('d', -1, now())", "10m"),
+        "realtime" => ("ts > now() - INTERVAL 10 MINUTE", "10s"),
+        "1h" => ("ts > now() - INTERVAL 1 HOUR", "1m"),
+        "6h" => ("ts > now() - INTERVAL 6 HOUR", "5m"),
+        "24h" => ("ts > now() - INTERVAL 1 DAY", "10m"),
+        "7d" => ("ts > now() - INTERVAL 7 DAY", "1h"),
+        "30d" => ("ts > now() - INTERVAL 30 DAY", "6h"),
+        _ => ("ts > now() - INTERVAL 1 DAY", "10m"),
     };
 
     // 1. 시계열 데이터 (트래픽 추이) - SAMPLE BY로 시간 간격 샘플링, 0값 제외
@@ -1713,13 +1721,13 @@ async fn api_traffic(
 
     // 4. 실시간 속도 계산 (최근 30초간 r_* 합산)
     let speed_query = "SELECT sum(r_http_bytes) as http, sum(r_p2p_bytes) as p2p, sum(r_p2p_up_bytes) as p2p_up \
-         FROM p2p_stats WHERE ts > dateadd('s', -30, now())";
+         FROM p2p_stats WHERE ts > now() - INTERVAL 30 SECOND";
 
     // 5. CDN 서버별 통계 (p2p_servers에서 트래픽 + visitor_logs에서 접속자)
     let server_traffic_query = format!(
-        "SELECT server, first(http_bytes) as first_http, last(http_bytes) as last_http, \
-         first(p2p_bytes) as first_p2p, last(p2p_bytes) as last_p2p, \
-         first(p2p_up_bytes) as first_up, last(p2p_up_bytes) as last_up, \
+        "SELECT server, first(http_bytes) as first_http, anyLast(http_bytes) as last_http, \
+         first(p2p_bytes) as first_p2p, anyLast(p2p_bytes) as last_p2p, \
+         first(p2p_up_bytes) as first_up, anyLast(p2p_up_bytes) as last_up, \
          max(viewers) as peak_viewers \
          FROM p2p_servers WHERE {} GROUP BY server ORDER BY last_http DESC",
         time_filter.replace("ts >", "timestamp >")
@@ -1727,28 +1735,28 @@ async fn api_traffic(
 
     let visitor_query = format!(
         "SELECT left(swarm_id, strpos(swarm_id, '.') - 1) as server, \
-         count_distinct(ip) as visitors, count() as requests \
+         uniqExact(ip) as visitors, count() as requests \
          FROM visitor_logs WHERE {} GROUP BY server ORDER BY visitors DESC",
         time_filter.replace("ts >", "timestamp >")
     );
 
     // 6. 서버별 실시간 속도 (최근 30초간 r_* 합산)
     let server_speed_query = "SELECT server, sum(r_http_bytes) as r_http, sum(r_p2p_bytes) as r_p2p, sum(r_p2p_up_bytes) as r_p2p_up \
-         FROM p2p_servers WHERE timestamp > dateadd('s', -30, now()) GROUP BY server";
+         FROM p2p_servers WHERE timestamp > now() - INTERVAL 30 SECOND GROUP BY server";
 
     // 7. 플레이어별 실시간 속도 (최근 30초간 r_* 합산)
     let player_speed_query = "SELECT player, sum(r_http_bytes) as r_http, sum(r_p2p_bytes) as r_p2p, sum(r_p2p_up_bytes) as r_p2p_up \
-         FROM p2p_players WHERE timestamp > dateadd('s', -30, now()) GROUP BY player";
+         FROM p2p_players WHERE timestamp > now() - INTERVAL 30 SECOND GROUP BY player";
 
     // 병렬 쿼리 실행 (QuestDB + simple_ws)
-    let timeline_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&timeline_query));
-    let total_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&total_query));
-    let traffic_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&traffic_query));
-    let speed_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(speed_query));
-    let server_traffic_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&server_traffic_query));
-    let visitor_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&visitor_query));
-    let server_speed_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(server_speed_query));
-    let player_speed_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(player_speed_query));
+    let timeline_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&timeline_query));
+    let total_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&total_query));
+    let traffic_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&traffic_query));
+    let speed_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(speed_query));
+    let server_traffic_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&server_traffic_query));
+    let visitor_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&visitor_query));
+    let server_speed_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(server_speed_query));
+    let player_speed_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(player_speed_query));
     let realtime_url = format!("{}/api/realtime", SIMPLE_WS_URL);
 
     let (timeline_res, total_res, traffic_res, speed_res, server_traffic_res, visitor_res, server_speed_res, player_speed_res, realtime_res) = tokio::join!(
@@ -1810,7 +1818,7 @@ async fn api_traffic(
     };
 
     // 정확한 총합 계산 (r_* 델타 합산 - 간단함)
-    let (total_http, total_p2p, total_p2p_up) = if let Some(dataset) = traffic_data.get("dataset").and_then(|d| d.as_array()) {
+    let (total_http, total_p2p, total_p2p_up) = if let Some(dataset) = traffic_data.get("data").and_then(|d| d.as_array()) {
         if let Some(row) = dataset.first().and_then(|r| r.as_array()) {
             (
                 row.get(0).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0),
@@ -1826,7 +1834,7 @@ async fn api_traffic(
 
     // 시계열 데이터 가공 (r_* 델타 합산이라 바로 사용)
     let mut timeline: Vec<serde_json::Value> = Vec::new();
-    if let Some(dataset) = timeline_data.get("dataset").and_then(|d| d.as_array()) {
+    if let Some(dataset) = timeline_data.get("data").and_then(|d| d.as_array()) {
         for row in dataset.iter() {
             if let Some(arr) = row.as_array() {
                 timeline.push(serde_json::json!({
@@ -1869,7 +1877,7 @@ async fn api_traffic(
         "p2pGbps": format!("{:.2}", p2p_gbps),
         "p2pUpGbps": format!("{:.2}", p2p_up_gbps)
     });
-    if let Some(dataset) = total_data.get("dataset").and_then(|d| d.as_array()) {
+    if let Some(dataset) = total_data.get("data").and_then(|d| d.as_array()) {
         if let Some(row) = dataset.first().and_then(|r| r.as_array()) {
             totals = serde_json::json!({
                 "peakViewers": row.get(0),
@@ -1891,7 +1899,7 @@ async fn api_traffic(
 
     // CDN 서버별 트래픽 맵 구성 (p2p_servers에서 first/last 델타)
     let mut server_traffic_map: std::collections::HashMap<String, (i64, i64, i64, i64)> = std::collections::HashMap::new();
-    if let Some(dataset) = server_traffic_data.get("dataset").and_then(|d| d.as_array()) {
+    if let Some(dataset) = server_traffic_data.get("data").and_then(|d| d.as_array()) {
         for row in dataset {
             if let Some(arr) = row.as_array() {
                 let server = arr.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -1913,7 +1921,7 @@ async fn api_traffic(
 
     // 3. 접속자 맵 구성
     let mut visitor_map: std::collections::HashMap<String, (i64, i64)> = std::collections::HashMap::new();
-    if let Some(dataset) = visitor_data.get("dataset").and_then(|d| d.as_array()) {
+    if let Some(dataset) = visitor_data.get("data").and_then(|d| d.as_array()) {
         for row in dataset {
             if let Some(arr) = row.as_array() {
                 let server = arr.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -1926,7 +1934,7 @@ async fn api_traffic(
 
     // 4. 서버별 속도 맵 구성 (r_* 합산 / 30 = GB/s)
     let mut server_speed_map: std::collections::HashMap<String, (f64, f64, f64)> = std::collections::HashMap::new();
-    if let Some(dataset) = server_speed_data.get("dataset").and_then(|d| d.as_array()) {
+    if let Some(dataset) = server_speed_data.get("data").and_then(|d| d.as_array()) {
         for row in dataset {
             if let Some(arr) = row.as_array() {
                 let server = arr.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -2023,12 +2031,12 @@ async fn api_servers_realtime(
 
     // 기간에 따른 시간 필터와 샘플링
     let (time_filter, sample_by) = match period {
-        "1h" => ("timestamp > dateadd('h', -1, now())", "SAMPLE BY 1m"),
-        "6h" => ("timestamp > dateadd('h', -6, now())", "SAMPLE BY 5m"),
-        "24h" => ("timestamp > dateadd('d', -1, now())", "SAMPLE BY 15m"),
-        "7d" => ("timestamp > dateadd('d', -7, now())", "SAMPLE BY 1h"),
-        "30d" => ("timestamp > dateadd('d', -30, now())", "SAMPLE BY 4h"),
-        _ => ("timestamp > dateadd('m', -10, now())", ""), // realtime: 최근 10분, 샘플링 없음
+        "1h" => ("timestamp > now() - INTERVAL 1 HOUR", "SAMPLE BY 1m"),
+        "6h" => ("timestamp > now() - INTERVAL 6 HOUR", "SAMPLE BY 5m"),
+        "24h" => ("timestamp > now() - INTERVAL 1 DAY", "SAMPLE BY 15m"),
+        "7d" => ("timestamp > now() - INTERVAL 7 DAY", "SAMPLE BY 1h"),
+        "30d" => ("timestamp > now() - INTERVAL 30 DAY", "SAMPLE BY 4h"),
+        _ => ("timestamp > now() - INTERVAL 10 MINUTE", ""), // realtime: 최근 10분, 샘플링 없음
     };
 
     // SAMPLE BY 대신 LIMIT으로 데이터 제한
@@ -2046,7 +2054,7 @@ async fn api_servers_realtime(
          FROM p2p_servers WHERE {} ORDER BY timestamp, server LIMIT {}",
         time_filter, limit
     );
-    let url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&query));
+    let url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&query));
 
     let data: serde_json::Value = match state.client.get(&url).send().await {
         Ok(r) => r.json().await.unwrap_or(serde_json::json!({})),
@@ -2057,7 +2065,7 @@ async fn api_servers_realtime(
     let mut server_timelines: std::collections::HashMap<String, Vec<serde_json::Value>> = std::collections::HashMap::new();
     let mut prev_values: std::collections::HashMap<String, (i64, i64)> = std::collections::HashMap::new();
 
-    if let Some(dataset) = data.get("dataset").and_then(|d| d.as_array()) {
+    if let Some(dataset) = data.get("data").and_then(|d| d.as_array()) {
         for row in dataset {
             if let Some(arr) = row.as_array() {
                 let ts = arr.get(0).and_then(|v| v.as_str()).unwrap_or("");
@@ -2248,25 +2256,25 @@ async fn api_ip_analysis(
 
 // 기간별 IP 분석 (QuestDB visitor_logs 기반)
 async fn api_ip_analysis_historical(state: &AppState, period: &str, limit: usize) -> Response {
-    // timestamp_floor('d', now()) = 오늘 00:00:00 UTC
+    // toStartOfDay(now()) = 오늘 00:00:00 UTC
     let time_filter = match period {
-        "1h" => "timestamp > dateadd('h', -1, now())".to_string(),
-        "6h" => "timestamp > dateadd('h', -6, now())".to_string(),
-        "24h" => "timestamp > dateadd('d', -1, now())".to_string(),
-        "today" => "timestamp >= timestamp_floor('d', now())".to_string(),
-        "yesterday" => "timestamp >= dateadd('d', -1, timestamp_floor('d', now())) AND timestamp < timestamp_floor('d', now())".to_string(),
-        "7d" => "timestamp > dateadd('d', -7, now())".to_string(),
-        "this_week" => "timestamp >= timestamp_floor('w', now())".to_string(),
-        "last_week" => "timestamp >= dateadd('w', -1, timestamp_floor('w', now())) AND timestamp < timestamp_floor('w', now())".to_string(),
-        "30d" => "timestamp > dateadd('d', -30, now())".to_string(),
-        "this_month" => "timestamp >= timestamp_floor('M', now())".to_string(),
-        "last_month" => "timestamp >= dateadd('M', -1, timestamp_floor('M', now())) AND timestamp < timestamp_floor('M', now())".to_string(),
-        _ => "timestamp > dateadd('d', -1, now())".to_string(),
+        "1h" => "timestamp > now() - INTERVAL 1 HOUR".to_string(),
+        "6h" => "timestamp > now() - INTERVAL 6 HOUR".to_string(),
+        "24h" => "timestamp > now() - INTERVAL 1 DAY".to_string(),
+        "today" => "timestamp >= toStartOfDay(now())".to_string(),
+        "yesterday" => "timestamp >= toStartOfDay(now()) - INTERVAL 1 DAY AND timestamp < toStartOfDay(now())".to_string(),
+        "7d" => "timestamp > now() - INTERVAL 7 DAY".to_string(),
+        "this_week" => "timestamp >= toStartOfWeek(now())".to_string(),
+        "last_week" => "timestamp >= toStartOfWeek(now()) - INTERVAL 1 WEEK AND timestamp < toStartOfWeek(now())".to_string(),
+        "30d" => "timestamp > now() - INTERVAL 30 DAY".to_string(),
+        "this_month" => "timestamp >= toStartOfMonth(now())".to_string(),
+        "last_month" => "timestamp >= toStartOfMonth(now()) - INTERVAL 1 MONTH AND timestamp < toStartOfMonth(now())".to_string(),
+        _ => "timestamp > now() - INTERVAL 1 DAY".to_string(),
     };
 
     // IP별 요청수, 트래픽, 마지막 서버
     let ip_query = format!(
-        "SELECT ip, count() as sessions, sum(http_bytes) as http, sum(p2p_bytes) as p2p, sum(p2p_up_bytes) as p2p_up, last(swarm_id) as last_swarm \
+        "SELECT ip, count() as sessions, sum(http_bytes) as http, sum(p2p_bytes) as p2p, sum(p2p_up_bytes) as p2p_up, anyLast(swarm_id) as last_swarm \
          FROM visitor_logs WHERE {} AND ip != '' AND ip IS NOT NULL \
          GROUP BY ip ORDER BY (sum(http_bytes) + sum(p2p_bytes)) DESC LIMIT {}",
         time_filter, limit
@@ -2284,9 +2292,9 @@ async fn api_ip_analysis_historical(state: &AppState, period: &str, limit: usize
     );
 
     // 병렬 쿼리
-    let ip_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&ip_query));
-    let total_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&total_query));
-    let unique_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(&unique_query));
+    let ip_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&ip_query));
+    let total_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&total_query));
+    let unique_url = format!("{}/?query={}", CLICKHOUSE_URL, urlencoding::encode(&unique_query));
 
     let (ip_res, total_res, unique_res) = tokio::join!(
         state.client.get(&ip_url).send(),
@@ -2302,7 +2310,7 @@ async fn api_ip_analysis_historical(state: &AppState, period: &str, limit: usize
     let (total_sessions, total_http, total_p2p, total_p2p_up) = match total_res {
         Ok(r) => {
             let data: serde_json::Value = r.json().await.unwrap_or(serde_json::json!({}));
-            let row = data.get("dataset").and_then(|d| d.as_array()).and_then(|a| a.first()).and_then(|r| r.as_array());
+            let row = data.get("data").and_then(|d| d.as_array()).and_then(|a| a.first()).and_then(|r| r.as_array());
             if let Some(arr) = row {
                 (
                     arr.get(0).and_then(|v| v.as_i64()).unwrap_or(0),
@@ -2320,14 +2328,14 @@ async fn api_ip_analysis_historical(state: &AppState, period: &str, limit: usize
     let unique_ips = match unique_res {
         Ok(r) => {
             let data: serde_json::Value = r.json().await.unwrap_or(serde_json::json!({}));
-            data.get("dataset").and_then(|d| d.as_array()).and_then(|a| a.first())
+            data.get("data").and_then(|d| d.as_array()).and_then(|a| a.first())
                 .and_then(|r| r.as_array()).and_then(|r| r.first()).and_then(|v| v.as_i64()).unwrap_or(0)
         }
         Err(_) => 0,
     };
 
     let mut ips: Vec<serde_json::Value> = Vec::new();
-    if let Some(dataset) = ip_data.get("dataset").and_then(|d| d.as_array()) {
+    if let Some(dataset) = ip_data.get("data").and_then(|d| d.as_array()) {
         for row in dataset {
             if let Some(arr) = row.as_array() {
                 let ip = arr.get(0).and_then(|v| v.as_str()).unwrap_or("-");
@@ -2572,7 +2580,7 @@ async fn api_blacklist_list() -> impl IntoResponse {
         "#, ips_filter);
 
         let client = reqwest::Client::new();
-        if let Ok(resp) = client.get("http://localhost:9002/exec")
+        if let Ok(resp) = client.get("http://localhost:8123")
             .query(&[("query", &query)])
             .timeout(std::time::Duration::from_secs(10))
             .send()
@@ -2997,12 +3005,12 @@ async fn api_logs_abusers(Query(params): Query<HashMap<String, String>>) -> Json
     let client = reqwest::Client::new();
 
     let time_filter = match period {
-        "1h" => "dateadd('h', -1, now())",
-        "3h" => "dateadd('h', -3, now())",
-        "6h" => "dateadd('h', -6, now())",
-        "12h" => "dateadd('h', -12, now())",
-        "24h" => "dateadd('d', -1, now())",
-        _ => "dateadd('h', -6, now())",
+        "1h" => "now() - INTERVAL 1 HOUR",
+        "3h" => "now() - INTERVAL 3 HOUR",
+        "6h" => "now() - INTERVAL 6 HOUR",
+        "12h" => "now() - INTERVAL 12 HOUR",
+        "24h" => "now() - INTERVAL 1 DAY",
+        _ => "now() - INTERVAL 6 HOUR",
     };
 
     let period_seconds = match period {
@@ -3040,9 +3048,9 @@ async fn api_logs_abusers(Query(params): Query<HashMap<String, String>>) -> Json
 
     // 3. 100초 단위 버스트 분석 - 최대 6시간 (속도 최적화)
     let burst_time = match period {
-        "1h" => "dateadd('h', -1, now())",
-        "3h" => "dateadd('h', -3, now())",
-        _ => "dateadd('h', -6, now())",  // 6h 이상은 6h로 제한
+        "1h" => "now() - INTERVAL 1 HOUR",
+        "3h" => "now() - INTERVAL 3 HOUR",
+        _ => "now() - INTERVAL 6 HOUR",  // 6h 이상은 6h로 제한
     };
     let max100s_query = format!(r#"
         SELECT client_ip, max(cnt) as max_req
@@ -3059,8 +3067,8 @@ async fn api_logs_abusers(Query(params): Query<HashMap<String, String>>) -> Json
 
     // 4. 동일 경로 반복 접근 (단일 비디오 어뷰즈) - 최대 3시간 (속도 최적화)
     let single_path_time = match period {
-        "1h" => "dateadd('h', -1, now())",
-        _ => "dateadd('h', -3, now())",  // 모든 기간 3h로 제한 (속도)
+        "1h" => "now() - INTERVAL 1 HOUR",
+        _ => "now() - INTERVAL 3 HOUR",  // 모든 기간 3h로 제한 (속도)
     };
     let single_path_query = format!(r#"
         SELECT client_ip, path, count() as cnt, sum(bytes_sent) as bytes
@@ -3084,23 +3092,23 @@ async fn api_logs_abusers(Query(params): Query<HashMap<String, String>>) -> Json
 
     // 모든 쿼리 병렬 실행
     let (res, servers_res, max100s_res, single_path_res, cache_bypass_res) = tokio::join!(
-        client.get("http://localhost:9002/exec")
+        client.get("http://localhost:8123")
             .query(&[("query", &query)])
             .timeout(std::time::Duration::from_secs(20))
             .send(),
-        client.get("http://localhost:9002/exec")
+        client.get("http://localhost:8123")
             .query(&[("query", &servers_query)])
             .timeout(std::time::Duration::from_secs(20))
             .send(),
-        client.get("http://localhost:9002/exec")
+        client.get("http://localhost:8123")
             .query(&[("query", &max100s_query)])
             .timeout(std::time::Duration::from_secs(20))
             .send(),
-        client.get("http://localhost:9002/exec")
+        client.get("http://localhost:8123")
             .query(&[("query", &single_path_query)])
             .timeout(std::time::Duration::from_secs(20))
             .send(),
-        client.get("http://localhost:9002/exec")
+        client.get("http://localhost:8123")
             .query(&[("query", &cache_bypass_query)])
             .timeout(std::time::Duration::from_secs(10))
             .send()
@@ -3415,7 +3423,7 @@ async fn api_logs_abusers(Query(params): Query<HashMap<String, String>>) -> Json
             GROUP BY client_ip, server_id
         "#, time_filter, ips_filter);
 
-        if let Ok(resp) = client.get("http://localhost:9002/exec")
+        if let Ok(resp) = client.get("http://localhost:8123")
             .query(&[("query", &missing_query)])
             .timeout(std::time::Duration::from_secs(10))
             .send()
@@ -3539,12 +3547,12 @@ async fn api_logs_by_ip(
     let limit = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(500i32);
 
     let time_filter = match period {
-        "1h" => "dateadd('h', -1, now())",
-        "3h" => "dateadd('h', -3, now())",
-        "6h" => "dateadd('h', -6, now())",
-        "12h" => "dateadd('h', -12, now())",
-        "24h" => "dateadd('d', -1, now())",
-        _ => "dateadd('h', -6, now())",
+        "1h" => "now() - INTERVAL 1 HOUR",
+        "3h" => "now() - INTERVAL 3 HOUR",
+        "6h" => "now() - INTERVAL 6 HOUR",
+        "12h" => "now() - INTERVAL 12 HOUR",
+        "24h" => "now() - INTERVAL 1 DAY",
+        _ => "now() - INTERVAL 6 HOUR",
     };
 
     let escaped_ip = ip.replace("'", "''");
@@ -3557,7 +3565,7 @@ async fn api_logs_by_ip(
         time_filter, escaped_ip, limit
     );
 
-    let res = client.get("http://localhost:9002/exec")
+    let res = client.get("http://localhost:8123")
         .query(&[("query", &query)])
         .send()
         .await;
@@ -3596,12 +3604,12 @@ async fn api_logs_list(Query(params): Query<HashMap<String, String>>) -> impl In
     let search = params.get("search").map(|s| s.as_str()).unwrap_or("");
 
     let time_filter = match period {
-        "5m" => "dateadd('m', -5, now())",
-        "15m" => "dateadd('m', -15, now())",
-        "1h" => "dateadd('h', -1, now())",
-        "6h" => "dateadd('h', -6, now())",
-        "24h" => "dateadd('d', -1, now())",
-        _ => "dateadd('h', -1, now())",
+        "5m" => "now() - INTERVAL 5 MINUTE",
+        "15m" => "now() - INTERVAL 15 MINUTE",
+        "1h" => "now() - INTERVAL 1 HOUR",
+        "6h" => "now() - INTERVAL 6 HOUR",
+        "24h" => "now() - INTERVAL 1 DAY",
+        _ => "now() - INTERVAL 1 HOUR",
     };
 
     let mut conditions = vec![format!("timestamp > {}", time_filter)];
@@ -3622,7 +3630,7 @@ async fn api_logs_list(Query(params): Query<HashMap<String, String>>) -> impl In
         limit
     );
 
-    let res = client.get("http://localhost:9002/exec")
+    let res = client.get("http://localhost:8123")
         .query(&[("query", &query)])
         .send()
         .await;
@@ -3748,7 +3756,7 @@ async fn api_logs_receive(
             chunk.join(",")
         );
 
-        let res = client.get("http://localhost:9002/exec")
+        let res = client.get("http://localhost:8123")
             .query(&[("query", &query)])
             .send()
             .await;
@@ -3770,12 +3778,12 @@ async fn api_logs_stats_summary(Query(params): Query<HashMap<String, String>>) -
     let server_id = params.get("server_id").map(|s| s.as_str()).unwrap_or("");
 
     let time_filter = match period {
-        "5m" => "dateadd('m', -5, now())",
-        "15m" => "dateadd('m', -15, now())",
-        "1h" => "dateadd('h', -1, now())",
-        "6h" => "dateadd('h', -6, now())",
-        "24h" => "dateadd('d', -1, now())",
-        _ => "dateadd('h', -1, now())",
+        "5m" => "now() - INTERVAL 5 MINUTE",
+        "15m" => "now() - INTERVAL 15 MINUTE",
+        "1h" => "now() - INTERVAL 1 HOUR",
+        "6h" => "now() - INTERVAL 6 HOUR",
+        "24h" => "now() - INTERVAL 1 DAY",
+        _ => "now() - INTERVAL 1 HOUR",
     };
 
     let server_filter = if server_id.is_empty() {
@@ -3795,7 +3803,7 @@ async fn api_logs_stats_summary(Query(params): Query<HashMap<String, String>>) -
         time_filter, server_filter
     );
 
-    let res = client.get("http://localhost:9002/exec")
+    let res = client.get("http://localhost:8123")
         .query(&[("query", &query)])
         .send()
         .await;
@@ -3827,11 +3835,11 @@ async fn api_logs_stats_ips(Query(params): Query<HashMap<String, String>>) -> im
     let limit = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(20);
 
     let time_filter = match period {
-        "1h" => "dateadd('h', -1, now())",
-        "6h" => "dateadd('h', -6, now())",
-        "24h" => "dateadd('d', -1, now())",
-        "7d" => "dateadd('d', -7, now())",
-        _ => "dateadd('h', -6, now())",
+        "1h" => "now() - INTERVAL 1 HOUR",
+        "6h" => "now() - INTERVAL 6 HOUR",
+        "24h" => "now() - INTERVAL 1 DAY",
+        "7d" => "now() - INTERVAL 7 DAY",
+        _ => "now() - INTERVAL 6 HOUR",
     };
 
     let query = format!(
@@ -3841,7 +3849,7 @@ async fn api_logs_stats_ips(Query(params): Query<HashMap<String, String>>) -> im
         time_filter, limit
     );
 
-    let res = client.get("http://localhost:9002/exec")
+    let res = client.get("http://localhost:8123")
         .query(&[("query", &query)])
         .send()
         .await;
@@ -3864,11 +3872,11 @@ async fn api_logs_stats_timeline(Query(params): Query<HashMap<String, String>>) 
     let period = params.get("period").map(|s| s.as_str()).unwrap_or("6h");
 
     let (time_filter, sample_by) = match period {
-        "1h" => ("dateadd('h', -1, now())", "1m"),
-        "6h" => ("dateadd('h', -6, now())", "5m"),
-        "24h" => ("dateadd('d', -1, now())", "30m"),
-        "7d" => ("dateadd('d', -7, now())", "1h"),
-        _ => ("dateadd('h', -6, now())", "5m"),
+        "1h" => ("now() - INTERVAL 1 HOUR", "1m"),
+        "6h" => ("now() - INTERVAL 6 HOUR", "5m"),
+        "24h" => ("now() - INTERVAL 1 DAY", "30m"),
+        "7d" => ("now() - INTERVAL 7 DAY", "1h"),
+        _ => ("now() - INTERVAL 6 HOUR", "5m"),
     };
 
     let query = format!(
@@ -3878,7 +3886,7 @@ async fn api_logs_stats_timeline(Query(params): Query<HashMap<String, String>>) 
         time_filter, sample_by
     );
 
-    let res = client.get("http://localhost:9002/exec")
+    let res = client.get("http://localhost:8123")
         .query(&[("query", &query)])
         .send()
         .await;
@@ -3901,19 +3909,19 @@ async fn api_logs_stats_daily(Query(params): Query<HashMap<String, String>>) -> 
     let limit = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(7);
 
     let query = format!(
-        "SELECT timestamp, count() as requests, \
+        "SELECT toStartOfDay(timestamp) as timestamp, count() as requests, \
          sum(CASE WHEN status >= 200 AND status < 300 THEN 1 ELSE 0 END) as s2xx, \
          sum(CASE WHEN status >= 400 AND status < 500 THEN 1 ELSE 0 END) as s4xx, \
          sum(CASE WHEN status >= 500 THEN 1 ELSE 0 END) as s5xx, \
          sum(bytes_sent) as bytes \
          FROM nginx_logs \
-         WHERE timestamp > dateadd('d', -{}, now()) \
-         SAMPLE BY 1d ALIGN TO CALENDAR",
+         WHERE timestamp > now() - INTERVAL {} DAY \
+         GROUP BY timestamp ORDER BY timestamp FORMAT JSON",
         limit
     );
 
-    let res = client.get("http://localhost:9002/exec")
-        .query(&[("query", &query)])
+    let res = client.post(CLICKHOUSE_URL)
+        .body(query)
         .send()
         .await;
 
@@ -3935,19 +3943,19 @@ async fn api_logs_stats_daily_servers(Query(params): Query<HashMap<String, Strin
     let days = params.get("days").and_then(|s| s.parse().ok()).unwrap_or(7);
 
     let query = format!(
-        "SELECT timestamp, server_id, count() as requests, \
+        "SELECT toStartOfDay(timestamp) as timestamp, server_id, count() as requests, \
          sum(CASE WHEN status >= 200 AND status < 300 THEN 1 ELSE 0 END) as s2xx, \
          sum(CASE WHEN status >= 400 AND status < 500 THEN 1 ELSE 0 END) as s4xx, \
          sum(CASE WHEN status >= 500 THEN 1 ELSE 0 END) as s5xx, \
          sum(bytes_sent) as bytes \
          FROM nginx_logs \
-         WHERE timestamp > dateadd('d', -{}, now()) \
-         SAMPLE BY 1d ALIGN TO CALENDAR",
+         WHERE timestamp > now() - INTERVAL {} DAY \
+         GROUP BY timestamp, server_id ORDER BY timestamp FORMAT JSON",
         days
     );
 
-    let res = client.get("http://localhost:9002/exec")
-        .query(&[("query", &query)])
+    let res = client.post(CLICKHOUSE_URL)
+        .body(query)
         .send()
         .await;
 
@@ -3975,7 +3983,7 @@ async fn api_logs_stats_hourly(Query(params): Query<HashMap<String, String>>) ->
          sum(CASE WHEN status >= 500 THEN 1 ELSE 0 END) as s5xx, \
          sum(bytes_sent) as bytes \
          FROM nginx_logs \
-         WHERE timestamp > dateadd('d', -1, now()) \
+         WHERE timestamp > now() - INTERVAL 1 DAY \
          SAMPLE BY 1h ALIGN TO CALENDAR".to_string()
     } else {
         format!(
@@ -3991,7 +3999,7 @@ async fn api_logs_stats_hourly(Query(params): Query<HashMap<String, String>>) ->
         )
     };
 
-    let res = client.get("http://localhost:9002/exec")
+    let res = client.get("http://localhost:8123")
         .query(&[("query", &query)])
         .send()
         .await;
@@ -4014,11 +4022,11 @@ async fn api_logs_stats_servers(Query(params): Query<HashMap<String, String>>) -
     let period = params.get("period").map(|s| s.as_str()).unwrap_or("6h");
 
     let time_filter = match period {
-        "1h" => "dateadd('h', -1, now())",
-        "6h" => "dateadd('h', -6, now())",
-        "24h" => "dateadd('d', -1, now())",
-        "7d" => "dateadd('d', -7, now())",
-        _ => "dateadd('h', -6, now())",
+        "1h" => "now() - INTERVAL 1 HOUR",
+        "6h" => "now() - INTERVAL 6 HOUR",
+        "24h" => "now() - INTERVAL 1 DAY",
+        "7d" => "now() - INTERVAL 7 DAY",
+        _ => "now() - INTERVAL 6 HOUR",
     };
 
     let query = format!(
@@ -4032,7 +4040,7 @@ async fn api_logs_stats_servers(Query(params): Query<HashMap<String, String>>) -
         time_filter
     );
 
-    let res = client.get("http://localhost:9002/exec")
+    let res = client.get("http://localhost:8123")
         .query(&[("query", &query)])
         .send()
         .await;

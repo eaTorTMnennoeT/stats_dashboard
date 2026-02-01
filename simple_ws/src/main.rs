@@ -16,8 +16,7 @@ use parking_lot::{Mutex, RwLock};
 use arc_swap::ArcSwap;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tokio::time::timeout;
-use tokio::net::TcpStream;
-use tokio::io::AsyncWriteExt;
+use reqwest::Client as HttpClient;
 use tower_http::cors::CorsLayer;
 
 const WORKER_THREADS: usize = 72;
@@ -25,8 +24,8 @@ const BLOCKING_THREADS: usize = 128;
 const MAX_CONNECTIONS: usize = 1_000_000;
 const IDLE_TIMEOUT_SECS: u64 = 120;
 const PING_INTERVAL_SECS: u64 = 15;
-const QUESTDB_ILP_ADDR: &str = "127.0.0.1:9019";
-const QUESTDB_FLUSH_SECS: u64 = 1;
+const CLICKHOUSE_URL: &str = "http://127.0.0.1:8123";
+const CLICKHOUSE_FLUSH_SECS: u64 = 1;
 
 // Global stats
 static TOTAL_CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -273,7 +272,7 @@ async fn async_main() {
     update_realtime_cache();
 
     // Spawn QuestDB flush task
-    tokio::spawn(questdb_flush_task());
+    tokio::spawn(clickhouse_flush_task());
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
@@ -298,8 +297,9 @@ async fn async_main() {
     server.await.unwrap();
 }
 
-async fn questdb_flush_task() {
-    let mut interval = tokio::time::interval(Duration::from_secs(QUESTDB_FLUSH_SECS));
+async fn clickhouse_flush_task() {
+    let mut interval = tokio::time::interval(Duration::from_secs(CLICKHOUSE_FLUSH_SECS));
+    let client = HttpClient::new();
 
     loop {
         interval.tick().await;
@@ -310,12 +310,12 @@ async fn questdb_flush_task() {
         // 2. API 캐시 업데이트 (last_http_speed 사용)
         update_realtime_cache();
 
-        // 3. QuestDB 전송 (r_http_bytes 등 델타값 전송)
-        if let Err(e) = flush_to_questdb().await {
-            eprintln!("QuestDB flush error: {}", e);
+        // 3. ClickHouse 전송 (r_http_bytes 등 델타값 전송)
+        if let Err(e) = flush_to_clickhouse(&client).await {
+            eprintln!("ClickHouse flush error: {}", e);
         }
 
-        // 4. 델타 리셋 (QuestDB 전송 후)
+        // 4. 델타 리셋 (ClickHouse 전송 후)
         reset_deltas();
     }
 }
@@ -378,19 +378,15 @@ fn update_realtime_cache() {
     // 락 획득 실패 시 이전 캐시 유지
 }
 
-async fn flush_to_questdb() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let now_ns = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_nanos();
+async fn flush_to_clickhouse(client: &HttpClient) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.6f").to_string();
 
-    // Collect all data while holding lock, then release
-    let lines = {
+    // Collect p2p_stats data
+    let p2p_stats_query = {
         let stats = P2P_STATS.read();
-        let mut lines = Vec::new();
-
-        // p2p_stats - main aggregate stats (cumulative + delta)
-        lines.push(format!(
-            "p2p_stats viewers={}i,unique_users={}i,http_bytes={}i,p2p_bytes={}i,p2p_up_bytes={}i,peers={}i,swarms={}i,r_http_bytes={}i,r_p2p_bytes={}i,r_p2p_up_bytes={}i {}\n",
+        format!(
+            "INSERT INTO p2p_stats VALUES ('{}', {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+            now,
             stats.viewers,
             stats.unique_ips.len(),
             stats.http_bytes,
@@ -400,29 +396,13 @@ async fn flush_to_questdb() -> Result<(), Box<dyn std::error::Error + Send + Syn
             stats.swarms.len(),
             stats.r_http_bytes,
             stats.r_p2p_bytes,
-            stats.r_p2p_up_bytes,
-            now_ns
-        ));
+            stats.r_p2p_up_bytes
+        )
+    };
 
-        // p2p_swarms - per swarm stats (top 50)
-        let mut swarms: Vec<_> = stats.swarms.iter().collect();
-        swarms.sort_by(|a, b| b.1.unique_ips.len().cmp(&a.1.unique_ips.len()));
-
-        for (swarm_id, swarm) in swarms.iter().take(50) {
-            let safe_id = swarm_id.replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=");
-            let safe_filename = swarm.filename.replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=");
-            lines.push(format!(
-                "p2p_swarms,swarm_id={} filename=\"{}\",viewers={}i,http_bytes={}i,p2p_bytes={}i {}\n",
-                safe_id,
-                safe_filename.replace("\"", "\\\""),
-                swarm.unique_ips.len(),
-                swarm.http_bytes,
-                swarm.p2p_bytes,
-                now_ns
-            ));
-        }
-
-        // p2p_servers - 서버별 합계 통계 (cumulative + delta) - IP 순회 제거로 최적화
+    // Collect p2p_servers data
+    let p2p_servers_query = {
+        let stats = P2P_STATS.read();
         let mut server_stats: HashMap<String, (u64, u64, u64, u64, u64, u64, u64)> = HashMap::new();
         for (swarm_id, swarm) in stats.swarms.iter() {
             let server = swarm_id.split('.').next().unwrap_or("unknown").to_string();
@@ -435,97 +415,44 @@ async fn flush_to_questdb() -> Result<(), Box<dyn std::error::Error + Send + Syn
             entry.5 += swarm.r_p2p_up_bytes;
             entry.6 += swarm.unique_ips.len() as u64;
         }
-        for (server, (http, p2p, p2p_up, r_http, r_p2p, r_p2p_up, viewers)) in &server_stats {
-            lines.push(format!(
-                "p2p_servers,server={} viewers={}i,unique_ips={}i,http_bytes={}i,p2p_bytes={}i,p2p_up_bytes={}i,r_http_bytes={}i,r_p2p_bytes={}i,r_p2p_up_bytes={}i {}\n",
-                server, viewers, viewers, http, p2p, p2p_up, r_http, r_p2p, r_p2p_up, now_ns
-            ));
+        if server_stats.is_empty() {
+            None
+        } else {
+            let values: Vec<String> = server_stats.iter().map(|(server, (http, p2p, p2p_up, r_http, r_p2p, r_p2p_up, viewers))| {
+                format!("('{}', {}, {}, {}, {}, '{}', {}, {}, {}, {})",
+                    server, viewers, viewers, http, p2p, now, p2p_up, r_http, r_p2p, r_p2p_up)
+            }).collect();
+            Some(format!("INSERT INTO p2p_servers VALUES {}", values.join(",")))
         }
-
-        // p2p_players - 플레이어별 통계
-        lines.push(format!(
-            "p2p_players,player=1 viewers={}i,http_bytes={}i,p2p_bytes={}i,p2p_up_bytes={}i,r_http_bytes={}i,r_p2p_bytes={}i,r_p2p_up_bytes={}i {}\n",
-            stats.player1.viewers, stats.player1.http_bytes, stats.player1.p2p_bytes, stats.player1.p2p_up_bytes,
-            stats.player1.r_http_bytes, stats.player1.r_p2p_bytes, stats.player1.r_p2p_up_bytes, now_ns
-        ));
-        lines.push(format!(
-            "p2p_players,player=2 viewers={}i,http_bytes={}i,p2p_bytes={}i,p2p_up_bytes={}i,r_http_bytes={}i,r_p2p_bytes={}i,r_p2p_up_bytes={}i {}\n",
-            stats.player2.viewers, stats.player2.http_bytes, stats.player2.p2p_bytes, stats.player2.p2p_up_bytes,
-            stats.player2.r_http_bytes, stats.player2.r_p2p_bytes, stats.player2.r_p2p_up_bytes, now_ns
-        ));
-
-        // p2p_analytics - devices
-        let devices = [
-            ("device", "mobile", stats.devices.mobile),
-            ("device", "desktop", stats.devices.desktop),
-            ("device", "tablet", stats.devices.tablet),
-            ("device", "unknown", stats.devices.unknown),
-        ];
-        for (cat, name, count) in devices {
-            if count > 0 {
-                lines.push(format!("p2p_analytics,category={},name={} count={}i {}\n", cat, name, count, now_ns));
-            }
-        }
-
-        // p2p_analytics - networks
-        let networks = [
-            ("network", "wifi", stats.networks.wifi),
-            ("network", "cellular", stats.networks.cellular),
-            ("network", "4g", stats.networks.g4),
-            ("network", "5g", stats.networks.g5),
-            ("network", "ethernet", stats.networks.ethernet),
-        ];
-        for (cat, name, count) in networks {
-            if count > 0 {
-                lines.push(format!("p2p_analytics,category={},name={} count={}i {}\n", cat, name, count, now_ns));
-            }
-        }
-
-        // p2p_analytics - browsers (top 10)
-        let mut browsers: Vec<_> = stats.browsers.iter().collect();
-        browsers.sort_by(|a, b| b.1.cmp(a.1));
-        for (name, count) in browsers.iter().take(10) {
-            let safe_name = name.replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=");
-            lines.push(format!("p2p_analytics,category=browser,name={} count={}i {}\n", safe_name, count, now_ns));
-        }
-
-        // p2p_analytics - referrers (top 10)
-        let mut referrers: Vec<_> = stats.referrers.iter().collect();
-        referrers.sort_by(|a, b| b.1.cmp(a.1));
-        for (name, count) in referrers.iter().take(10) {
-            let safe_name = name.replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=");
-            lines.push(format!("p2p_analytics,category=referrer,name={} count={}i {}\n", safe_name, count, now_ns));
-        }
-
-        lines
-    }; // Lock released here
-
-    // Collect visitor logs
-    let visitor_lines: Vec<String> = {
-        let mut logs = VISITOR_LOGS.lock();
-        let collected: Vec<_> = logs.drain(..).collect();
-        collected.into_iter().map(|log| {
-            let safe_ip = log.ip.replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=");
-            let safe_filename = log.filename.replace("\"", "\\\"").replace("\n", " ");
-            let safe_device = log.device.replace(" ", "\\ ").replace(",", "\\,");
-            let safe_browser = log.browser.replace(" ", "\\ ").replace(",", "\\,");
-            let safe_referrer = log.referrer.replace(" ", "\\ ").replace(",", "\\,");
-            format!(
-                "visitor_logs,ip={} session_id=\"{}\",swarm_id=\"{}\",filename=\"{}\",device=\"{}\",device_name=\"{}\",browser=\"{}\",referrer=\"{}\",net_type=\"{}\",player_id={}i,http_bytes={}i,p2p_bytes={}i,p2p_up_bytes={}i {}\n",
-                safe_ip, log.session_id, log.swarm_id, safe_filename, safe_device, log.device_name, safe_browser, safe_referrer, log.net_type, log.player_id, log.http_bytes, log.p2p_bytes, log.p2p_up_bytes, now_ns
-            )
-        }).collect()
     };
 
-    // Now write to stream without holding the lock
-    let mut stream = TcpStream::connect(QUESTDB_ILP_ADDR).await?;
-    for line in lines {
-        stream.write_all(line.as_bytes()).await?;
+    // Collect visitor_logs data
+    let visitor_logs_query = {
+        let mut logs = VISITOR_LOGS.lock();
+        if logs.is_empty() {
+            None
+        } else {
+            let collected: Vec<_> = logs.drain(..).collect();
+            let values: Vec<String> = collected.iter().map(|log| {
+                let safe_filename = log.filename.replace("'", "''");
+                let safe_referrer = log.referrer.replace("'", "''");
+                format!("('{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', {}, '{}', {}, {}, {})",
+                    log.ip, log.session_id, log.swarm_id, safe_filename, log.device, log.device_name,
+                    log.browser, safe_referrer, log.net_type, log.player_id, now,
+                    log.http_bytes, log.p2p_bytes, log.p2p_up_bytes)
+            }).collect();
+            Some(format!("INSERT INTO visitor_logs VALUES {}", values.join(",")))
+        }
+    };
+
+    // Send to ClickHouse
+    let _ = client.post(CLICKHOUSE_URL).body(p2p_stats_query).send().await;
+    if let Some(query) = p2p_servers_query {
+        let _ = client.post(CLICKHOUSE_URL).body(query).send().await;
     }
-    for line in visitor_lines {
-        stream.write_all(line.as_bytes()).await?;
+    if let Some(query) = visitor_logs_query {
+        let _ = client.post(CLICKHOUSE_URL).body(query).send().await;
     }
-    stream.flush().await?;
 
     Ok(())
 }
