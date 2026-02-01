@@ -1,0 +1,13 @@
+[Unit]
+Description=Server Monitoring Agent
+After=network.target
+
+[Service]
+Type=simple
+# 대시보드 URL을 여기에 설정
+ExecStart=/usr/local/bin/server_agent http://37.27.122.163:8080
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

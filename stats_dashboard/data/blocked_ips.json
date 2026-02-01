@@ -1,0 +1,2173 @@
+{
+  "175.114.243.100": {
+    "ip": "175.114.243.100",
+    "reason": "높은 트래픽: 10.5GB",
+    "created_at": "2026-01-22T05:42:43.245833928+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "ab8f262fe4f8",
+      "test-server-1",
+      "92abef1e2e64",
+      "41e76d192a03",
+      "6b46224ac5ad",
+      "a49ee3d372ff",
+      "11d5ecf97e20",
+      "fbdde4624ac0",
+      "6cd73b181f42",
+      "3bdf9d8613fa"
+    ]
+  },
+  "114.202.208.123": {
+    "ip": "114.202.208.123",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 7.6GB, 🟠 높은 버스트: 316req/100s",
+    "created_at": "2026-01-22 13:11:59",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "7",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "3bdf9d8613fa",
+      "41e76d192a03",
+      "a49ee3d372ff",
+      "92abef1e2e64",
+      "6cd73b181f42"
+    ]
+  },
+  "2406:5900:1029:100:d07a:3e5e:739f:21e7": {
+    "ip": "2406:5900:1029:100:d07a:3e5e:739f:21e7",
+    "reason": "[서버자동차단] 155점 - 중간 트래픽: 3.7GB, 🔴 극심한 버스트: 505req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "3",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "218.159.18.171": {
+    "ip": "218.159.18.171",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 33.2GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "7",
+      "5",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:4430:c01f:50bb::38d:c925": {
+    "ip": "2001:4430:c01f:50bb::38d:c925",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 273req/100s, 🟡 빠른 다운: 5.9GB/h",
+    "created_at": "2026-01-22 14:15:44",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "3bdf9d8613fa",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "fbdde4624ac0",
+      "a49ee3d372ff",
+      "92abef1e2e64",
+      "11d5ecf97e20",
+      "6cd73b181f42",
+      "41e76d192a03"
+    ]
+  },
+  "121.142.208.237": {
+    "ip": "121.142.208.237",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 7.0GB, 🟠 높은 버스트: 395req/100s",
+    "created_at": "2026-01-22 12:31:52",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "ab8f262fe4f8",
+      "6cd73b181f42",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "11d5ecf97e20",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "6b46224ac5ad",
+      "41e76d192a03"
+    ]
+  },
+  "115.21.194.82": {
+    "ip": "115.21.194.82",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 298req/100s, 🟡 빠른 다운: 9.0GB/h",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "221.147.33.171": {
+    "ip": "221.147.33.171",
+    "reason": "[서버자동차단] 90점 - 🟠 대용량: 15.8GB, 🟡 빠른 다운: 6.9GB/h",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "1",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "222.98.17.140": {
+    "ip": "222.98.17.140",
+    "reason": "[서버자동차단] 125점 - 중간 트래픽: 3.2GB, 🟠 높은 버스트: 235req/100s",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "9",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "175.121.114.222": {
+    "ip": "175.121.114.222",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 4.7GB, 🟠 높은 버스트: 291req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2406:5900:1048:8910:30e0:585e:dfd6:b070": {
+    "ip": "2406:5900:1048:8910:30e0:585e:dfd6:b070",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 6.0GB, 🟠 높은 버스트: 330req/100s",
+    "created_at": "2026-01-22 13:16:54",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:2d8:631c:1815:9c0c:9e59:f51:6914": {
+    "ip": "2001:2d8:631c:1815:9c0c:9e59:f51:6914",
+    "reason": "[서버자동차단] 90점 - 🟠 대용량: 29.5GB, 🟡 빠른 다운: 5.0GB/h",
+    "created_at": "2026-01-22 12:33:20",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "3",
+      "6",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "11d5ecf97e20",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "ab8f262fe4f8",
+      "fbdde4624ac0",
+      "6cd73b181f42"
+    ]
+  },
+  "112.168.207.52": {
+    "ip": "112.168.207.52",
+    "reason": "[서버자동차단] 140점 - 🔴 극대용량: 51.3GB, 🔴 극고속: 34.4GB/h",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "180.68.140.17": {
+    "ip": "180.68.140.17",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 57.1GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "4",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "222.232.91.52": {
+    "ip": "222.232.91.52",
+    "reason": "[자동차단] AI탐지 125점 (high) - 🟡 높은 트래픽: 8.2GB, 🟠 높은 버스트: 334req/100s",
+    "created_at": "2026-01-22T11:56:48.825605998+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "6b46224ac5ad",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "92abef1e2e64",
+      "6cd73b181f42",
+      "11d5ecf97e20",
+      "3bdf9d8613fa",
+      "41e76d192a03"
+    ]
+  },
+  "183.107.216.16": {
+    "ip": "183.107.216.16",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 37.8GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "1",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "39.115.69.120": {
+    "ip": "39.115.69.120",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 31.6GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "1",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "2406:5900:10f7:5cd9:a025:c9a6:368a:de6": {
+    "ip": "2406:5900:10f7:5cd9:a025:c9a6:368a:de6",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 274req/100s, 🟡 빠른 다운: 6.5GB/h",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "121.169.163.40": {
+    "ip": "121.169.163.40",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 3.5GB, 🟠 높은 버스트: 291req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "2",
+      "3",
+      "fbdde4624ac0",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "42.82.184.96": {
+    "ip": "42.82.184.96",
+    "reason": "[자동차단] AI탐지 140점 (high) - 🟡 높은 트래픽: 8.8GB, 🔴 극심한 버스트: 655req/100s",
+    "created_at": "2026-01-22T11:56:47.004913712+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "6cd73b181f42",
+      "92abef1e2e64",
+      "11d5ecf97e20",
+      "3bdf9d8613fa",
+      "41e76d192a03"
+    ]
+  },
+  "121.189.183.226": {
+    "ip": "121.189.183.226",
+    "reason": "[서버자동차단] 90점 - 🟠 대용량: 15.6GB, 🟡 빠른 다운: 5.8GB/h",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:4430:d1de:7363:5961:8bcc:973f:ff7a": {
+    "ip": "2001:4430:d1de:7363:5961:8bcc:973f:ff7a",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 4.0GB, 🟠 높은 버스트: 322req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "7",
+      "fbdde4624ac0",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "211.230.63.141": {
+    "ip": "211.230.63.141",
+    "reason": "[서버자동차단] 110점 - 🟡 높은 트래픽: 10.7GB, 🟠 높은 버스트: 356req/100s",
+    "created_at": "2026-01-22 13:16:59",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "124.59.37.234": {
+    "ip": "124.59.37.234",
+    "reason": "[서버자동차단] 155점 - 중간 트래픽: 5.7GB, 🔴 극심한 버스트: 1130req/100s",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "9",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "121.254.20.180": {
+    "ip": "121.254.20.180",
+    "reason": "[서버자동차단] 110점 - 중간 트래픽: 7.0GB, 🟠 높은 버스트: 248req/100s",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "2",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "220.118.124.167": {
+    "ip": "220.118.124.167",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 4.2GB, 🟠 높은 버스트: 290req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "fbdde4624ac0",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "106.254.171.35": {
+    "ip": "106.254.171.35",
+    "reason": "[자동차단] AI탐지 95점 (medium) - 중간 트래픽: 7.4GB, 🟠 높은 버스트: 357req/100s",
+    "created_at": "2026-01-22T12:27:27.251298225+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "11d5ecf97e20",
+      "6cd73b181f42",
+      "fbdde4624ac0",
+      "a49ee3d372ff",
+      "ab8f262fe4f8",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "6b46224ac5ad",
+      "41e76d192a03"
+    ]
+  },
+  "2406:5900:1072:4c6f:3197:45d2:8c16:afba": {
+    "ip": "2406:5900:1072:4c6f:3197:45d2:8c16:afba",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 6.5GB, 🟠 높은 버스트: 283req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "121.153.19.150": {
+    "ip": "121.153.19.150",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 5.2GB, 🟠 높은 버스트: 301req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:4430:d28d:9aba:c486:20cb:c55c:126e": {
+    "ip": "2001:4430:d28d:9aba:c486:20cb:c55c:126e",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 5.3GB, 🟠 높은 버스트: 310req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "121.179.18.74": {
+    "ip": "121.179.18.74",
+    "reason": "[서버자동차단] 140점 - 🟡 높은 트래픽: 8.9GB, 🔴 극심한 버스트: 587req/100s",
+    "created_at": "2026-01-22 13:16:59",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "39.119.193.37": {
+    "ip": "39.119.193.37",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 3.6GB, 🟠 높은 버스트: 293req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "7",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "182.230.57.8": {
+    "ip": "182.230.57.8",
+    "reason": "[서버자동차단] 110점 - 중간 트래픽: 3.1GB, 🟠 높은 버스트: 337req/100s",
+    "created_at": "2026-01-22 13:41:00",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "9",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "6b46224ac5ad",
+      "ab8f262fe4f8",
+      "6cd73b181f42",
+      "11d5ecf97e20",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "a49ee3d372ff"
+    ]
+  },
+  "2001:2d8:2222:f8c8:591d:6ea6:ec27:9987": {
+    "ip": "2001:2d8:2222:f8c8:591d:6ea6:ec27:9987",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 5.5GB, 🟠 높은 버스트: 301req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "7",
+      "fbdde4624ac0",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "222.100.171.141": {
+    "ip": "222.100.171.141",
+    "reason": "[서버자동차단] 160점 - 🔴 극심한 버스트: 1066req/100s, 🔴 극고속: 25.1GB/h",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "7",
+      "fbdde4624ac0",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:2d8:71a1:6f58:8839:9058:ddf7:5e62": {
+    "ip": "2001:2d8:71a1:6f58:8839:9058:ddf7:5e62",
+    "reason": "[서버자동차단] 90점 - 🟠 대용량: 16.6GB, 🟡 빠른 다운: 7.3GB/h",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "221.145.118.242": {
+    "ip": "221.145.118.242",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 38.3GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "1",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "182.228.254.98": {
+    "ip": "182.228.254.98",
+    "reason": "높은 트래픽: 10.7GB",
+    "created_at": "2026-01-22T05:31:25.639129950+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "ab8f262fe4f8",
+      "test-server-1",
+      "92abef1e2e64",
+      "41e76d192a03",
+      "6b46224ac5ad",
+      "a49ee3d372ff",
+      "11d5ecf97e20",
+      "fbdde4624ac0",
+      "6cd73b181f42",
+      "3bdf9d8613fa"
+    ]
+  },
+  "59.23.159.216": {
+    "ip": "59.23.159.216",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 3.7GB, 🟠 높은 버스트: 225req/100s",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "3",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "110.14.6.130": {
+    "ip": "110.14.6.130",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 36.0GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "4",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "119.56.209.100": {
+    "ip": "119.56.209.100",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 40.5GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "1",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "122.43.134.75": {
+    "ip": "122.43.134.75",
+    "reason": "[서버자동차단] 90점 - 🟠 대용량: 15.4GB, 🟡 빠른 다운: 5.1GB/h",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "3",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "112.187.173.97": {
+    "ip": "112.187.173.97",
+    "reason": "[서버자동차단] 90점 - 🟠 대용량: 27.7GB, 🟡 빠른 다운: 7.5GB/h",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "58.233.200.10": {
+    "ip": "58.233.200.10",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 34.7GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "2406:5900:5074:dc73:78f:d438:ce4:1003": {
+    "ip": "2406:5900:5074:dc73:78f:d438:ce4:1003",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 3.6GB, 🟠 높은 버스트: 316req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "8",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2406:5900:10f0:b47d:813:f330:359f:d395": {
+    "ip": "2406:5900:10f0:b47d:813:f330:359f:d395",
+    "reason": "[자동차단] AI탐지 110점 (high) - 🟡 높은 트래픽: 9.8GB, 🟠 높은 버스트: 321req/100s",
+    "created_at": "2026-01-22T11:56:50.292442117+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "6b46224ac5ad",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "92abef1e2e64",
+      "6cd73b181f42",
+      "11d5ecf97e20",
+      "3bdf9d8613fa",
+      "41e76d192a03"
+    ]
+  },
+  "2001:4430:c416:9b6b:fcc0:c8fd:452b:3ce3": {
+    "ip": "2001:4430:c416:9b6b:fcc0:c8fd:452b:3ce3",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 3.3GB, 🟠 높은 버스트: 251req/100s",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "3",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "118.40.245.211": {
+    "ip": "118.40.245.211",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 3.4GB, 🟠 높은 버스트: 286req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "2",
+      "4",
+      "fbdde4624ac0",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "175.198.73.130": {
+    "ip": "175.198.73.130",
+    "reason": "[서버자동차단] 300점 - 중간 트래픽: 3.9GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "9",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "220.127.111.63": {
+    "ip": "220.127.111.63",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 4.3GB, 🟠 높은 버스트: 302req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "8",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "1.226.3.162": {
+    "ip": "1.226.3.162",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 6.8GB, 🟠 높은 버스트: 327req/100s",
+    "created_at": "2026-01-22 12:31:52",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "ab8f262fe4f8",
+      "3bdf9d8613fa",
+      "6cd73b181f42",
+      "92abef1e2e64",
+      "11d5ecf97e20",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "6b46224ac5ad",
+      "41e76d192a03"
+    ]
+  },
+  "121.182.210.75": {
+    "ip": "121.182.210.75",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 364req/100s, 🟡 빠른 다운: 5.4GB/h",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "fbdde4624ac0",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "110.10.240.170": {
+    "ip": "110.10.240.170",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 36.9GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "4",
+      "6",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "211.202.235.81": {
+    "ip": "211.202.235.81",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 241req/100s, 🟡 빠른 다운: 5.5GB/h",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "111.91.172.208": {
+    "ip": "111.91.172.208",
+    "reason": "높은 트래픽: 11.2GB",
+    "created_at": "2026-01-22T05:46:50.273718071+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "ab8f262fe4f8",
+      "test-server-1",
+      "92abef1e2e64",
+      "41e76d192a03",
+      "6b46224ac5ad",
+      "a49ee3d372ff",
+      "11d5ecf97e20",
+      "fbdde4624ac0",
+      "6cd73b181f42",
+      "3bdf9d8613fa"
+    ]
+  },
+  "2001:4430:d255:caa:5851:6044:784d:cf13": {
+    "ip": "2001:4430:d255:caa:5851:6044:784d:cf13",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 5.8GB, 🟠 높은 버스트: 326req/100s",
+    "created_at": "2026-01-22 13:16:54",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2406:5900:1159:e865:cc06:2d58:73c1:9c2d": {
+    "ip": "2406:5900:1159:e865:cc06:2d58:73c1:9c2d",
+    "reason": "[서버자동차단] 90점 - 🟠 대용량: 21.7GB, 🟡 빠른 다운: 5.0GB/h",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:2d8:e4a7:a151::3a2c:a859": {
+    "ip": "2001:2d8:e4a7:a151::3a2c:a859",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 267req/100s, 🟡 빠른 다운: 7.6GB/h",
+    "created_at": "2026-01-22 14:15:44",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "3bdf9d8613fa",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "fbdde4624ac0",
+      "a49ee3d372ff",
+      "92abef1e2e64",
+      "11d5ecf97e20",
+      "6cd73b181f42",
+      "41e76d192a03"
+    ]
+  },
+  "2406:5900:1185:ee05:1d17:b354:55ef:6ed4": {
+    "ip": "2406:5900:1185:ee05:1d17:b354:55ef:6ed4",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 5.7GB, 🟠 높은 버스트: 282req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:4430:c11f:dcbd:80f3:cfb3:be4c:b543": {
+    "ip": "2001:4430:c11f:dcbd:80f3:cfb3:be4c:b543",
+    "reason": "[자동차단] AI탐지 110점 (high) - 🟡 높은 트래픽: 9.4GB, 🟠 높은 버스트: 327req/100s",
+    "created_at": "2026-01-22T11:56:51.597874529+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "6b46224ac5ad",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "6cd73b181f42",
+      "92abef1e2e64",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "3bdf9d8613fa",
+      "41e76d192a03"
+    ]
+  },
+  "110.15.98.159": {
+    "ip": "110.15.98.159",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 34.5GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "4",
+      "5",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "39.28.212.116": {
+    "ip": "39.28.212.116",
+    "reason": "[서버자동차단] 90점 - 🟠 대용량: 15.5GB, 🟡 빠른 다운: 7.4GB/h",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:4430:c01e:8466::a4:499b": {
+    "ip": "2001:4430:c01e:8466::a4:499b",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 338req/100s, 🟡 빠른 다운: 5.8GB/h",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "1",
+      "8",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "58.123.156.19": {
+    "ip": "58.123.156.19",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 3.8GB, 🟠 높은 버스트: 315req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "4",
+      "8",
+      "2",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "115.14.67.130": {
+    "ip": "115.14.67.130",
+    "reason": "[자동차단] AI탐지 110점 (high) - 🟡 높은 트래픽: 8.7GB, 🟠 높은 버스트: 423req/100s",
+    "created_at": "2026-01-22T11:56:52.563645239+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "6b46224ac5ad",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "6cd73b181f42",
+      "92abef1e2e64",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "3bdf9d8613fa",
+      "41e76d192a03"
+    ]
+  },
+  "211.108.248.79": {
+    "ip": "211.108.248.79",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 32.2GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "1",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "118.35.68.82": {
+    "ip": "118.35.68.82",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 33.3GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "3",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2406:5900:1055:d9d9:7db9:ed3d:3ae7:1651": {
+    "ip": "2406:5900:1055:d9d9:7db9:ed3d:3ae7:1651",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 7.8GB, 🟠 높은 버스트: 332req/100s",
+    "created_at": "2026-01-22 13:16:59",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "220.120.167.252": {
+    "ip": "220.120.167.252",
+    "reason": "[자동차단] AI탐지 140점 (high) - 🟡 높은 트래픽: 13.6GB, 🟠 높은 버스트: 496req/100s",
+    "created_at": "2026-01-22T12:27:24.359828198+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "6cd73b181f42",
+      "fbdde4624ac0",
+      "a49ee3d372ff",
+      "ab8f262fe4f8",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "41e76d192a03"
+    ]
+  },
+  "123.108.163.151": {
+    "ip": "123.108.163.151",
+    "reason": "높은 트래픽: 19.9GB",
+    "created_at": "2026-01-22T05:16:16.112656516+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "test-server-1",
+      "ab8f262fe4f8",
+      "92abef1e2e64",
+      "41e76d192a03",
+      "6b46224ac5ad",
+      "a49ee3d372ff",
+      "11d5ecf97e20",
+      "fbdde4624ac0",
+      "6cd73b181f42",
+      "3bdf9d8613fa"
+    ]
+  },
+  "45.82.246.211": {
+    "ip": "45.82.246.211",
+    "reason": "[자동차단] AI탐지 125점 (high) - 🟡 높은 트래픽: 10.7GB, 🟠 높은 버스트: 355req/100s",
+    "created_at": "2026-01-22T11:36:58.613440467+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "6b46224ac5ad",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "ab8f262fe4f8",
+      "41e76d192a03",
+      "11d5ecf97e20",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "6cd73b181f42"
+    ]
+  },
+  "58.122.150.174": {
+    "ip": "58.122.150.174",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 298req/100s, 🟡 빠른 다운: 7.3GB/h",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "fbdde4624ac0",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "59.3.193.118": {
+    "ip": "59.3.193.118",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 35.4GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "9",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "61.76.119.148": {
+    "ip": "61.76.119.148",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 4.4GB, 🟠 높은 버스트: 290req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "123.111.94.243": {
+    "ip": "123.111.94.243",
+    "reason": "[서버자동차단] 300점 - 🔴 캐시우회 공격: .gif? 패턴 419회",
+    "created_at": "2026-01-22 14:15:44",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "9",
+      "3bdf9d8613fa",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42",
+      "41e76d192a03",
+      "11d5ecf97e20"
+    ]
+  },
+  "95.173.204.132": {
+    "ip": "95.173.204.132",
+    "reason": "[서버자동차단] 125점 - 🟠 대용량: 27.4GB, 🔴 극고속: 39.6GB/h",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "210.99.204.240": {
+    "ip": "210.99.204.240",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 6.2GB, 🟠 높은 버스트: 351req/100s",
+    "created_at": "2026-01-22 13:16:54",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:4430:d436:bbfc:4524:1ba6:3663:17a": {
+    "ip": "2001:4430:d436:bbfc:4524:1ba6:3663:17a",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 226req/100s, 🟡 빠른 다운: 6.3GB/h",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "121.160.189.106": {
+    "ip": "121.160.189.106",
+    "reason": "[자동차단] AI탐지 125점 (high) - 🟡 높은 트래픽: 11.8GB, 🟠 높은 버스트: 466req/100s",
+    "created_at": "2026-01-22T11:36:57.756398022+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "6b46224ac5ad",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "ab8f262fe4f8",
+      "41e76d192a03",
+      "11d5ecf97e20",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "6cd73b181f42"
+    ]
+  },
+  "119.56.129.60": {
+    "ip": "119.56.129.60",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 3.4GB, 🟠 높은 버스트: 349req/100s",
+    "created_at": "2026-01-22 13:41:00",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "7",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "6b46224ac5ad",
+      "ab8f262fe4f8",
+      "6cd73b181f42",
+      "11d5ecf97e20",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "a49ee3d372ff"
+    ]
+  },
+  "42.82.12.53": {
+    "ip": "42.82.12.53",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 35.2GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "1",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "218.154.216.61": {
+    "ip": "218.154.216.61",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 40.6GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "7",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2406:5900:7036:8055:7bd8:c973:8bee:c4da": {
+    "ip": "2406:5900:7036:8055:7bd8:c973:8bee:c4da",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 239req/100s, 🟡 빠른 다운: 9.7GB/h",
+    "created_at": "2026-01-22 14:15:44",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "3bdf9d8613fa",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42",
+      "41e76d192a03",
+      "11d5ecf97e20"
+    ]
+  },
+  "115.89.44.64": {
+    "ip": "115.89.44.64",
+    "reason": "[서버자동차단] 105점 - 🔴 극대용량: 34.2GB, 🟡 빠른 다운: 5.7GB/h",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:4430:520f:c2ce::d4:cae7": {
+    "ip": "2001:4430:520f:c2ce::d4:cae7",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 249req/100s, 🟡 빠른 다운: 8.2GB/h",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "1.230.227.127": {
+    "ip": "1.230.227.127",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 37.5GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "115.139.221.113": {
+    "ip": "115.139.221.113",
+    "reason": "[자동차단] AI탐지 185점 (critical) - 🟠 대용량: 22.2GB, 🔴 극심한 버스트: 1172req/100s",
+    "created_at": "2026-01-22T11:36:56.271097853+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "6b46224ac5ad",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "ab8f262fe4f8",
+      "41e76d192a03",
+      "11d5ecf97e20",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "6cd73b181f42"
+    ]
+  },
+  "59.23.70.204": {
+    "ip": "59.23.70.204",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 6.6GB, 🟠 높은 버스트: 337req/100s",
+    "created_at": "2026-01-22 13:16:54",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "3",
+      "2",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:4430:c038:33cb::7f0:8bd3": {
+    "ip": "2001:4430:c038:33cb::7f0:8bd3",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 3.3GB, 🟠 높은 버스트: 307req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "7",
+      "fbdde4624ac0",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "58.29.145.25": {
+    "ip": "58.29.145.25",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 35.8GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "124.5.31.170": {
+    "ip": "124.5.31.170",
+    "reason": "[서버자동차단] 105점 - 🟠 대용량: 15.1GB, 🟠 고속: 15.0GB/h",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "9",
+      "5",
+      "8",
+      "6",
+      "4",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:4430:d084:9fef:7d50:5adf:afb8:eab4": {
+    "ip": "2001:4430:d084:9fef:7d50:5adf:afb8:eab4",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 4.3GB, 🟠 높은 버스트: 294req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "fbdde4624ac0",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "121.131.215.117": {
+    "ip": "121.131.215.117",
+    "reason": "[자동차단] AI탐지 155점 (critical) - 중간 트래픽: 7.2GB, 🔴 극심한 버스트: 1353req/100s",
+    "created_at": "2026-01-22T11:56:46.068572018+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "6cd73b181f42",
+      "11d5ecf97e20",
+      "3bdf9d8613fa",
+      "41e76d192a03"
+    ]
+  },
+  "125.140.150.144": {
+    "ip": "125.140.150.144",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 263req/100s, 🟡 빠른 다운: 7.7GB/h",
+    "created_at": "2026-01-22 14:15:44",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "7",
+      "ab8f262fe4f8",
+      "3bdf9d8613fa",
+      "6b46224ac5ad",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "41e76d192a03",
+      "6cd73b181f42",
+      "11d5ecf97e20"
+    ]
+  },
+  "221.141.231.45": {
+    "ip": "221.141.231.45",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 3.6GB, 🟠 높은 버스트: 299req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "2406:5900:1031:215d:e026:9252:d8f2:e920": {
+    "ip": "2406:5900:1031:215d:e026:9252:d8f2:e920",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 6.7GB, 🟠 높은 버스트: 418req/100s",
+    "created_at": "2026-01-22 13:16:54",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2406:5900:4000:3c7c::146": {
+    "ip": "2406:5900:4000:3c7c::146",
+    "reason": "[자동차단] AI탐지 95점 (medium) - 중간 트래픽: 7.2GB, 🟠 높은 버스트: 319req/100s",
+    "created_at": "2026-01-22T11:56:53.477795170+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "6b46224ac5ad",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "92abef1e2e64",
+      "6cd73b181f42",
+      "11d5ecf97e20",
+      "3bdf9d8613fa",
+      "41e76d192a03"
+    ]
+  },
+  "58.234.241.241": {
+    "ip": "58.234.241.241",
+    "reason": "[서버자동차단] 110점 - 🟡 높은 트래픽: 14.7GB, 🟠 높은 버스트: 317req/100s",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "7",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "39.112.221.33": {
+    "ip": "39.112.221.33",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 30.8GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "4",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "222.110.48.183": {
+    "ip": "222.110.48.183",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 318req/100s, 🟡 빠른 다운: 9.2GB/h",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "114.206.136.132": {
+    "ip": "114.206.136.132",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 44.9GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "1",
+      "6",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "61.77.134.232": {
+    "ip": "61.77.134.232",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 37.2GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "4",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "39.116.123.155": {
+    "ip": "39.116.123.155",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 34.7GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "3",
+      "2",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:4430:d1cc:39f8::875:933": {
+    "ip": "2001:4430:d1cc:39f8::875:933",
+    "reason": "[서버자동차단] 110점 - 🟠 높은 버스트: 244req/100s, 🟠 고속: 12.3GB/h",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:2d8:6a7b:960b:b4b9:fb42:79b0:2ab1": {
+    "ip": "2001:2d8:6a7b:960b:b4b9:fb42:79b0:2ab1",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 294req/100s, 🟡 빠른 다운: 6.9GB/h",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "fbdde4624ac0",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2406:5900:1182:d80f:1510:b312:f2f3:b056": {
+    "ip": "2406:5900:1182:d80f:1510:b312:f2f3:b056",
+    "reason": "[자동차단] AI탐지 95점 (medium) - 중간 트래픽: 7.1GB, 🟠 높은 버스트: 344req/100s",
+    "created_at": "2026-01-22T11:56:54.425753029+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "6b46224ac5ad",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "6cd73b181f42",
+      "92abef1e2e64",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "3bdf9d8613fa",
+      "41e76d192a03"
+    ]
+  },
+  "2001:e60:c236:f492::c3e:36d9": {
+    "ip": "2001:e60:c236:f492::c3e:36d9",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 3.3GB, 🟠 높은 버스트: 314req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "fbdde4624ac0",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "123.248.49.239": {
+    "ip": "123.248.49.239",
+    "reason": "[서버자동차단] 110점 - 🟡 높은 트래픽: 8.4GB, 🟠 높은 버스트: 413req/100s",
+    "created_at": "2026-01-22 13:16:59",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "1",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "2406:5900:3e62:4c65:59f9:e734:c442:3b2f": {
+    "ip": "2406:5900:3e62:4c65:59f9:e734:c442:3b2f",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 5.7GB, 🟠 높은 버스트: 323req/100s",
+    "created_at": "2026-01-22 13:16:54",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "2001:4430:50e8:48d1::6f8:a1f": {
+    "ip": "2001:4430:50e8:48d1::6f8:a1f",
+    "reason": "[서버자동차단] 95점 - 🟠 높은 버스트: 258req/100s, 🟡 빠른 다운: 5.0GB/h",
+    "created_at": "2026-01-22 13:16:43",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "fbdde4624ac0",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "175.118.219.119": {
+    "ip": "175.118.219.119",
+    "reason": "[서버자동차단] 145점 - 중간 트래픽: 5.9GB, 🟠 높은 버스트: 371req/100s",
+    "created_at": "2026-01-22 13:16:54",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "1",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "124.59.243.6": {
+    "ip": "124.59.243.6",
+    "reason": "[자동차단] AI탐지 175점 (critical) - 중간 트래픽: 7.3GB, 🔴 극심한 버스트: 1423req/100s",
+    "created_at": "2026-01-22T11:56:44.910923535+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "6cd73b181f42",
+      "11d5ecf97e20",
+      "3bdf9d8613fa",
+      "41e76d192a03"
+    ]
+  },
+  "14.43.44.174": {
+    "ip": "14.43.44.174",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 3.5GB, 🟠 높은 버스트: 293req/100s",
+    "created_at": "2026-01-22 13:16:48",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "fbdde4624ac0",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "211.237.252.88": {
+    "ip": "211.237.252.88",
+    "reason": "[서버자동차단] 300점 - 🟡 높은 트래픽: 11.5GB, 🟡 빠른 다운: 8.3GB/h",
+    "created_at": "2026-01-22 13:16:59",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "2",
+      "ab8f262fe4f8",
+      "11d5ecf97e20",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "182.214.103.174": {
+    "ip": "182.214.103.174",
+    "reason": "[서버자동차단] 90점 - 🟠 대용량: 26.4GB, 🟡 빠른 다운: 6.7GB/h",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "59.26.19.53": {
+    "ip": "59.26.19.53",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 53.1GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "6",
+      "1",
+      "4",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "11d5ecf97e20",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "3bdf9d8613fa",
+      "6cd73b181f42"
+    ]
+  },
+  "118.220.245.163": {
+    "ip": "118.220.245.163",
+    "reason": "[서버자동차단] 95점 - 중간 트래픽: 6.9GB, 🟠 높은 버스트: 418req/100s",
+    "created_at": "2026-01-22 12:31:52",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "7",
+      "ab8f262fe4f8",
+      "3bdf9d8613fa",
+      "6cd73b181f42",
+      "92abef1e2e64",
+      "11d5ecf97e20",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "6b46224ac5ad",
+      "41e76d192a03"
+    ]
+  },
+  "220.85.248.125": {
+    "ip": "220.85.248.125",
+    "reason": "[자동차단] AI탐지 110점 (high) - 🟡 높은 트래픽: 14.7GB, 🟠 높은 버스트: 331req/100s",
+    "created_at": "2026-01-22T11:36:59.819313573+00:00",
+    "cf_blocked": true,
+    "servers_blocked": [
+      "6b46224ac5ad",
+      "92abef1e2e64",
+      "3bdf9d8613fa",
+      "ab8f262fe4f8",
+      "41e76d192a03",
+      "11d5ecf97e20",
+      "a49ee3d372ff",
+      "fbdde4624ac0",
+      "6cd73b181f42"
+    ]
+  },
+  "59.28.187.204": {
+    "ip": "59.28.187.204",
+    "reason": "[서버자동차단] 90점 - 🔴 극대용량: 33.6GB, 🟡 낮은 경로다양성: 0.0%",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "8",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  },
+  "124.61.53.152": {
+    "ip": "124.61.53.152",
+    "reason": "[서버자동차단] 140점 - 🔴 극대용량: 39.7GB, 🔴 극고속: 44.7GB/h",
+    "created_at": "2026-01-22 13:17:13",
+    "cf_blocked": false,
+    "servers_blocked": [
+      "5",
+      "1",
+      "6",
+      "11d5ecf97e20",
+      "ab8f262fe4f8",
+      "6b46224ac5ad",
+      "41e76d192a03",
+      "fbdde4624ac0",
+      "3bdf9d8613fa",
+      "92abef1e2e64",
+      "a49ee3d372ff",
+      "6cd73b181f42"
+    ]
+  }
+}
