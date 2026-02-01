@@ -2738,9 +2738,9 @@ const pages = {
         </div>
       </div>
 
-      <!-- 점수 산정 방식 (8패턴 v2.1) -->
+      <!-- 점수 산정 방식 (9패턴 v2.2) -->
       <div class="panel" style="margin-top:15px;padding:15px 20px;font-size:11px;color:#888">
-        <div style="margin-bottom:8px"><span style="color:#00d4ff">📊 점수 산정 기준 (8패턴)</span></div>
+        <div style="margin-bottom:8px"><span style="color:#00d4ff">📊 점수 산정 기준 (9패턴)</span></div>
         <div style="line-height:1.9">
           <div style="margin-bottom:4px">
             <span style="color:#ff4444">①트래픽</span> 30GB+60 · 15GB+45 · 8GB+30 · 3GB+15
@@ -2756,6 +2756,9 @@ const pages = {
             <span style="margin-left:12px;color:#ffa500">⑦속도</span> 20GB/h+50 · 10+30 · 5+15
             <span style="margin-left:12px;color:#ffcc00">⑧경로다양성</span> &lt;1%+500req=30
           </div>
+          <div style="margin-bottom:4px">
+            <span style="color:#ff0000;font-weight:bold">⑨캐시우회</span> .gif? 패턴 감지=<b>300</b> (즉시 확정)
+          </div>
         </div>
         <div style="margin-top:8px;padding-top:8px;border-top:1px solid #333">
           <span style="color:#000;background:#fff;padding:2px 6px;border-radius:3px;font-weight:bold">⚫ Confirmed 300</span>
@@ -2765,7 +2768,7 @@ const pages = {
           <span style="margin-left:10px;color:#88ff88">🟢 Low &lt;50</span>
         </div>
         <div style="margin-top:6px;color:#666;font-size:10px">
-          ⚫ 확정: 단일영상어뷰즈+(전체서버 or 10GB+) | 극버스트+극대용량(30GB+)
+          ⚫ 확정: 캐시우회(.gif?) | 단일영상어뷰즈+(전체서버 or 10GB+) | 극버스트+극대용량(30GB+)
         </div>
       </div>
     </div>
@@ -2797,14 +2800,16 @@ const pages = {
           <table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">
             <thead>
               <tr style="background:#1a1a2e">
-                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:12%">IP 주소</th>
-                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:12%">차단 시간</th>
-                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:66%">차단 사유</th>
+                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:14%">IP 주소</th>
+                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:10%">최초 접속</th>
+                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:10%">마지막 접속</th>
+                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:10%">차단 시간</th>
+                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:46%">차단 사유</th>
                 <th style="padding:10px 8px;text-align:center;border-bottom:1px solid #333;width:10%">작업</th>
               </tr>
             </thead>
             <tbody id="blacklistTbodyInline">
-              <tr><td colspan="4" style="text-align:center;color:#666;padding:40px">로딩 중...</td></tr>
+              <tr><td colspan="6" style="text-align:center;color:#666;padding:40px">로딩 중...</td></tr>
             </tbody>
           </table>
         </div>
@@ -3674,7 +3679,7 @@ async function loadBlacklistInline() {
     if (el('blkServers')) el('blkServers').textContent = serversData?.length || 0;
 
     if (blacklist.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#666;padding:40px">차단된 IP가 없습니다</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#666;padding:40px">차단된 IP가 없습니다</td></tr>';
       return;
     }
 
@@ -3688,8 +3693,24 @@ async function loadBlacklistInline() {
       return server ? server.name : id;
     };
 
+    // 시간 포맷 함수
+    const formatLogTime = (ts) => {
+      if (!ts) return '-';
+      // ISO 형식이면 바로 파싱, 아니면 변환
+      let d;
+      if (ts.includes('T')) {
+        d = new Date(ts);
+      } else {
+        d = new Date(ts.replace(' ', 'T') + 'Z');
+      }
+      if (isNaN(d.getTime())) return '-';
+      return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    };
+
     tbody.innerHTML = blacklist.map(item => {
       const blockedAt = item.blocked_at ? new Date(item.blocked_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
+      const firstSeen = formatLogTime(item.first_seen);
+      const lastSeen = formatLogTime(item.last_seen);
       const cfStatus = item.cf_blocked ? '✓' : '✗';
       const cfColor = item.cf_blocked ? '#00ff88' : '#ff6b6b';
       const blockedServers = item.blocked_servers || [];
@@ -3709,6 +3730,8 @@ async function loadBlacklistInline() {
             ${item.ip}
             ${isp ? `<div style="font-size:9px;color:#888;font-weight:normal;margin-top:2px">${isp}</div>` : ''}
           </td>
+          <td style="padding:10px 8px;color:#00d4ff;font-size:11px;vertical-align:top">${firstSeen}</td>
+          <td style="padding:10px 8px;color:#ffcc00;font-size:11px;vertical-align:top">${lastSeen}</td>
           <td style="padding:10px 8px;color:#888;font-size:11px;vertical-align:top">${blockedAt}</td>
           <td style="padding:10px 8px;color:#ccc;font-size:11px;vertical-align:top;word-break:break-word">
             ${item.reason || '-'}
@@ -4687,9 +4710,9 @@ async function initDashboard() {
 
   function render(d) {
     try {
-      if (d.error) { document.getElementById('status').className = 'status err'; document.getElementById('status').textContent = 'Offline'; return; }
-      document.getElementById('status').className = 'status ok';
-      document.getElementById('status').textContent = 'Connected';
+      const statusEl = document.getElementById('status');
+      if (d.error) { if (statusEl) { statusEl.className = 'status err'; statusEl.textContent = 'Offline'; } return; }
+      if (statusEl) { statusEl.className = 'status ok'; statusEl.textContent = 'Connected'; }
 
       // 히어로 메트릭
       const el = id => document.getElementById(id);

@@ -942,10 +942,12 @@ dependencies = [
 name = "simple_ws"
 version = "0.1.0"
 dependencies = [
+ "arc-swap",
  "axum",
  "axum-server",
  "futures-util",
  "lazy_static",
+ "parking_lot",
  "rand",
  "serde",
  "serde_json",

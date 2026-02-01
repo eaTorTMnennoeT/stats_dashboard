@@ -19,8 +19,8 @@ use serde::Deserialize;
 use sha2::{Sha256, Digest};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::broadcast;
+use std::time::{Duration, Instant};
+use tokio::sync::{broadcast, Semaphore};
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 
@@ -28,10 +28,22 @@ const SIMPLE_WS_URL: &str = "http://127.0.0.1:8444";
 const QUESTDB_URL: &str = "http://127.0.0.1:9002";
 const DRAGONFLY_URL: &str = "redis://127.0.0.1:6379";
 
+// 캐시 엔트리
+struct CacheEntry<T> {
+    data: T,
+    expires_at: Instant,
+}
+
 // 전역 상태
 lazy_static::lazy_static! {
     // 외부 서버 관리
     static ref EXTERNAL_SERVERS: Arc<RwLock<HashMap<String, ExternalServer>>> = Arc::new(RwLock::new(HashMap::new()));
+    // Abuser API 캐시 (period -> (data, expires_at))
+    static ref ABUSER_CACHE: Arc<RwLock<HashMap<String, CacheEntry<serde_json::Value>>>> = Arc::new(RwLock::new(HashMap::new()));
+    // Summary API 캐시 (10초 TTL)
+    static ref SUMMARY_CACHE: Arc<RwLock<Option<CacheEntry<serde_json::Value>>>> = Arc::new(RwLock::new(None));
+    // 무거운 쿼리 동시 실행 제한 (최대 2개)
+    static ref HEAVY_QUERY_SEMAPHORE: Arc<Semaphore> = Arc::new(Semaphore::new(2));
     // 에이전트 최신 버전
     static ref AGENT_LATEST_VERSION: Arc<RwLock<String>> = Arc::new(RwLock::new("37".to_string()));
     // 서버 이벤트 (메모리)
@@ -468,6 +480,96 @@ async fn main() {
                 }
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    });
+
+    // Background task: 캐시 정리 (5분마다)
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(300)).await;
+            // Abuser 캐시 정리
+            {
+                let mut cache = ABUSER_CACHE.write();
+                let now = Instant::now();
+                cache.retain(|_, entry| entry.expires_at > now);
+            }
+        }
+    });
+
+
+    // Background task: 일별 집계 + 오래된 파티션 삭제 (1시간마다)
+    let agg_client = client.clone();
+    tokio::spawn(async move {
+        // 시작 시 2분 대기 (서버 안정화)
+        tokio::time::sleep(Duration::from_secs(120)).await;
+        loop {
+            // 1. 어제 데이터를 일별 집계 테이블로 저장
+            let daily_agg_query = r#"
+                INSERT INTO nginx_daily_agg
+                SELECT
+                    timestamp_floor('d', timestamp) as day,
+                    client_ip,
+                    count() as total_requests,
+                    sum(bytes_sent) as total_bytes,
+                    count_distinct(path) as unique_paths,
+                    count_distinct(server_id) as server_count,
+                    0 as max_burst,
+                    min(timestamp) as first_seen,
+                    max(timestamp) as last_seen
+                FROM nginx_logs
+                WHERE timestamp >= dateadd('d', -2, timestamp_floor('d', now()))
+                  AND timestamp < timestamp_floor('d', now())
+                GROUP BY day, client_ip
+            "#;
+
+            if let Ok(resp) = agg_client.get("http://localhost:9002/exec")
+                .query(&[("query", daily_agg_query)])
+                .timeout(Duration::from_secs(300))
+                .send()
+                .await
+            {
+                if resp.status().is_success() {
+                    eprintln!("[Aggregation] Daily aggregation completed");
+                }
+            }
+
+            // 2. 2일 이상 된 파티션 삭제 (집계 완료된 데이터)
+            let partitions_query = "SELECT name FROM table_partitions('nginx_logs')";
+            if let Ok(resp) = agg_client.get("http://localhost:9002/exec")
+                .query(&[("query", partitions_query)])
+                .timeout(Duration::from_secs(30))
+                .send()
+                .await
+            {
+                if let Ok(data) = resp.json::<serde_json::Value>().await {
+                    if let Some(dataset) = data["dataset"].as_array() {
+                        let cutoff = (chrono::Utc::now() - chrono::Duration::days(2))
+                            .format("%Y-%m-%d").to_string();
+
+                        for row in dataset {
+                            if let Some(name) = row[0].as_str() {
+                                // YYYY-MM-DD 형식만 처리 (조각 파티션 제외)
+                                if name.len() == 10 && name < cutoff.as_str() {
+                                    let drop_query = format!(
+                                        "ALTER TABLE nginx_logs DROP PARTITION LIST '{}'", name
+                                    );
+                                    if let Ok(_) = agg_client.get("http://localhost:9002/exec")
+                                        .query(&[("query", &drop_query)])
+                                        .timeout(Duration::from_secs(60))
+                                        .send()
+                                        .await
+                                    {
+                                        eprintln!("[Cleanup] Dropped old partition: {} (aggregated)", name);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 1시간마다 실행
+            tokio::time::sleep(Duration::from_secs(3600)).await;
         }
     });
 
@@ -1301,9 +1403,23 @@ async fn api_popular(
         .unwrap()
 }
 
-// 종합통계 (오늘/어제 비교)
+// 종합통계 (오늘/어제 비교) - hourly_stats에서 미리 계산된 값 사용
 async fn api_summary(State(state): State<AppState>) -> Response {
-    // timestamp_floor('d', now()) = 오늘 자정 UTC
+    // ========== 캐시 확인 (30초 TTL) ==========
+    {
+        let cache = SUMMARY_CACHE.read();
+        if let Some(ref entry) = *cache {
+            if entry.expires_at > Instant::now() {
+                return Response::builder()
+                    .header("content-type", "application/json")
+                    .header("x-cache", "HIT")
+                    .body(Body::from(entry.data.to_string()))
+                    .unwrap();
+            }
+        }
+    }
+
+    // p2p_stats에서 피크값, 트래픽
     let today_query = "SELECT max(viewers) as max_viewers, max(unique_users) as max_users, \
         last(http_bytes) as http_bytes, last(p2p_bytes) as p2p_bytes, last(swarms) as swarms \
         FROM p2p_stats WHERE ts >= timestamp_floor('d', now())";
@@ -1312,30 +1428,73 @@ async fn api_summary(State(state): State<AppState>) -> Response {
         last(http_bytes) as http_bytes, last(p2p_bytes) as p2p_bytes, last(swarms) as swarms \
         FROM p2p_stats WHERE ts >= dateadd('d', -1, timestamp_floor('d', now())) AND ts < timestamp_floor('d', now())";
 
-    let today_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(today_query));
-    let yesterday_url = format!("{}/exec?query={}", QUESTDB_URL, urlencoding::encode(yesterday_query));
+    // hourly_stats에서 오늘/어제 재생수, 순방문자 (GROUP BY로 중복 제거 후 합산)
+    let today_hourly_query = "SELECT sum(plays) as plays, sum(unique_visitors) as unique_visitors \
+        FROM (SELECT ts, max(plays) as plays, max(unique_visitors) as unique_visitors FROM hourly_stats WHERE ts >= timestamp_floor('d', now()) GROUP BY ts)";
 
-    let (today_res, yesterday_res) = tokio::join!(
-        state.client.get(&today_url).send(),
-        state.client.get(&yesterday_url).send()
+    let yesterday_hourly_query = "SELECT sum(plays) as plays, sum(unique_visitors) as unique_visitors \
+        FROM (SELECT ts, max(plays) as plays, max(unique_visitors) as unique_visitors FROM hourly_stats WHERE ts >= dateadd('d', -1, timestamp_floor('d', now())) AND ts < timestamp_floor('d', now()) GROUP BY ts)";
+
+    let (today_res, yesterday_res, today_hourly_res, yesterday_hourly_res) = tokio::join!(
+        questdb_query_json(&state.client, today_query),
+        questdb_query_json(&state.client, yesterday_query),
+        questdb_query_json(&state.client, today_hourly_query),
+        questdb_query_json(&state.client, yesterday_hourly_query)
     );
 
-    let today_data = match today_res {
-        Ok(r) => r.text().await.unwrap_or_else(|_| "{}".to_string()),
-        Err(_) => "{}".to_string(),
-    };
-    let yesterday_data = match yesterday_res {
-        Ok(r) => r.text().await.unwrap_or_else(|_| "{}".to_string()),
-        Err(_) => "{}".to_string(),
-    };
+    // QuestDB 응답에서 첫 번째 행 추출 헬퍼
+    fn extract_row(json: &serde_json::Value) -> Option<&Vec<serde_json::Value>> {
+        json.get("dataset")?.as_array()?.first()?.as_array()
+    }
 
-    let body = format!(r#"{{"today":{},"yesterday":{}}}"#, today_data, yesterday_data);
+    // 오늘 데이터 파싱
+    let today_row = today_res.as_ref().ok().and_then(|j| extract_row(j));
+    let today_hourly_row = today_hourly_res.as_ref().ok().and_then(|j| extract_row(j));
+
+    let today_data = serde_json::json!({
+        "max_viewers": today_row.and_then(|r| r.get(0)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "max_users": today_row.and_then(|r| r.get(1)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "http_bytes": today_row.and_then(|r| r.get(2)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "p2p_bytes": today_row.and_then(|r| r.get(3)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "swarms": today_row.and_then(|r| r.get(4)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "plays": today_hourly_row.and_then(|r| r.get(0)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "unique_visitors": today_hourly_row.and_then(|r| r.get(1)).and_then(|v| v.as_i64()).unwrap_or(0)
+    });
+
+    // 어제 데이터 파싱
+    let yesterday_row = yesterday_res.as_ref().ok().and_then(|j| extract_row(j));
+    let yesterday_hourly_row = yesterday_hourly_res.as_ref().ok().and_then(|j| extract_row(j));
+
+    let yesterday_data = serde_json::json!({
+        "max_viewers": yesterday_row.and_then(|r| r.get(0)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "max_users": yesterday_row.and_then(|r| r.get(1)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "http_bytes": yesterday_row.and_then(|r| r.get(2)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "p2p_bytes": yesterday_row.and_then(|r| r.get(3)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "swarms": yesterday_row.and_then(|r| r.get(4)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "plays": yesterday_hourly_row.and_then(|r| r.get(0)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "unique_visitors": yesterday_hourly_row.and_then(|r| r.get(1)).and_then(|v| v.as_i64()).unwrap_or(0)
+    });
+
+    let body = serde_json::json!({
+        "today": today_data,
+        "yesterday": yesterday_data
+    });
+
+    // ========== 결과 캐시 (30초 TTL) ==========
+    {
+        let mut cache = SUMMARY_CACHE.write();
+        *cache = Some(CacheEntry {
+            data: body.clone(),
+            expires_at: Instant::now() + Duration::from_secs(30),
+        });
+    }
 
     Response::builder()
         .status(StatusCode::OK)
         .header("content-type", "application/json")
         .header("access-control-allow-origin", "*")
-        .body(axum::body::Body::from(body))
+        .header("x-cache", "MISS")
+        .body(axum::body::Body::from(body.to_string()))
         .unwrap()
 }
 
@@ -1411,7 +1570,7 @@ async fn questdb_query_json(client: &Client, query: &str) -> Result<serde_json::
 async fn api_init_data(State(state): State<AppState>) -> Response {
     let client = &state.client;
 
-    // 오늘/어제 summary
+    // 오늘/어제 summary (p2p_stats에서 피크값, 트래픽)
     let today_query = "SELECT max(viewers) as max_viewers, max(unique_users) as max_users, \
         last(http_bytes) as http_bytes, last(p2p_bytes) as p2p_bytes, last(swarms) as swarms \
         FROM p2p_stats WHERE ts >= timestamp_floor('d', now())";
@@ -1419,25 +1578,70 @@ async fn api_init_data(State(state): State<AppState>) -> Response {
         last(http_bytes) as http_bytes, last(p2p_bytes) as p2p_bytes, last(swarms) as swarms \
         FROM p2p_stats WHERE ts >= dateadd('d', -1, timestamp_floor('d', now())) AND ts < timestamp_floor('d', now())";
 
-    let today = questdb_query_json(client, today_query).await.ok();
-    let yesterday = questdb_query_json(client, yesterday_query).await.ok();
+    // hourly_stats에서 오늘/어제 재생수, 순방문자 (GROUP BY로 중복 제거 후 합산)
+    let today_hourly_query = "SELECT sum(plays) as plays, sum(unique_visitors) as unique_visitors \
+        FROM (SELECT ts, max(plays) as plays, max(unique_visitors) as unique_visitors FROM hourly_stats WHERE ts >= timestamp_floor('d', now()) GROUP BY ts)";
+    let yesterday_hourly_query = "SELECT sum(plays) as plays, sum(unique_visitors) as unique_visitors \
+        FROM (SELECT ts, max(plays) as plays, max(unique_visitors) as unique_visitors FROM hourly_stats WHERE ts >= dateadd('d', -1, timestamp_floor('d', now())) AND ts < timestamp_floor('d', now()) GROUP BY ts)";
 
-    let summary = serde_json::json!({
-        "today": today,
-        "yesterday": yesterday
+    let (today_res, yesterday_res, today_visitors_res, yesterday_visitors_res) = tokio::join!(
+        questdb_query_json(client, today_query),
+        questdb_query_json(client, yesterday_query),
+        questdb_query_json(client, today_hourly_query),
+        questdb_query_json(client, yesterday_hourly_query)
+    );
+
+    // QuestDB 응답에서 첫 번째 행 추출 헬퍼
+    fn extract_row(json: &serde_json::Value) -> Option<&Vec<serde_json::Value>> {
+        json.get("dataset")?.as_array()?.first()?.as_array()
+    }
+
+    // 오늘 데이터 파싱: [max_viewers, max_users, http_bytes, p2p_bytes, swarms]
+    let today_row = today_res.as_ref().ok().and_then(|j| extract_row(j));
+    let today_visitors_row = today_visitors_res.as_ref().ok().and_then(|j| extract_row(j));
+
+    let today_data = serde_json::json!({
+        "max_viewers": today_row.and_then(|r| r.get(0)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "max_users": today_row.and_then(|r| r.get(1)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "http_bytes": today_row.and_then(|r| r.get(2)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "p2p_bytes": today_row.and_then(|r| r.get(3)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "swarms": today_row.and_then(|r| r.get(4)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "plays": today_visitors_row.and_then(|r| r.get(0)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "unique_visitors": today_visitors_row.and_then(|r| r.get(1)).and_then(|v| v.as_i64()).unwrap_or(0)
     });
 
-    // 일별 통계 (최근 30일)
-    let daily_query = "SELECT ts, viewers, unique_users, http_bytes, p2p_bytes, p2p_up_bytes, \
-        peers, swarms, plays, unique_visitors, tvmon, tvwiki, tvhot, mobile, pc \
-        FROM hourly_stats WHERE ts >= dateadd('d', -30, now()) ORDER BY ts";
+    // 어제 데이터 파싱
+    let yesterday_row = yesterday_res.as_ref().ok().and_then(|j| extract_row(j));
+    let yesterday_visitors_row = yesterday_visitors_res.as_ref().ok().and_then(|j| extract_row(j));
+
+    let yesterday_data = serde_json::json!({
+        "max_viewers": yesterday_row.and_then(|r| r.get(0)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "max_users": yesterday_row.and_then(|r| r.get(1)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "http_bytes": yesterday_row.and_then(|r| r.get(2)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "p2p_bytes": yesterday_row.and_then(|r| r.get(3)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "swarms": yesterday_row.and_then(|r| r.get(4)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "plays": yesterday_visitors_row.and_then(|r| r.get(0)).and_then(|v| v.as_i64()).unwrap_or(0),
+        "unique_visitors": yesterday_visitors_row.and_then(|r| r.get(1)).and_then(|v| v.as_i64()).unwrap_or(0)
+    });
+
+    let summary = serde_json::json!({
+        "today": today_data,
+        "yesterday": yesterday_data
+    });
+
+    // 일별 통계 (최근 30일) - GROUP BY로 중복 제거
+    let daily_query = "SELECT ts, max(viewers) as viewers, max(unique_users) as unique_users, \
+        max(http_bytes) as http_bytes, max(p2p_bytes) as p2p_bytes, max(p2p_up_bytes) as p2p_up_bytes, \
+        max(peers) as peers, max(swarms) as swarms, max(plays) as plays, max(unique_visitors) as unique_visitors, \
+        max(tvmon) as tvmon, max(tvwiki) as tvwiki, max(tvhot) as tvhot, max(mobile) as mobile, max(pc) as pc \
+        FROM hourly_stats WHERE ts >= dateadd('d', -30, now()) GROUP BY ts ORDER BY ts";
     let daily_stats = questdb_query_json(client, daily_query).await.unwrap_or(serde_json::json!({}));
 
-    // 월별 통계
+    // 월별 통계 - 서브쿼리로 중복 제거 후 집계
     let monthly_query = "SELECT timestamp_floor('M', ts) as month, \
         max(viewers) as peak_viewers, max(unique_users) as peak_users, \
         sum(http_bytes) as total_http, sum(p2p_bytes) as total_p2p \
-        FROM hourly_stats GROUP BY month ORDER BY month DESC LIMIT 12";
+        FROM (SELECT ts, max(viewers) as viewers, max(unique_users) as unique_users, max(http_bytes) as http_bytes, max(p2p_bytes) as p2p_bytes FROM hourly_stats GROUP BY ts) GROUP BY month ORDER BY month DESC LIMIT 12";
     let monthly_stats = questdb_query_json(client, monthly_query).await.unwrap_or(serde_json::json!({}));
 
     Response::builder()
@@ -2314,30 +2518,112 @@ async fn auth_middleware(
 // ============ 블랙리스트 API ============
 
 async fn api_blacklist_list() -> impl IntoResponse {
-    let blocked = BLOCKED_SERVERS.read();
-    let pending = PENDING_BLOCKS.read();
+    // 먼저 데이터 복사 (락 빠르게 해제)
+    let (blocked_data, pending_data, server_id_to_name): (Vec<_>, Vec<_>, HashMap<String, String>) = {
+        let blocked = BLOCKED_SERVERS.read();
+        let pending = PENDING_BLOCKS.read();
+        let servers = EXTERNAL_SERVERS.read();
+        let b: Vec<_> = blocked.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let p: Vec<_> = pending.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        // 서버 ID → 이름 매핑 (컨테이너ID → 서버번호)
+        let id_map: HashMap<String, String> = servers.iter()
+            .map(|(_, s)| (s.id.clone(), s.name.clone()))
+            .collect();
+        (b, p, id_map)
+    };
+
+    // 서버 ID 정규화 함수 (컨테이너 ID → 서버 이름, 중복 제거)
+    let normalize_servers = |servers: &[String]| -> Vec<String> {
+        let mut names: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for s in servers {
+            // 컨테이너 ID면 서버 이름으로 변환, 아니면 그대로 사용
+            let name = server_id_to_name.get(s).cloned().unwrap_or_else(|| s.clone());
+            names.insert(name);
+        }
+        let mut result: Vec<String> = names.into_iter().collect();
+        // 숫자 정렬 시도
+        result.sort_by(|a, b| {
+            match (a.parse::<i32>(), b.parse::<i32>()) {
+                (Ok(na), Ok(nb)) => na.cmp(&nb),
+                _ => a.cmp(b)
+            }
+        });
+        result
+    };
+
+    // 모든 IP 수집
+    let all_ips: Vec<String> = blocked_data.iter().map(|(k, _)| k.clone())
+        .chain(pending_data.iter().map(|(k, _)| k.clone()))
+        .collect();
+
+    // IP별 first_seen, last_seen 조회
+    let mut ip_times: HashMap<String, (String, String)> = HashMap::new();
+    if !all_ips.is_empty() {
+        let ips_filter = all_ips.iter()
+            .map(|ip| format!("'{}'", ip))
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let query = format!(r#"
+            SELECT client_ip, min(timestamp) as first_seen, max(timestamp) as last_seen
+            FROM nginx_logs
+            WHERE client_ip IN ({})
+            GROUP BY client_ip
+        "#, ips_filter);
+
+        let client = reqwest::Client::new();
+        if let Ok(resp) = client.get("http://localhost:9002/exec")
+            .query(&[("query", &query)])
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+        {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                if let Some(dataset) = data["dataset"].as_array() {
+                    for row in dataset {
+                        let ip = row[0].as_str().unwrap_or("").to_string();
+                        let first = row[1].as_str().unwrap_or("").to_string();
+                        let last = row[2].as_str().unwrap_or("").to_string();
+                        ip_times.insert(ip, (first, last));
+                    }
+                }
+            }
+        }
+    }
 
     let mut items: Vec<serde_json::Value> = Vec::new();
 
-    for (ip, cmd) in blocked.iter() {
+    for (ip, cmd) in blocked_data {
+        let (first_seen, last_seen) = ip_times.get(&ip)
+            .cloned()
+            .unwrap_or_default();
+        let normalized = normalize_servers(&cmd.servers_blocked);
         items.push(serde_json::json!({
             "ip": ip,
             "reason": cmd.reason,
             "blocked_at": cmd.created_at,
             "cf_blocked": cmd.cf_blocked,
-            "blocked_servers": cmd.servers_blocked,
-            "status": "blocked"
+            "blocked_servers": normalized,
+            "status": "blocked",
+            "first_seen": first_seen,
+            "last_seen": last_seen
         }));
     }
 
-    for (ip, cmd) in pending.iter() {
+    for (ip, cmd) in pending_data {
+        let (first_seen, last_seen) = ip_times.get(&ip)
+            .cloned()
+            .unwrap_or_default();
+        let normalized = normalize_servers(&cmd.servers_blocked);
         items.push(serde_json::json!({
             "ip": ip,
             "reason": cmd.reason,
             "blocked_at": cmd.created_at,
             "cf_blocked": cmd.cf_blocked,
-            "blocked_servers": cmd.servers_blocked,
-            "status": "pending"
+            "blocked_servers": normalized,
+            "status": "pending",
+            "first_seen": first_seen,
+            "last_seen": last_seen
         }));
     }
 
@@ -2669,10 +2955,46 @@ async fn api_agent_register(
 
 // ============ 어뷰저 탐지 API ============
 
-async fn api_logs_abusers(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
-    let client = reqwest::Client::new();
+async fn api_logs_abusers(Query(params): Query<HashMap<String, String>>) -> Json<serde_json::Value> {
     let period = params.get("period").map(|s| s.as_str()).unwrap_or("6h");
     let limit = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(30i32);
+    let cache_key = format!("{}_{}", period, limit);
+
+    // ========== 캐시 확인 (30초 TTL) ==========
+    {
+        let cache = ABUSER_CACHE.read();
+        if let Some(entry) = cache.get(&cache_key) {
+            if entry.expires_at > Instant::now() {
+                return Json(entry.data.clone());
+            }
+        }
+    }
+
+    // ========== 동시 쿼리 제한 (최대 2개) ==========
+    let _permit = match HEAVY_QUERY_SEMAPHORE.try_acquire() {
+        Ok(permit) => Some(permit),
+        Err(_) => {
+            // 이미 2개 쿼리 실행 중 - 캐시된 값 반환 (만료되어도)
+            let cache = ABUSER_CACHE.read();
+            if let Some(entry) = cache.get(&cache_key) {
+                return Json(entry.data.clone());
+            }
+            // 캐시도 없으면 빈 결과 반환 (과부하 방지)
+            return Json(serde_json::json!({"abusers": [], "cached": false, "busy": true}));
+        }
+    };
+
+    // 다시 캐시 확인 (다른 요청이 캐시를 채웠을 수 있음)
+    {
+        let cache = ABUSER_CACHE.read();
+        if let Some(entry) = cache.get(&cache_key) {
+            if entry.expires_at > Instant::now() {
+                return Json(entry.data.clone());
+            }
+        }
+    }
+
+    let client = reqwest::Client::new();
 
     let time_filter = match period {
         "1h" => "dateadd('h', -1, now())",
@@ -2749,8 +3071,19 @@ async fn api_logs_abusers(Query(params): Query<HashMap<String, String>>) -> impl
         LIMIT 300
     "#, single_path_time);
 
+    // 5. 캐시 우회 탐지 (세그먼트 파일에 쿼리스트링 추가 - .gif? 패턴)
+    let cache_bypass_query = format!(r#"
+        SELECT client_ip, count() as cnt
+        FROM nginx_logs
+        WHERE timestamp > {} AND status = 200
+          AND path ~ '\.gif\?'
+        GROUP BY client_ip
+        ORDER BY cnt DESC
+        LIMIT 200
+    "#, time_filter);
+
     // 모든 쿼리 병렬 실행
-    let (res, servers_res, max100s_res, single_path_res) = tokio::join!(
+    let (res, servers_res, max100s_res, single_path_res, cache_bypass_res) = tokio::join!(
         client.get("http://localhost:9002/exec")
             .query(&[("query", &query)])
             .timeout(std::time::Duration::from_secs(20))
@@ -2766,6 +3099,10 @@ async fn api_logs_abusers(Query(params): Query<HashMap<String, String>>) -> impl
         client.get("http://localhost:9002/exec")
             .query(&[("query", &single_path_query)])
             .timeout(std::time::Duration::from_secs(20))
+            .send(),
+        client.get("http://localhost:9002/exec")
+            .query(&[("query", &cache_bypass_query)])
+            .timeout(std::time::Duration::from_secs(10))
             .send()
     );
 
@@ -2802,6 +3139,20 @@ async fn api_logs_abusers(Query(params): Query<HashMap<String, String>>) -> impl
                     if cnt > entry.0 {
                         *entry = (cnt, bytes);
                     }
+                }
+            }
+        }
+    }
+
+    // IP -> 캐시 우회 요청 수 (.gif? 패턴)
+    let mut ip_cache_bypass: HashMap<String, i64> = HashMap::new();
+    if let Ok(resp) = cache_bypass_res {
+        if let Ok(data) = resp.json::<serde_json::Value>().await {
+            if let Some(dataset) = data["dataset"].as_array() {
+                for row in dataset {
+                    let ip = row[0].as_str().unwrap_or("").to_string();
+                    let cnt = row[1].as_i64().unwrap_or(0);
+                    ip_cache_bypass.insert(ip, cnt);
                 }
             }
         }
@@ -2969,6 +3320,16 @@ async fn api_logs_abusers(Query(params): Query<HashMap<String, String>>) -> impl
                         reasons.push(format!("🟡 낮은 경로다양성: {:.1}%", path_ratio * 100.0));
                     }
 
+                    // ===== 캐시 우회 공격 (확정 악성 - 300점) =====
+                    // 세그먼트 파일(.gif)에 쿼리스트링 추가하여 캐시 우회 시도
+                    let cache_bypass_cnt = ip_cache_bypass.get(ip).copied().unwrap_or(0);
+                    if cache_bypass_cnt > 0 {
+                        score = 300;
+                        reasons.push(format!("🔴 캐시우회 공격: .gif? 패턴 {}회", cache_bypass_cnt));
+                        flags.push("CACHE_BYPASS");
+                        flags.push("CONFIRMED_ABUSER");
+                    }
+
                     // ===== 확정 악성 유저 (300점 부여) =====
                     // 조건: 단일비디오 어뷰즈 + 전체서버 공격 + 10GB 이상
                     let is_confirmed_abuser = flags.contains(&"SINGLE_VIDEO_ABUSE")
@@ -3035,7 +3396,135 @@ async fn api_logs_abusers(Query(params): Query<HashMap<String, String>>) -> impl
     });
     abusers.truncate(limit as usize);
 
-    Json(serde_json::json!({"abusers": abusers}))
+    // ========== 서버 정보 누락 IP 보완 ==========
+    let missing_server_ips: Vec<String> = abusers.iter()
+        .filter(|a| a["servers"].as_array().map(|arr| arr.is_empty()).unwrap_or(true))
+        .filter_map(|a| a["ip"].as_str().map(|s| s.to_string()))
+        .collect();
+
+    if !missing_server_ips.is_empty() {
+        let ips_filter = missing_server_ips.iter()
+            .map(|ip| format!("'{}'", ip))
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let missing_query = format!(r#"
+            SELECT client_ip, server_id, count() as cnt
+            FROM nginx_logs
+            WHERE timestamp > {} AND status = 200 AND client_ip IN ({})
+            GROUP BY client_ip, server_id
+        "#, time_filter, ips_filter);
+
+        if let Ok(resp) = client.get("http://localhost:9002/exec")
+            .query(&[("query", &missing_query)])
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+        {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                if let Some(dataset) = data["dataset"].as_array() {
+                    let mut ip_server_map: HashMap<String, Vec<String>> = HashMap::new();
+                    for row in dataset {
+                        let ip = row[0].as_str().unwrap_or("").to_string();
+                        let server_id = row[1].as_str().unwrap_or("").to_string();
+                        if !server_id.is_empty() {
+                            let server_name = server_name_map.get(&server_id)
+                                .cloned()
+                                .unwrap_or_else(|| server_id.chars().take(6).collect());
+                            ip_server_map.entry(ip).or_default().push(server_name);
+                        }
+                    }
+
+                    // abusers 업데이트
+                    for abuser in &mut abusers {
+                        if let Some(ip) = abuser["ip"].as_str() {
+                            if let Some(servers) = ip_server_map.get(ip) {
+                                abuser["servers"] = serde_json::json!(servers);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ========== 서버 측 자동 차단 (85점 이상) ==========
+    let auto_block_threshold = 85i64;
+    let mut to_block: Vec<(String, String, Vec<String>, usize)> = Vec::new();
+
+    // 차단할 IP 수집
+    for (idx, abuser) in abusers.iter().enumerate() {
+        let score = abuser["score"].as_i64().unwrap_or(0);
+        let already_blocked = abuser["alreadyBlocked"].as_bool().unwrap_or(false);
+
+        if score >= auto_block_threshold && !already_blocked {
+            let ip = abuser["ip"].as_str().unwrap_or("").to_string();
+            let reasons = abuser["reasons"].as_array()
+                .map(|arr| arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .take(2)
+                    .collect::<Vec<_>>()
+                    .join(", "))
+                .unwrap_or_default();
+            let servers: Vec<String> = abuser["servers"].as_array()
+                .map(|arr| arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect())
+                .unwrap_or_default();
+
+            if !ip.is_empty() {
+                let reason = format!("[서버자동차단] {}점 - {}", score, reasons);
+                to_block.push((ip, reason, servers, idx));
+            }
+        }
+    }
+
+    // 실제 차단 실행
+    for (ip, reason, servers, idx) in to_block {
+        let should_block = {
+            let blocked = BLOCKED_SERVERS.read();
+            !blocked.contains_key(&ip)
+        };
+
+        if should_block {
+            {
+                let mut blocked = BLOCKED_SERVERS.write();
+                blocked.insert(ip.clone(), BlockCommand {
+                    ip: ip.clone(),
+                    reason: reason.clone(),
+                    created_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                    cf_blocked: false,
+                    servers_blocked: servers,
+                });
+            }
+            abusers[idx]["alreadyBlocked"] = serde_json::json!(true);
+            println!("[AutoBlock] {} - {}", ip, reason);
+
+            // Cloudflare 차단 (비동기)
+            let ip_clone = ip.clone();
+            let reason_clone = reason.clone();
+            tokio::spawn(async move {
+                block_ip_cloudflare(&ip_clone, &reason_clone).await;
+            });
+        }
+    }
+
+    // 변경사항 저장 (차단된 것이 있으면)
+    if BLOCKED_SERVERS.read().len() > 0 {
+        save_blocked_list();
+    }
+
+    // ========== 결과 캐시 (30초 TTL) ==========
+    let result = serde_json::json!({"abusers": abusers});
+    {
+        let mut cache = ABUSER_CACHE.write();
+        cache.insert(cache_key, CacheEntry {
+            data: result.clone(),
+            expires_at: Instant::now() + Duration::from_secs(30),
+        });
+    }
+
+    Json(result)
 }
 
 // ============ 로그 리스트 API ============
@@ -3211,10 +3700,11 @@ async fn api_logs_receive(
     }
 
     let client = reqwest::Client::new();
-    let mut inserted = 0;
     let server_id = req.server_id.replace("'", "''");
 
-    // 각 로그 엔트리를 QuestDB에 삽입
+    // 배치 INSERT를 위해 모든 VALUES를 모음
+    let mut values_list: Vec<String> = Vec::with_capacity(logs.len());
+
     for log in &logs {
         // timestamp가 숫자(나노초)인 경우 ISO8601로 변환
         let timestamp = match &log.timestamp {
@@ -3244,10 +3734,18 @@ async fn api_logs_receive(
         let user_agent = user_agent.replace("'", "''");
         let referer = referer.replace("'", "''");
 
-        let query = format!(
-            "INSERT INTO nginx_logs (timestamp, server_id, client_ip, method, path, status, bytes_sent, response_time, referer, user_agent) \
-             VALUES ('{}', '{}', '{}', '{}', '{}', {}, {}, {}, '{}', '{}')",
+        values_list.push(format!(
+            "('{}', '{}', '{}', '{}', '{}', {}, {}, {}, '{}', '{}')",
             timestamp, server_id, client_ip, method, path, log.status, log.bytes_sent, response_time, referer, user_agent
+        ));
+    }
+
+    // 한 번에 최대 100개씩 배치 INSERT (쿼리가 너무 길어지지 않게)
+    let mut inserted = 0;
+    for chunk in values_list.chunks(100) {
+        let query = format!(
+            "INSERT INTO nginx_logs (timestamp, server_id, client_ip, method, path, status, bytes_sent, response_time, referer, user_agent) VALUES {}",
+            chunk.join(",")
         );
 
         let res = client.get("http://localhost:9002/exec")
@@ -3256,7 +3754,7 @@ async fn api_logs_receive(
             .await;
 
         if res.is_ok() {
-            inserted += 1;
+            inserted += chunk.len();
         }
     }
 
