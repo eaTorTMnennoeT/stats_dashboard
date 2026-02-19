@@ -7,11 +7,15 @@ use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::IpAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
+
+// 실제 TCP 연결 수 추적 (sockets 맵과 별개로 정확한 카운팅)
+static ACTIVE_CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
 
 // ============================================================
 // GeoIP Reader (전역)
@@ -64,7 +68,10 @@ static GEOIP_CITY_READER: Lazy<Option<Reader<Vec<u8>>>> = Lazy::new(|| {
 const MAX_PEER_AGE_MS: u64 = 180_000;       // 피어 타임아웃 180초
 const MAX_OFFER_AGE_MS: u64 = 120_000;      // Offer 만료 120초
 const MAX_OFFERS_PER_ANNOUNCE: usize = 10;   // 최대 offer 수
-const CLEANUP_INTERVAL_SECS: u64 = 30;       // 정리 주기
+const MAX_SWARMS_TOTAL: usize = 50_000;      // 최대 스웜 수
+const MAX_PEER_CONNECTIONS: usize = 100_000; // 최대 peer_connections 수
+const MAX_ACTIVE_SOCKETS: usize = 20_000;    // 최대 동시 연결 수 (메모리 ~1.3GB)
+const CLEANUP_INTERVAL_SECS: u64 = 5;        // 정리 주기 (메모리 관리 강화)
 const PEER_ANNOUNCE_INTERVAL: usize = 120;   // 재announce 주기
 
 // ============================================================
@@ -185,7 +192,7 @@ struct TrackerState {
     matches_random: u64,         // 해외 매칭
 
     // 메시지 로그 (최근 200개)
-    message_logs: Vec<MessageLog>,
+    message_logs: VecDeque<MessageLog>,
 
     // 피어별 연결 관계
     peer_connections: HashMap<String, PeerConnection>,
@@ -759,9 +766,9 @@ fn handle_announce(
                             to_city: target_geo.city.clone(),
                             match_tier: match_tier.to_string(),
                         };
-                        state.message_logs.push(log_entry);
+                        state.message_logs.push_back(log_entry);
                         if state.message_logs.len() > MAX_MESSAGE_LOGS {
-                            state.message_logs.remove(0);
+                            state.message_logs.pop_front();
                         }
 
                         // 연결 관계 기록
@@ -980,9 +987,9 @@ fn handle_announce(
                     to_city: target_peer.geo.city.clone(),
                     match_tier: match_tier.to_string(),
                 };
-                state.message_logs.push(log_entry);
+                state.message_logs.push_back(log_entry);
                 if state.message_logs.len() > MAX_MESSAGE_LOGS {
-                    state.message_logs.remove(0);
+                    state.message_logs.pop_front();
                 }
 
                 // 연결 관계 기록
@@ -1077,6 +1084,9 @@ fn cleanup_peer(state: &mut TrackerState, socket_id: u64) {
                     state.swarms.swap_remove(&info_hash);
                 }
             }
+
+            // peer_connections에서도 제거
+            state.peer_connections.remove(&peer_id);
         }
     }
 
@@ -1124,7 +1134,14 @@ async fn ws_handler(
         .unwrap_or("unknown")
         .to_string();
 
-    // 메시지 전송용 채널
+    // 연결 수 제한 체크 (AtomicUsize로 실제 TCP 연결 수 추적)
+    let current = ACTIVE_CONNECTIONS.fetch_add(1, Ordering::Relaxed);
+    if current >= MAX_ACTIVE_SOCKETS {
+        ACTIVE_CONNECTIONS.fetch_sub(1, Ordering::Relaxed);
+        log::warn!("Connection limit reached ({}/{}), rejecting", current, MAX_ACTIVE_SOCKETS);
+        return Ok(HttpResponse::ServiceUnavailable().body("Too many connections"));
+    }
+
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
 
     // 소켓 등록
@@ -1141,10 +1158,18 @@ async fn ws_handler(
 
     // 메시지 처리 태스크
     actix_rt::spawn(async move {
+        // Heartbeat: 30초마다 ping, 2번 연속 실패 시 종료
+        let mut heartbeat_interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        let mut missed_heartbeats: u8 = 0;
+        const MAX_MISSED_HEARTBEATS: u8 = 2;
+
         loop {
             tokio::select! {
                 // 클라이언트로부터 메시지 수신
                 Some(msg) = msg_stream.next() => {
+                    // 메시지 수신 시 heartbeat 리셋
+                    missed_heartbeats = 0;
+
                     match msg {
                         Ok(Message::Text(text)) => {
                             if let Ok(tracker_msg) = serde_json::from_str::<TrackerMessage>(&text) {
@@ -1179,6 +1204,10 @@ async fn ws_handler(
                         Ok(Message::Ping(data)) => {
                             let _ = session.pong(&data).await;
                         }
+                        Ok(Message::Pong(_)) => {
+                            // Pong 수신 - 연결 활성 상태 확인됨
+                            missed_heartbeats = 0;
+                        }
                         Ok(Message::Close(_)) => {
                             break;
                         }
@@ -1196,6 +1225,18 @@ async fn ws_handler(
                     }
                 }
 
+                // Heartbeat ping 전송
+                _ = heartbeat_interval.tick() => {
+                    missed_heartbeats += 1;
+                    if missed_heartbeats > MAX_MISSED_HEARTBEATS {
+                        log::debug!("Heartbeat timeout: socket_id={}", socket_id);
+                        break;
+                    }
+                    if session.ping(b"").await.is_err() {
+                        break;
+                    }
+                }
+
                 else => break,
             }
         }
@@ -1204,6 +1245,8 @@ async fn ws_handler(
         log::info!("Connection closed: socket_id={}", socket_id);
         let mut s = state_clone.write();
         cleanup_peer(&mut s, socket_id);
+        drop(s);
+        ACTIVE_CONNECTIONS.fetch_sub(1, Ordering::Relaxed);
     });
 
     Ok(res)
@@ -1451,6 +1494,25 @@ async fn api_health() -> HttpResponse {
     HttpResponse::Ok().json(serde_json::json!({"status": "ok"}))
 }
 
+// IP 정보 조회 API (배치 지원)
+async fn api_ip_lookup(body: web::Json<Vec<String>>) -> HttpResponse {
+    let ips = body.into_inner();
+    let results: Vec<serde_json::Value> = ips.iter()
+        .take(100) // 최대 100개
+        .map(|ip| {
+            let geo = lookup_geo(ip);
+            serde_json::json!({
+                "query": ip,
+                "isp": geo.as_org,
+                "country": geo.country,
+                "city": geo.city,
+                "asn": geo.asn
+            })
+        })
+        .collect();
+    HttpResponse::Ok().json(results)
+}
+
 // ============================================================
 // 어드민 API (리퍼러 관리)
 // ============================================================
@@ -1567,45 +1629,144 @@ async fn cleanup_task(state: SharedState) {
         interval.tick().await;
 
         let now = now_ms();
-
-        let mut s = state.write();
-
-        // 타임아웃된 피어 및 만료된 offer 정리
         let mut peers_removed = 0u64;
         let mut offers_expired = 0u64;
+        let mut conns_removed = 0usize;
 
-        for swarm in s.swarms.values_mut() {
-            // 만료된 expecting_answers 정리
-            for peer in swarm.peers.values_mut() {
-                let before = peer.expecting_answers.len();
-                peer.expecting_answers.retain(|_, valid_until| *valid_until > now);
-                offers_expired += (before - peer.expecting_answers.len()) as u64;
+        // Phase 1: 타임아웃된 피어 및 만료된 offer 정리
+        {
+            let mut s = state.write();
+            for swarm in s.swarms.values_mut() {
+                for peer in swarm.peers.values_mut() {
+                    let before = peer.expecting_answers.len();
+                    peer.expecting_answers.retain(|_, valid_until| *valid_until > now);
+                    offers_expired += (before - peer.expecting_answers.len()) as u64;
+                }
+                let before = swarm.peers.len();
+                swarm.peers.retain(|_, peer| {
+                    let keep = peer.valid_until > now;
+                    if !keep && peer.is_seeder {
+                        swarm.num_seeders = swarm.num_seeders.saturating_sub(1);
+                    }
+                    keep
+                });
+                peers_removed += (before - swarm.peers.len()) as u64;
+            }
+            s.swarms.retain(|_, swarm| !swarm.peers.is_empty());
+        } // lock released
+
+        // Phase 2: 스웜 수 제한 및 shrink
+        {
+            let mut s = state.write();
+            if s.swarms.len() > MAX_SWARMS_TOTAL {
+                let excess = s.swarms.len() - MAX_SWARMS_TOTAL;
+                for _ in 0..excess {
+                    s.swarms.shift_remove_index(0);
+                }
+                log::warn!("Swarms limit reached, removed {} old swarms", excess);
+            }
+            for swarm in s.swarms.values_mut() {
+                swarm.peers.shrink_to_fit();
+                for peer in swarm.peers.values_mut() {
+                    peer.expecting_answers.shrink_to_fit();
+                }
+            }
+            s.swarms.shrink_to_fit();
+        } // lock released
+
+        // Phase 3: peer_connections 정리
+        {
+            let mut s = state.write();
+            let active_peer_ids: std::collections::HashSet<String> = s.swarms.values()
+                .flat_map(|swarm| swarm.peers.keys().cloned())
+                .collect();
+            let before_conns = s.peer_connections.len();
+            s.peer_connections.retain(|peer_id, _| active_peer_ids.contains(peer_id));
+            conns_removed = before_conns - s.peer_connections.len();
+
+            if s.peer_connections.len() > MAX_PEER_CONNECTIONS {
+                let excess = s.peer_connections.len() - MAX_PEER_CONNECTIONS;
+                let keys_to_remove: Vec<_> = s.peer_connections.keys().take(excess).cloned().collect();
+                for key in keys_to_remove {
+                    s.peer_connections.remove(&key);
+                }
+                log::warn!("peer_connections limit reached, removed {} entries", excess);
             }
 
-            // 타임아웃된 피어 제거
-            let before = swarm.peers.len();
-            swarm.peers.retain(|_, peer| {
-                let keep = peer.valid_until > now;
-                if !keep && peer.is_seeder {
-                    swarm.num_seeders = swarm.num_seeders.saturating_sub(1);
+            for conn in s.peer_connections.values_mut() {
+                if conn.connected_peers.len() > 100 {
+                    conn.connected_peers = conn.connected_peers.split_off(conn.connected_peers.len() - 50);
                 }
-                keep
-            });
-            peers_removed += (before - swarm.peers.len()) as u64;
+                if conn.offers_sent_to.len() > 100 {
+                    let mut entries: Vec<_> = conn.offers_sent_to.drain().collect();
+                    entries.sort_by(|a, b| b.1.cmp(&a.1));
+                    conn.offers_sent_to = entries.into_iter().take(50).collect();
+                }
+                if conn.answers_received_from.len() > 100 {
+                    let mut entries: Vec<_> = conn.answers_received_from.drain().collect();
+                    entries.sort_by(|a, b| b.1.cmp(&a.1));
+                    conn.answers_received_from = entries.into_iter().take(50).collect();
+                }
+            }
+            s.peer_connections.shrink_to_fit();
+        } // lock released
+
+        // Phase 4: 나머지 정리 및 통계
+        {
+            let mut s = state.write();
+            while s.message_logs.len() > 200 {
+                s.message_logs.pop_front();
+            }
+
+            // NOTE: sockets 맵에서 무조건 제거하면 실제 TCP는 살아있는데
+            // sockets.len()이 줄어 MAX_ACTIVE_SOCKETS 제한이 우회됨.
+            // 이제 ACTIVE_CONNECTIONS atomic 카운터로 제한하므로,
+            // announce하지 않은 소켓은 맵에서만 정리 (sender drop → 연결 종료 유도)
+            let stale_sockets: Vec<u64> = s.sockets.keys()
+                .filter(|sid| !s.socket_to_peer.contains_key(sid))
+                .copied()
+                .collect();
+            for sid in &stale_sockets {
+                s.sockets.remove(sid);
+            }
+            if !stale_sockets.is_empty() {
+                log::info!("Cleaned {} stale sockets (never announced)", stale_sockets.len());
+            }
+
+            if s.isp_stats.len() > 1000 {
+                let mut entries: Vec<_> = s.isp_stats.drain().collect();
+                entries.sort_by(|a, b| b.1.peer_count.cmp(&a.1.peer_count));
+                s.isp_stats = entries.into_iter().take(1000).collect();
+            }
+            if s.country_stats.len() > 500 {
+                let mut entries: Vec<_> = s.country_stats.drain().collect();
+                entries.sort_by(|a, b| b.1.peer_count.cmp(&a.1.peer_count));
+                s.country_stats = entries.into_iter().take(500).collect();
+            }
+            if s.city_stats.len() > 1000 {
+                let mut entries: Vec<_> = s.city_stats.drain().collect();
+                entries.sort_by(|a, b| b.1.peer_count.cmp(&a.1.peer_count));
+                s.city_stats = entries.into_iter().take(1000).collect();
+            }
+
+            s.sockets.shrink_to_fit();
+            s.socket_to_peer.shrink_to_fit();
+            s.isp_stats.shrink_to_fit();
+            s.country_stats.shrink_to_fit();
+            s.city_stats.shrink_to_fit();
+            s.message_logs.shrink_to_fit();
+
+            s.total_answers_expired += offers_expired;
+
+            log::debug!(
+                "Cleanup: {} peers, {} conns, {} offers expired, {} swarms, {} sockets",
+                peers_removed,
+                conns_removed,
+                offers_expired,
+                s.swarms.len(),
+                s.sockets.len()
+            );
         }
-
-        // 빈 스웜 제거
-        s.swarms.retain(|_, swarm| !swarm.peers.is_empty());
-
-        s.total_answers_expired += offers_expired;
-
-        log::debug!(
-            "Cleanup: {} peers removed, {} offers expired, {} swarms, {} sockets",
-            peers_removed,
-            offers_expired,
-            s.swarms.len(),
-            s.sockets.len()
-        );
     }
 }
 
@@ -1685,6 +1846,7 @@ async fn main() -> std::io::Result<()> {
             .route("/api/peer/{peer_id}", web::get().to(api_peer_detail))
             .route("/api/connections", web::get().to(api_connections))
             .route("/api/health", web::get().to(api_health))
+            .route("/api/ip-lookup", web::post().to(api_ip_lookup))
             // 어드민 API (리퍼러 관리)
             .route("/api/admin/referrers", web::get().to(api_admin_referrers))
             .route("/api/admin/referrers", web::post().to(api_admin_add_referrer))
