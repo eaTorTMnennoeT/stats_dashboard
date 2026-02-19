@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>P2P Stats Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
-  <link rel="preload" href="/api/init-data" as="fetch" crossorigin>
+  
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -178,19 +179,20 @@
       .responsive-table th:nth-child(14) { width: 8%; }  /* P2P% */
     }
 
-    /* Server Table - 9 columns with % widths */
+    /* Server Table - 11 columns with % widths */
     #serverTable { width: 100%; table-layout: fixed; font-size: 12.5px; }
     #serverTable th, #serverTable td { padding: 10px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
     #serverTable th:nth-child(1), #serverTable td:nth-child(1) { text-align: left; width: 4%; }   /* 서버 */
-    #serverTable th:nth-child(2) { width: 10%; }  /* HTTP */
-    #serverTable th:nth-child(3) { width: 10%; }  /* P2P↓ */
-    #serverTable th:nth-child(4) { width: 10%; }  /* P2P↑ */
-    #serverTable th:nth-child(5) { width: 8%; }   /* P2P% */
-    #serverTable th:nth-child(6) { width: 10%; }  /* 접속자 */
-    #serverTable th:nth-child(7) { width: 12%; }  /* HTTP GB/s */
-    #serverTable th:nth-child(8) { width: 12%; }  /* P2P↓ GB/s */
-    #serverTable th:nth-child(9) { width: 12%; }  /* P2P↑ GB/s */
-    #serverTable th:nth-child(10) { width: 12%; } /* Total GB/s */
+    #serverTable th:nth-child(2) { width: 9%; }   /* HTTP */
+    #serverTable th:nth-child(3) { width: 9%; }   /* P2P↓ */
+    #serverTable th:nth-child(4) { width: 9%; }   /* P2P↑ */
+    #serverTable th:nth-child(5) { width: 7%; }   /* P2P% */
+    #serverTable th:nth-child(6) { width: 8%; }   /* 접속자 */
+    #serverTable th:nth-child(7) { width: 8%; }   /* 스웜 */
+    #serverTable th:nth-child(8) { width: 11%; }  /* HTTP GB/s */
+    #serverTable th:nth-child(9) { width: 11%; }  /* P2P↓ GB/s */
+    #serverTable th:nth-child(10) { width: 11%; } /* P2P↑ GB/s */
+    #serverTable th:nth-child(11) { width: 11%; } /* Total GB/s */
     @media (max-width: 768px) {
       #serverTable { font-size: 12px; }
       #serverTable th, #serverTable td { padding: 6px 4px; }
@@ -934,7 +936,7 @@
 </head>
 <body>
   <!-- Login Overlay -->
-  <div class="login-overlay" id="loginOverlay">
+  <div class="login-overlay hidden" id="loginOverlay">
     <div class="login-box">
       <h2>🔐 P2P Stats</h2>
       <p>관리자 로그인이 필요합니다</p>
@@ -947,7 +949,7 @@
     </div>
   </div>
 
-  <aside class="sidebar app-content">
+  <aside class="sidebar app-content app-hidden">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:25px">
       <h1 style="margin:0">P2P Stats</h1>
       <div style="text-align:right;font-size:11px">
@@ -971,10 +973,11 @@
       <li class="menu-item"><a href="#tracker">트래커</a></li>
       <li class="menu-item"><a href="#servers">외부서버</a></li>
       <li class="menu-item"><a href="#blacklist">블랙리스트</a></li>
+      <li class="menu-item"><a href="#bots">파싱봇</a></li>
     </ul>
   </aside>
 
-  <main class="main app-content" id="app"></main>
+  <main class="main app-content app-hidden" id="app"></main>
 
   <!-- Settings Modal -->
   <div class="modal-overlay" id="settingsModal">
@@ -1190,13 +1193,7 @@ function toServerTime(utcString) {
   return new Date(d.getTime() + serverTimeOffset * 60 * 1000);
 }
 
-// 서버시간 기준 날짜 포맷 (월/일)
-function formatServerDate(utcString) {
-  const d = toServerTime(utcString);
-  const days = ['일', '월', '화', '수', '목', '금', '토'];
-  const dayName = days[d.getUTCDay()];
-  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}(${dayName})`;
-}
+// 서버시간 기준 날짜 포맷 (월/일) - getServerDateParts 사용 (아래 정의됨)
 
 // ============================================
 // 자동 차단 설정 (기본 활성화)
@@ -1230,12 +1227,19 @@ function saveAutoBlockSettingsToStorage() {
 }
 
 // 모달 열기
-function openAutoBlockSettings() {
-  loadAutoBlockSettings();
+async function openAutoBlockSettings() {
+  // 서버에서 설정 로드
+  try {
+    const res = await fetch('/api/settings/autoblock', { credentials: 'same-origin' });
+    const data = await res.json();
+    autoBlockSettings.enabled = data.enabled;
+    autoBlockSettings.score = data.score;
+  } catch (e) {
+    console.error('[AutoBlock] 서버 설정 로드 실패:', e);
+  }
   document.getElementById('autoBlockEnabled').checked = autoBlockSettings.enabled;
   document.getElementById('autoBlockScore').value = autoBlockSettings.score;
   document.getElementById('autoBlockScoreVal').textContent = autoBlockSettings.score;
-  document.getElementById('autoBlockDuration').value = autoBlockSettings.duration;
   document.getElementById('autoBlockModal').style.display = 'flex';
 }
 
@@ -1245,16 +1249,24 @@ function closeAutoBlockSettings() {
 }
 
 // 설정 저장 버튼
-function saveAutoBlockSettings() {
-  autoBlockSettings.enabled = document.getElementById('autoBlockEnabled').checked;
-  autoBlockSettings.score = parseInt(document.getElementById('autoBlockScore').value);
-  autoBlockSettings.duration = document.getElementById('autoBlockDuration').value;
-  saveAutoBlockSettingsToStorage();
-  closeAutoBlockSettings();
-  alert('자동 차단 설정이 저장되었습니다.\n\n' +
-        (autoBlockSettings.enabled ?
-          `✅ 활성화됨\n기준: ${autoBlockSettings.score}점 이상\n기간: ${autoBlockSettings.duration}` :
-          '❌ 비활성화됨'));
+async function saveAutoBlockSettings() {
+  const enabled = document.getElementById("autoBlockEnabled").checked;
+  const score = parseInt(document.getElementById("autoBlockScore").value);
+  try {
+    const res = await fetch("/api/settings/autoblock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ enabled, score })
+    });
+    const data = await res.json();
+    if (data.success) {
+      autoBlockSettings.enabled = data.enabled;
+      autoBlockSettings.score = data.score;
+      closeAutoBlockSettings();
+      alert(data.enabled ? "ON - " + data.score + "점 이상 차단" : "OFF");
+    } else { alert("fail"); }
+  } catch (e) { alert(e.message); }
 }
 
 // 자동 차단 실행 (AI탐지 로드 후 호출)
@@ -1305,38 +1317,56 @@ async function executeAutoBlock(abusers) {
 // 초기화 시 설정 로드
 loadAutoBlockSettings();
 
-// 서버시간 기준 시간 포맷 (HH:mm)
-function formatServerTime(utcString) {
-  const d = toServerTime(utcString);
-  return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+// 서버시간 기준 시간 포맷 (HH:mm) - KST 타임스탬프 직접 파싱
+function formatServerTime(kstString) {
+  const p = getServerDateParts(kstString);
+  return `${String(p.hour).padStart(2,'0')}:${String(p.minute).padStart(2,'0')}`;
 }
 
-// 서버시간 기준 날짜+시간 포맷
-function formatServerDateTime(utcString) {
-  const d = toServerTime(utcString);
-  return `${d.getUTCMonth()+1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+// 서버시간 기준 날짜+시간 포맷 - KST 타임스탬프 직접 파싱
+function formatServerDateTime(kstString) {
+  const p = getServerDateParts(kstString);
+  return `${p.month}/${p.day} ${String(p.hour).padStart(2,'0')}:${String(p.minute).padStart(2,'0')}`;
 }
 
 // 서버시간 기준 날짜만 포맷 (7d/30d용) - 요일 포함
-function formatServerDate(utcString) {
-  const d = toServerTime(utcString);
-  const days = ['일', '월', '화', '수', '목', '금', '토'];
-  const dayName = days[d.getUTCDay()];
-  return `${d.getUTCMonth()+1}/${d.getUTCDate()}(${dayName})`;
+function formatServerDate(kstString) {
+  const p = getServerDateParts(kstString);
+  return `${p.month}/${p.day}(${p.dayOfWeek})`;
 }
 
-// 서버시간 기준 월/일/시 추출
+// 서버시간 기준 월/일/시 추출 (API는 KST 타임스탬프 반환)
 const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-function getServerDateParts(utcString) {
-  const d = toServerTime(utcString);
-  return {
-    year: d.getUTCFullYear(),
-    month: d.getUTCMonth() + 1,
-    day: d.getUTCDate(),
-    hour: d.getUTCHours(),
-    minute: d.getUTCMinutes(),
-    dayOfWeek: dayNames[d.getUTCDay()]
-  };
+function getServerDateParts(kstString) {
+  // API returns KST timestamps in two formats:
+  // - "2026-02-06 20:00:00" (with time)
+  // - "2026-02-01" (date only)
+  // Parse directly without timezone conversion to avoid browser timezone issues
+  if (!kstString) return { year: 0, month: 0, day: 0, hour: 0, minute: 0, dayOfWeek: '' };
+
+  // Try with time first
+  let match = kstString.match(/(\d+)-(\d+)-(\d+)\s+(\d+):(\d+)/);
+  if (match) {
+    const year = parseInt(match[1]);
+    const month = parseInt(match[2]);
+    const day = parseInt(match[3]);
+    const hour = parseInt(match[4]);
+    const minute = parseInt(match[5]);
+    const d = new Date(Date.UTC(year, month - 1, day));
+    return { year, month, day, hour, minute, dayOfWeek: dayNames[d.getUTCDay()] };
+  }
+
+  // Try date only
+  match = kstString.match(/(\d+)-(\d+)-(\d+)/);
+  if (match) {
+    const year = parseInt(match[1]);
+    const month = parseInt(match[2]);
+    const day = parseInt(match[3]);
+    const d = new Date(Date.UTC(year, month - 1, day));
+    return { year, month, day, hour: 0, minute: 0, dayOfWeek: dayNames[d.getUTCDay()] };
+  }
+
+  return { year: 0, month: 0, day: 0, hour: 0, minute: 0, dayOfWeek: '' };
 }
 
 // 서버시간 시계 업데이트 (KST = UTC+9)
@@ -1379,31 +1409,32 @@ function setActiveInterval(fn, ms) {
 
 // Settings & Cache
 const defaultSettings = {
-  dashboard: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 5 },
-  traffic: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 5 },
-  realtime: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 5 },
-  sessions: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 5 },
-  players: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 5 },
-  live: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 5 },
-  charts: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 10 },
-  popular: { mode: 'cache', realtimeInterval: 1000, cacheMinutes: 10 },
-  summary: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 10 },
-  analysis: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 5 },
-  visitors: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 5 },
-  history: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 10 },
-  servers: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 5 }
+  dashboard: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
+  traffic: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
+  realtime: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
+  sessions: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 5 },
+  players: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
+  live: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 5 },
+  charts: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 10 },
+  popular: { mode: 'cache', realtimeInterval: 30000, cacheMinutes: 10 },
+  summary: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 10 },
+    analysis: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
+  visitors: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 5 },
+  history: { mode: 'realtime', realtimeInterval: 30000, cacheMinutes: 10 },
+  servers: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 5 }
 };
 
 // 설정 초기화 (v5로 버전 업)
-const SETTINGS_KEY = 'p2p-settings-v5';
+const SETTINGS_KEY = 'p2p-settings-v7';
 const storedSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
 let settings = {};
 for (const page in defaultSettings) {
   settings[page] = { ...defaultSettings[page], ...storedSettings[page] };
 }
-// 이전 버전 설정 삭제
 localStorage.removeItem('p2p-settings-v3');
 localStorage.removeItem('p2p-settings-v4');
+localStorage.removeItem('p2p-settings-v5');
+localStorage.removeItem('p2p-settings-v6');
 
 // Modal functions
 let currentModalPage = null;
@@ -1834,7 +1865,7 @@ const pages = {
     </div>
     <div class="panel" style="margin-top:20px">
       <h3 style="margin-bottom:15px">서버별 상세</h3>
-      <table id="serverTable"><thead><tr><th>서버</th><th>HTTP</th><th>P2P↓</th><th>P2P↑</th><th>P2P%</th><th>접속자</th><th>HTTP GB/s</th><th>P2P↓ GB/s</th><th>P2P↑ GB/s</th><th>Total GB/s</th></tr></thead><tbody></tbody></table>
+      <table id="serverTable"><thead><tr><th>서버</th><th>HTTP</th><th>P2P↓</th><th>P2P↑</th><th>P2P%</th><th>접속자</th><th>스웜</th><th>HTTP GB/s</th><th>P2P↓ GB/s</th><th>P2P↑ GB/s</th><th>Total GB/s</th></tr></thead><tbody></tbody></table>
     </div>
   `,
   realtime: () => `
@@ -2078,6 +2109,7 @@ const pages = {
         <canvas id="dailyTrendChart"></canvas>
       </div>
     </div>
+
 
     <!-- 테이블 -->
     <div class="panel">
@@ -2782,6 +2814,7 @@ const pages = {
             <span style="color:#888;font-size:12px">차단된 IP는 모든 에이전트 서버에서 차단됨</span>
           </div>
           <div style="display:flex;gap:10px">
+            <button id="bulkUnblockBtn" class="settings-btn" onclick="bulkUnblockSelected()" style="background:#f59e0b;border-color:#f59e0b;display:none">🔓 선택 해제 (<span id="selectedCount">0</span>개)</button>
             <button class="settings-btn" onclick="openCfSettingsModal()">⚙️ Cloudflare 설정</button>
             <button class="settings-btn" onclick="openBlockModal()" style="background:#dc2626;border-color:#dc2626">+ IP 차단</button>
           </div>
@@ -2800,16 +2833,17 @@ const pages = {
           <table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">
             <thead>
               <tr style="background:#1a1a2e">
-                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:14%">IP 주소</th>
+                <th style="padding:10px 8px;text-align:center;border-bottom:1px solid #333;width:4%"><input type="checkbox" id="blkSelectAll" onchange="toggleAllBlacklist(this)" style="cursor:pointer;width:14px;height:14px"></th>
+                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:13%">IP 주소</th>
                 <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:10%">최초 접속</th>
                 <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:10%">마지막 접속</th>
                 <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:10%">차단 시간</th>
-                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:46%">차단 사유</th>
+                <th style="padding:10px 8px;text-align:left;border-bottom:1px solid #333;width:43%">차단 사유</th>
                 <th style="padding:10px 8px;text-align:center;border-bottom:1px solid #333;width:10%">작업</th>
               </tr>
             </thead>
             <tbody id="blacklistTbodyInline">
-              <tr><td colspan="6" style="text-align:center;color:#666;padding:40px">로딩 중...</td></tr>
+              <tr><td colspan="7" style="text-align:center;color:#666;padding:40px">로딩 중...</td></tr>
             </tbody>
           </table>
         </div>
@@ -2858,8 +2892,136 @@ const pages = {
         </tbody>
       </table>
     </div>
+  `,
+
+  bots: () => `
+    <div class="header">
+      <h2>🤖 파싱봇 탐지</h2>
+      <div class="header-right">
+        <button class="settings-btn" onclick="loadBots()">🔄 새로고침</button>
+        <div id="botsStatus" class="status ok">Ready</div>
+      </div>
+    </div>
+
+    <!-- 요약 -->
+    <div class="stats-grid" id="botsSummary">
+      ${card('탐지된 봇', '0', '개', 'botsTotal')}
+      ${card('오늘 탐지', '0', '개', 'botsToday')}
+      ${card('총 차단 횟수', '0', '회', 'botsBlocked')}
+      ${card('활성 서버', '0', '대', 'botsServers')}
+    </div>
+
+    <!-- 봇 목록 -->
+    <div class="panel">
+      <h3>📋 탐지된 파싱봇 목록</h3>
+      <div style="color:#888;font-size:12px;margin-bottom:15px">c.html(m3u8) 요청 없이 gif 세그먼트만 요청하는 IP</div>
+      <table id="botsTable" style="table-layout:fixed;width:100%">
+        <thead>
+          <tr>
+            <th style="width:12%">IP 주소</th>
+            <th style="width:6%">GIF</th>
+            <th style="width:25%">User-Agent</th>
+            <th style="width:10%">탐지 이유</th>
+            <th style="width:10%">서버</th>
+            <th style="width:15%">최초 탐지</th>
+            <th style="width:15%">마지막 탐지</th>
+            <th style="width:7%">차단</th>
+          </tr>
+        </thead>
+        <tbody id="botsTbody">
+          <tr><td colspan="8" style="text-align:center;color:#666;padding:40px">로딩 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
   `
 };
+
+// 파싱봇 데이터
+let botsData = [];
+
+async function initBots() {
+  await loadBots();
+}
+
+async function loadBots() {
+  try {
+    const res = await fetch('/api/bot/reports?_t=' + Date.now());
+    const data = await res.json();
+    if (data.success) {
+      botsData = data.reports || [];
+      renderBots();
+    }
+  } catch (e) {
+    console.error('[Bots] Load error:', e);
+  }
+}
+
+function renderBots() {
+  const tbody = document.getElementById('botsTbody');
+  if (!tbody) return;
+
+  // 요약
+  const total = botsData.length;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayCount = botsData.filter(b => b.first_seen?.slice(0, 10) === today).length;
+  const totalBlocked = botsData.reduce((sum, b) => sum + (b.report_count || 1), 0);
+  const servers = [...new Set(botsData.map(b => b.server))].length;
+
+  const totalEl = document.getElementById('botsTotal');
+  const todayEl = document.getElementById('botsToday');
+  const blockedEl = document.getElementById('botsBlocked');
+  const serversEl = document.getElementById('botsServers');
+  if (totalEl) totalEl.textContent = total.toLocaleString();
+  if (todayEl) todayEl.textContent = todayCount.toLocaleString();
+  if (blockedEl) blockedEl.textContent = totalBlocked.toLocaleString();
+  if (serversEl) serversEl.textContent = servers;
+
+  if (botsData.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#666;padding:40px">탐지된 봇이 없습니다</td></tr>';
+    return;
+  }
+
+  // 최신순 정렬
+  const sorted = [...botsData].sort((a, b) => new Date(b.last_seen) - new Date(a.last_seen));
+
+  tbody.innerHTML = sorted.map(b => {
+    const firstSeen = b.first_seen ? new Date(b.first_seen).toLocaleString('ko-KR') : '-';
+    const lastSeen = b.last_seen ? new Date(b.last_seen).toLocaleString('ko-KR') : '-';
+    const ua = b.user_agent || '-';
+    const uaShort = ua.length > 50 ? ua.slice(0, 50) + '...' : ua;
+    const isFakeDevice = /CrKey|AndroidTV|SmartTV/i.test(ua) ? '<span style="color:#ffa500">위장</span>' : '';
+    const reasonText = b.reason === 'gif_only' ? 'c.html 미요청' : b.reason;
+    return `<tr>
+      <td style="font-family:monospace;color:#00d4ff">${b.ip}</td>
+      <td style="color:#ff6b6b;text-align:center"><b>${b.gif_count || 0}</b></td>
+      <td style="font-size:10px;color:#888" title="${ua}">${uaShort} ${isFakeDevice}</td>
+      <td style="font-size:11px;color:#ff6b6b">${reasonText}</td>
+      <td style="font-size:11px">${b.server || '-'}</td>
+      <td style="font-size:10px;color:#888">${firstSeen}</td>
+      <td style="font-size:10px;color:#888">${lastSeen}</td>
+      <td style="text-align:center"><button class="settings-btn" style="padding:4px 8px;font-size:11px" onclick="blockBotIp('${b.ip}')">🚫</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function blockBotIp(ip) {
+  if (!confirm(ip + ' 를 블랙리스트에 추가할까요?')) return;
+  try {
+    const res = await fetch('/api/blacklist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip, reason: '파싱봇 탐지 (gif_only)', source: 'bot_detect' })
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert(ip + ' 차단 완료');
+    } else {
+      alert('차단 실패: ' + (data.error || 'Unknown'));
+    }
+  } catch (e) {
+    alert('차단 실패: ' + e.message);
+  }
+}
 
 // 외부서버 관리 데이터
 let serversData = [];
@@ -3312,12 +3474,15 @@ async function loadLogs() {
     }
 
     renderLogs();
-    calculateStatsFromData();
     renderServerStats();
-    loadSuspiciousIps();
-    loadHourlyStats();
-    loadDailyStats();
-    loadServerDailyStats();
+    // 병렬 로딩으로 속도 개선
+    Promise.all([
+      calculateStatsFromData(),
+      loadSuspiciousIps(),
+      loadHourlyStats(),
+      loadDailyStats(),
+      loadServerDailyStats()
+    ]);
 
     // 성공 시 디버그 숨김
     if (debugEl) debugEl.style.display = 'none';
@@ -3506,6 +3671,9 @@ async function loadAbusers() {
     const data = await res.json();
     const abusers = data.abusers || [];
 
+    // 이미 차단된 IP 표시 (자동차단에서 사용)
+    abusers.forEach(a => { a.alreadyBlocked = blockedIPs.has(a.ip); });
+
     if (abusers.length === 0) {
       tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#888">데이터가 없습니다</td></tr>';
       return;
@@ -3525,6 +3693,8 @@ async function loadAbusers() {
     };
 
     // 위험도 있는 것만 필터링 (score > 0) 또는 전체 표시
+    const thresholdScore = autoBlockSettings.score;
+    let thresholdLineInserted = false;
     const rows = abusers.map((a, i) => {
       const levelColors = {
         critical: { bg: '#ff000030', text: '#ff4444', icon: '🔴' },
@@ -3567,18 +3737,29 @@ async function loadAbusers() {
 
       // 이미 차단된 IP인지 확인
       const isBlocked = blockedIPs.has(a.ip);
+      // 모바일 통신사 IP 감지 (CGNAT - 차단 시 기지국 전체 영향)
+      const isMobileCarrier = a.ip.startsWith('2001:2d8:') || a.ip.startsWith('2001:4430:')
+        || a.ip.startsWith('2001:e60:') || a.ip.startsWith('2001:0e60:')
+        || a.ip.startsWith('2406:5900:');
       const rowStyle = isBlocked ? 'opacity:0.5;background:#1a0a0a' : `background:${level.bg}`;
       const blockBtn = isBlocked
         ? `<button disabled style="background:#333;border:none;color:#888;padding:3px 6px;border-radius:3px;font-size:10px">차단됨</button>`
+        : isMobileCarrier
+        ? `<span style="background:#352160;color:#d8b4fe;padding:3px 6px;border-radius:3px;font-size:10px;white-space:nowrap;border:1px solid #7c3aed" title="통신사 공유IP(CGNAT) - 차단 시 기지국 수천 명 영향">📱 차단제외</span>`
         : `<button onclick="blockAbuserIP('${a.ip}', '${(a.reasons || []).slice(0,2).join(', ').replace(/'/g, "\\'")}', '${(a.servers || []).join(',')}')" style="background:#dc2626;border:none;color:#fff;padding:3px 6px;border-radius:3px;cursor:pointer;font-size:10px">차단</button>`;
 
-      return `<tr style="${rowStyle};border-bottom:1px solid #222">
+      let separatorRow = '';
+      if (!thresholdLineInserted && a.risk_score < thresholdScore) {
+        thresholdLineInserted = true;
+        separatorRow = `<tr><td colspan="10" style="padding:0;border:none"><div style="border-top:2px dashed rgba(255,255,255,0.7);margin:10px 0;position:relative"><span style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#0d1117;color:#ccc;padding:0 14px;font-size:11px;white-space:nowrap;letter-spacing:1px">ㅡㅡ 자동차단 기준 ${thresholdScore}점 ㅡㅡ</span></div></td></tr>`;
+      }
+      return separatorRow + `<tr style="${rowStyle};border-bottom:1px solid #222">
         <td style="padding:6px;text-align:center;vertical-align:middle">${level.icon}<br><span style="font-size:10px;color:${level.text}">${a.risk_score}점</span></td>
-        <td style="padding:6px;color:${level.text};font-weight:${a.risk_score >= 50 ? 'bold' : 'normal'};vertical-align:middle;font-size:11px">${a.ip}${isBlocked ? ' <span style="color:#ff4444;font-size:9px">🚫</span>' : ''}</td>
+        <td style="padding:6px;color:${level.text};font-weight:${a.risk_score >= 50 ? 'bold' : 'normal'};vertical-align:middle;font-size:11px">${a.ip}${isBlocked ? ' <span style="color:#ff4444;font-size:9px">🚫</span>' : ''}${a.device_name ? `<br><span style="font-size:9px;color:#888;font-weight:normal">${a.is_mobile ? '📱' : '🖥️'} ${a.device_name}${a.isp_name ? ' · ' + a.isp_name : ''}</span>` : ''}</td>
         <td style="padding:6px;text-align:right;color:#00d4ff;vertical-align:middle">${a.gb}GB</td>
         <td style="padding:6px;text-align:right;color:${parseFloat(a.gb_per_hour) > 15 ? '#ff6b6b' : '#fff'};vertical-align:middle">${a.gb_per_hour}</td>
         <td style="padding:6px;text-align:right;vertical-align:middle"><span style="color:${avgColor}">${a.avg_req_per_sec}</span> ${burstInfo}</td>
-        <td style="padding:6px;text-align:right;vertical-align:middle;color:${max100sColor}">${max100s > 0 ? max100s : '-'}</td>
+        <td style="padding:6px;text-align:right;vertical-align:middle;color:${max100sColor}">${max100s}</td>
         <td style="padding:6px;text-align:center;color:#888;vertical-align:middle;font-size:10px;line-height:1.4">${activityTime}</td>
         <td style="padding:6px;text-align:center;vertical-align:middle">${servers}</td>
         <td style="padding:6px;font-size:11px;color:${level.text};vertical-align:middle;line-height:1.5">${reasons}</td>
@@ -3602,7 +3783,7 @@ async function loadAbusers() {
     if (el('abuserMedium')) el('abuserMedium').textContent = mediumCount;
 
     // 자동 차단 실행
-    await executeAutoBlock(abusers);
+    // auto-block moved to backend only
   } catch (e) {
     tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#ff6b6b">로드 실패: ' + e.message + '</td></tr>';
   }
@@ -3654,16 +3835,17 @@ async function loadBlacklistInline() {
   const tbody = document.getElementById('blacklistTbodyInline');
   if (!tbody) return;
 
-  // Cloudflare 설정 로드
-  await loadCfSettings();
-
   try {
-    const res = await fetch('/api/blacklist');
-    const data = await res.json();
+    // CF 설정과 블랙리스트를 병렬 로드
+    const [_, blRes] = await Promise.all([
+      loadCfSettings(),
+      fetch('/api/blacklist')
+    ]);
+    const data = await blRes.json();
     const blacklist = data.blacklist || [];
 
     if (!data.blacklist) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ff6b6b;padding:40px">로드 실패</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ff6b6b;padding:40px">로드 실패</td></tr>';
       return;
     }
 
@@ -3679,13 +3861,16 @@ async function loadBlacklistInline() {
     if (el('blkServers')) el('blkServers').textContent = serversData?.length || 0;
 
     if (blacklist.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#666;padding:40px">차단된 IP가 없습니다</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#666;padding:40px">차단된 IP가 없습니다</td></tr>';
       return;
     }
 
-    // ISP 정보 조회
+    // ISP 정보 조회 (비동기)
     const ips = blacklist.map(item => item.ip);
-    await fetchIspInfo(ips);
+    fetchIspInfo(ips);
+
+    // 시간 정보 비동기 로드 (메인 렌더링 후)
+    fetchBlacklistTimes(ips);
 
     // 서버 ID -> 이름 매핑 함수
     const getServerName = (id) => {
@@ -3726,12 +3911,13 @@ async function loadBlacklistInline() {
       const isp = ispCache[item.ip] || '';
       return `
         <tr style="border-bottom:1px solid #1a1a2e">
+          <td style="padding:10px 8px;text-align:center;vertical-align:top"><input type="checkbox" class="blk-check" value="${item.ip}" style="cursor:pointer;width:14px;height:14px"></td>
           <td style="padding:10px 8px;font-family:monospace;font-weight:bold;color:#ff6b6b;vertical-align:top;font-size:12px">
             ${item.ip}
             ${isp ? `<div style="font-size:9px;color:#888;font-weight:normal;margin-top:2px">${isp}</div>` : ''}
           </td>
-          <td style="padding:10px 8px;color:#00d4ff;font-size:11px;vertical-align:top">${firstSeen}</td>
-          <td style="padding:10px 8px;color:#ffcc00;font-size:11px;vertical-align:top">${lastSeen}</td>
+          <td style="padding:10px 8px;color:#00d4ff;font-size:11px;vertical-align:top" data-ip="${item.ip}" data-field="first_seen">${firstSeen || '...'}</td>
+          <td style="padding:10px 8px;color:#ffcc00;font-size:11px;vertical-align:top" data-ip="${item.ip}" data-field="last_seen">${lastSeen || '...'}</td>
           <td style="padding:10px 8px;color:#888;font-size:11px;vertical-align:top">${blockedAt}</td>
           <td style="padding:10px 8px;color:#ccc;font-size:11px;vertical-align:top;word-break:break-word">
             ${item.reason || '-'}
@@ -3743,8 +3929,15 @@ async function loadBlacklistInline() {
         </tr>
       `;
     }).join('');
+
+    document.querySelectorAll('.blk-check').forEach(cb => {
+      cb.addEventListener('change', updateBulkUnblockBtn);
+    });
+    const selectAll = document.getElementById('blkSelectAll');
+    if (selectAll) selectAll.checked = false;
+    updateBulkUnblockBtn();
   } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ff6b6b;padding:40px">로드 실패: ' + e.message + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ff6b6b;padding:40px">로드 실패: ' + e.message + '</td></tr>';
   }
 }
 
@@ -3768,6 +3961,58 @@ async function unblockIPInline(ip) {
     }
   } catch (e) {
     alert('해제 오류: ' + e.message);
+  }
+}
+
+function toggleAllBlacklist(masterCheckbox) {
+  document.querySelectorAll('.blk-check').forEach(cb => {
+    cb.checked = masterCheckbox.checked;
+  });
+  updateBulkUnblockBtn();
+}
+
+function updateBulkUnblockBtn() {
+  const checked = document.querySelectorAll('.blk-check:checked');
+  const btn = document.getElementById('bulkUnblockBtn');
+  const countEl = document.getElementById('selectedCount');
+  if (btn) {
+    btn.style.display = checked.length > 0 ? 'inline-block' : 'none';
+    if (countEl) countEl.textContent = checked.length;
+  }
+}
+
+async function bulkUnblockSelected() {
+  const checked = document.querySelectorAll('.blk-check:checked');
+  const ips = Array.from(checked).map(cb => cb.value);
+
+  if (ips.length === 0) return;
+  if (!confirm(`${ips.length}개 IP의 차단을 해제하시겠습니까?\n\n(Cloudflare + 스트리밍 서버 + 블랙리스트 일괄 해제)`)) return;
+
+  const btn = document.getElementById('bulkUnblockBtn');
+  const origText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳ 해제 중...';
+
+  try {
+    const res = await fetch('/api/blacklist/bulk-unblock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ ips })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const cfCount = data.cf_results ? Object.values(data.cf_results).filter(v => v).length : 0;
+      alert(`✅ 대량 차단 해제 완료\n\n해제: ${data.total_unblocked}개\n미발견: ${data.total_not_found}개\nCloudflare 해제: ${cfCount}개`);
+      loadBlacklistInline();
+    } else {
+      alert('해제 실패: ' + (data.error || 'Unknown error'));
+    }
+  } catch (e) {
+    alert('해제 오류: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origText;
   }
 }
 
@@ -4404,6 +4649,7 @@ function nav(p) {
     initServers().then(() => switchServerTab('blacklist'));
   }
   else if (p === 'blacklist') initBlacklist();
+  else if (p === 'bots') initBots();
 }
 
 // ============================================
@@ -4445,23 +4691,60 @@ async function loadCfSettings() {
 
 // ISP 캐시
 const ispCache = {};
+const blacklistTimesCache = {};
 
-// ISP 정보 조회 (ip-api.com 배치)
+// 블랙리스트 시간 정보 비동기 로드
+async function fetchBlacklistTimes(ips) {
+  const uncached = ips.filter(ip => !blacklistTimesCache[ip]);
+  if (uncached.length === 0) return;
+
+  try {
+    const res = await fetch('/api/blacklist/times', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(uncached.slice(0, 100))
+    });
+    const data = await res.json();
+
+    // 캐시 업데이트
+    Object.assign(blacklistTimesCache, data);
+
+    // 테이블 업데이트
+    const formatTime = (ts) => {
+      if (!ts) return '-';
+      const d = new Date(ts.replace(' ', 'T') + '+09:00');
+      if (isNaN(d.getTime())) return ts;
+      return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    };
+
+    for (const [ip, times] of Object.entries(data)) {
+      const firstEl = document.querySelector(`[data-ip="${ip}"][data-field="first_seen"]`);
+      const lastEl = document.querySelector(`[data-ip="${ip}"][data-field="last_seen"]`);
+      if (firstEl) firstEl.textContent = formatTime(times.first_seen);
+      if (lastEl) lastEl.textContent = formatTime(times.last_seen);
+    }
+  } catch (e) {
+    console.error('Blacklist times fetch failed:', e);
+  }
+}
+
+// ISP 정보 조회 (트래커 GeoIP DB 사용)
 async function fetchIspInfo(ips) {
   const uncached = ips.filter(ip => !ispCache[ip]);
   if (uncached.length === 0) return;
 
   try {
-    // ip-api.com 배치 API (최대 100개)
+    // 트래커 API 사용 (MaxMind GeoIP DB)
     const batch = uncached.slice(0, 100);
-    const res = await fetch('http://ip-api.com/batch?fields=query,isp,org,as', {
+    const res = await fetch(TRACKER_API + '/api/ip-lookup', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(batch)
     });
     const data = await res.json();
     data.forEach(info => {
       if (info.query) {
-        ispCache[info.query] = info.isp || info.org || info.as || 'Unknown';
+        ispCache[info.query] = info.isp || 'Unknown';
       }
     });
   } catch (e) {
@@ -5083,17 +5366,21 @@ function initTraffic() {
       serverBarChart.update('none');
     }
 
-    // 서버별 테이블 - 실시간이면 realtimeData.servers에서 uniqueUsers 가져옴
+    // 서버별 테이블 - 실시간이면 realtimeData.servers에서 uniqueUsers, swarms 가져옴
     const rtServerMap = {};
     if (isRealtime && realtimeData && realtimeData.servers) {
-      realtimeData.servers.forEach(s => { rtServerMap[s.name] = s.uniqueUsers || 0; });
+      realtimeData.servers.forEach(s => { rtServerMap[s.name] = { users: s.uniqueUsers || 0, swarms: s.swarms || 0 }; });
     }
-    const mergedServers = servers.map(s => ({
-      ...s,
-      uniqueUsers: rtServerMap[s.server] || rtServerMap['every' + s.server] || s.visitors || s.uniqueUsers || 0
-    }));
+    const mergedServers = servers.map(s => {
+      const rtData = rtServerMap[s.server] || rtServerMap['every' + s.server] || {};
+      return {
+        ...s,
+        uniqueUsers: rtData.users || s.visitors || s.uniqueUsers || 0,
+        swarms: rtData.swarms || s.swarms || 0
+      };
+    });
     const sortedServers = [...mergedServers].sort((a, b) => (b.uniqueUsers || 0) - (a.uniqueUsers || 0));
-    let totalHttp = 0, totalP2p = 0, totalP2pUp = 0, totalViewers = 0;
+    let totalHttp = 0, totalP2p = 0, totalP2pUp = 0, totalViewers = 0, totalSwarms = 0;
     let totalHttpGbps = 0, totalP2pGbps = 0, totalP2pUpGbps = 0;
     const rows = sortedServers.map(s => {
       const isPlayer = s.server.startsWith('Player');
@@ -5105,15 +5392,18 @@ function initTraffic() {
       const p2pRatio = hasTraffic ? (p2p / total * 100).toFixed(1) : 0;
       const color = isPlayer ? '#ffa500' : '#8a2be2';
       const viewers = s.uniqueUsers || 0;
-      totalHttp += http; totalP2p += p2p; totalP2pUp += p2pUp; totalViewers += viewers;
+      const swarms = s.swarms || 0;
+      totalHttp += http; totalP2p += p2p; totalP2pUp += p2pUp; totalViewers += viewers; totalSwarms += swarms;
       totalHttpGbps += httpGbps; totalP2pGbps += p2pGbps; totalP2pUpGbps += p2pUpGbps;
       const totalGbps = httpGbps + p2pGbps;
-      return `<tr><td><b style="color:${color}">${displayName}</b></td><td style="color:#ff6b6b">${hasTraffic ? formatBytes(http) : '-'}</td><td style="color:#00ff88">${hasTraffic ? formatBytes(p2p) : '-'}</td><td style="color:#88ff00">${p2pUp > 0 ? formatBytes(p2pUp) : '-'}</td><td style="color:#00ff88;font-weight:bold">${hasTraffic ? p2pRatio + '%' : '-'}</td><td style="color:#00d4ff">${viewers.toLocaleString()}</td><td style="color:#ff6b6b">${httpGbps.toFixed(2)}</td><td style="color:#00ff88">${p2pGbps.toFixed(2)}</td><td style="color:#88ff00">${p2pUpGbps.toFixed(2)}</td><td style="color:#00d4ff;font-weight:bold">${totalGbps.toFixed(2)}</td></tr>`;
+      return `<tr><td><b style="color:${color}">${displayName}</b></td><td style="color:#ff6b6b">${hasTraffic ? formatBytes(http) : '-'}</td><td style="color:#00ff88">${hasTraffic ? formatBytes(p2p) : '-'}</td><td style="color:#88ff00">${p2pUp > 0 ? formatBytes(p2pUp) : '-'}</td><td style="color:#00ff88;font-weight:bold">${hasTraffic ? p2pRatio + '%' : '-'}</td><td style="color:#00d4ff">${viewers.toLocaleString()}</td><td style="color:#a55eea">${swarms.toLocaleString()}</td><td style="color:#ff6b6b">${httpGbps.toFixed(2)} Gbps</td><td style="color:#00ff88">${p2pGbps.toFixed(2)} Gbps</td><td style="color:#88ff00">${p2pUpGbps.toFixed(2)} Gbps</td><td style="color:#00d4ff;font-weight:bold">${totalGbps.toFixed(2)} Gbps</td></tr>`;
     }).join('');
     const totalP2pRatio = (totalHttp + totalP2p) > 0 ? (totalP2p / (totalHttp + totalP2p) * 100).toFixed(1) : 0;
     const totalDownGbps = totalHttpGbps + totalP2pGbps;
-    const totalRow = servers.length > 0 ? `<tr style="background:rgba(0,212,255,0.1);font-weight:bold;border-top:2px solid rgba(255,255,255,0.3)"><td>합계</td><td style="color:#ff6b6b">${formatBytes(totalHttp)}</td><td style="color:#00ff88">${formatBytes(totalP2p)}</td><td style="color:#88ff00">${formatBytes(totalP2pUp)}</td><td style="color:#00ff88">${totalP2pRatio}%</td><td style="color:#00d4ff">${totalViewers.toLocaleString()}</td><td style="color:#ff6b6b">${totalHttpGbps.toFixed(2)}</td><td style="color:#00ff88">${totalP2pGbps.toFixed(2)}</td><td style="color:#88ff00">${totalP2pUpGbps.toFixed(2)}</td><td style="color:#00d4ff">${totalDownGbps.toFixed(2)}</td></tr>` : '';
-    document.querySelector('#serverTable tbody').innerHTML = (rows + totalRow) || '<tr><td colspan="10" style="text-align:center">데이터 없음</td></tr>';
+    // 실시간이면 activeSwarms 사용 (전체 열린 스웜), 아니면 서버 합계
+    const displaySwarms = (isRealtime && realtimeData?.activeSwarms) ? realtimeData.activeSwarms : totalSwarms;
+    const totalRow = servers.length > 0 ? `<tr style="background:rgba(0,212,255,0.1);font-weight:bold;border-top:2px solid rgba(255,255,255,0.3)"><td>합계</td><td style="color:#ff6b6b">${formatBytes(totalHttp)}</td><td style="color:#00ff88">${formatBytes(totalP2p)}</td><td style="color:#88ff00">${formatBytes(totalP2pUp)}</td><td style="color:#00ff88">${totalP2pRatio}%</td><td style="color:#00d4ff">${totalViewers.toLocaleString()}</td><td style="color:#a55eea">${displaySwarms.toLocaleString()}</td><td style="color:#ff6b6b">${totalHttpGbps.toFixed(2)} Gbps</td><td style="color:#00ff88">${totalP2pGbps.toFixed(2)} Gbps</td><td style="color:#88ff00">${totalP2pUpGbps.toFixed(2)} Gbps</td><td style="color:#00d4ff">${totalDownGbps.toFixed(2)} Gbps</td></tr>` : '';
+    document.querySelector('#serverTable tbody').innerHTML = (rows + totalRow) || '<tr><td colspan="11" style="text-align:center">데이터 없음</td></tr>';
   }
 
   async function load() {
@@ -5638,9 +5928,36 @@ function initLive() {
       const idx = (st.p - 1) * st.size + i + 1;
       const t = (d.http_bytes || 0) + (d.p2p_bytes || 0);
       const ratio = t > 0 ? ((d.p2p_bytes || 0) / t * 100).toFixed(1) : '0';
-      const sw = d.swarm_id?.length > 20 ? d.swarm_id.slice(0, 12) + '...' + d.swarm_id.slice(-6) : d.swarm_id;
-      const fn = d.filename?.length > 25 ? d.filename.slice(0, 25) + '...' : (d.filename || '-');
-      return `<tr><td>${idx}</td><td title="${d.filename}">${fn}</td><td title="${d.swarm_id}" style="font-size:10px">${sw}</td><td style="color:#ff6b6b"><b>${d.viewers || 0}</b></td><td>${formatBytes(d.http_bytes)}</td><td>${formatBytes(d.p2p_bytes)}</td><td style="color:#00ff88"><b>${ratio}%</b></td></tr>`;
+
+      // swarm_id 표시 처리
+      const swarmId = d.swarm_id || '';
+      let sw = swarmId;
+      if (swarmId.length > 20) {
+        sw = swarmId.slice(0, 12) + '...' + swarmId.slice(-6);
+      }
+
+      // filename 처리: unknown이면 swarm_id에서 추출 시도
+      let filename = d.filename || '';
+      if (!filename || filename === 'unknown') {
+        // URL 형식이면 마지막 경로에서 해시 추출
+        if (swarmId.includes('/')) {
+          const parts = swarmId.split('/');
+          const hash = parts[parts.length - 1];
+          filename = hash.length > 8 ? hash.slice(0, 8) + '...' : hash;
+          // 서버 이름 추출 (every9.poorcdn.com -> every9)
+          const server = parts[0].split('.')[0] || '';
+          filename = `[${server}] ${filename}`;
+        } else if (/^\d+$/.test(swarmId)) {
+          // 숫자만 있으면 ID로 표시
+          filename = `ID: ${swarmId}`;
+        } else {
+          filename = swarmId;
+        }
+      }
+      const fn = filename.length > 30 ? filename.slice(0, 30) + '...' : filename;
+      const fullTitle = d.filename && d.filename !== 'unknown' ? d.filename : swarmId;
+
+      return `<tr><td>${idx}</td><td title="${fullTitle}">${fn}</td><td title="${swarmId}" style="font-size:10px">${sw}</td><td style="color:#ff6b6b"><b>${d.viewers || 0}</b></td><td>${formatBytes(d.http_bytes)}</td><td>${formatBytes(d.p2p_bytes)}</td><td style="color:#00ff88"><b>${ratio}%</b></td></tr>`;
     }).join('') || '<tr><td colspan="7" style="text-align:center">데이터 없음</td></tr>';
     const pages = Math.ceil(st.total / st.size) || 1;
     document.getElementById('pageInfo').textContent = `${st.p} / ${pages}`;
@@ -5846,7 +6163,7 @@ function initSummary() {
   // 기간별 통계 계산 함수
   function calcStats(rows) {
     let plays = 0, visitors = 0, maxUsers = 0, tvmon = 0, tvwiki = 0, tvhot = 0, mobile = 0, pc = 0;
-    let firstHttp = null, lastHttp = 0, firstP2p = null, lastP2p = 0, firstP2pUp = null, lastP2pUp = 0;
+    let http = 0, p2p = 0, p2pUp = 0;
     rows.forEach(r => {
       plays += r[8] || 0;
       visitors += r[9] || 0;
@@ -5856,16 +6173,11 @@ function initSummary() {
       mobile += r[13] || 0;
       pc += r[14] || 0;
       if ((r[1] || 0) > maxUsers) maxUsers = r[1] || 0;
-      if (firstHttp === null) firstHttp = r[3] || 0;
-      lastHttp = r[3] || 0;
-      if (firstP2p === null) firstP2p = r[4] || 0;
-      lastP2p = r[4] || 0;
-      if (firstP2pUp === null) firstP2pUp = r[5] || 0;
-      lastP2pUp = r[5] || 0;
+      // r[3], r[4], r[5] are per-hour delta sums — aggregate by summing
+      http += r[3] || 0;
+      p2p += r[4] || 0;
+      p2pUp += r[5] || 0;
     });
-    const http = lastHttp >= firstHttp ? lastHttp - firstHttp : lastHttp;
-    const p2p = lastP2p >= firstP2p ? lastP2p - firstP2p : lastP2p;
-    const p2pUp = lastP2pUp >= firstP2pUp ? lastP2pUp - firstP2pUp : lastP2pUp;
     const total = http + p2p;
     const ratio = total > 0 ? ((p2p / total) * 100).toFixed(1) : '0';
     return { plays, visitors, maxUsers, tvmon, tvwiki, tvhot, mobile, pc, http, p2p, p2pUp, total, ratio };
@@ -5909,14 +6221,15 @@ function initSummary() {
       stats.today.plays = t.plays || stats.today.plays;
       stats.today.http = t.http_bytes || stats.today.http;
       stats.today.p2p = t.p2p_bytes || stats.today.p2p;
+      stats.today.p2pUp = t.p2p_up_bytes || stats.today.p2pUp;
       stats.today.total = (t.http_bytes || 0) + (t.p2p_bytes || 0) || stats.today.total;
       stats.today.ratio = stats.today.total > 0 ? ((stats.today.p2p / stats.today.total) * 100).toFixed(1) : stats.today.ratio;
       stats.today.maxUsers = t.max_users || stats.today.maxUsers;
     }
-    // dailyData[0]에서 오늘 유입경로/디바이스 데이터
-    if (st.dailyData && st.dailyData[0]) {
-      const d = st.dailyData[0];
-      // [date, plays, unique_visitors, tvmon, tvwiki, tvhot, mobile, pc, http_bytes, p2p_bytes, p2p_up_bytes, max_viewers, max_users]
+    // dailyData에서 오늘 유입경로/디바이스 데이터 (마지막 행이 오늘)
+    if (st.dailyData && st.dailyData.length > 0) {
+      const d = st.dailyData[st.dailyData.length - 1];
+      // [date, plays, unique_visitors, tvmon, tvwiki, tvhot, mobile, pc, http_bytes, p2p_bytes, p2p_up_bytes, max_viewers]
       stats.today.tvmon = d[3] || stats.today.tvmon;
       stats.today.tvwiki = d[4] || stats.today.tvwiki;
       stats.today.tvhot = d[5] || stats.today.tvhot;
@@ -6431,7 +6744,7 @@ function initSummary() {
     // 최근 14일 데이터 (역순으로 정렬되어 있으므로 slice 후 reverse)
     const data = st.dailyData.slice(0, 14).reverse();
 
-    // 데이터 변경 확인 (변경 없으면 차트 재생성 안함 - 흔들림 방지)
+    // 데이터 변경 확인 (변경 없으면 스킵)
     const dataHash = JSON.stringify(data.map(r => [r[1], r[2], r[11]]));
     if (dataHash === lastChartDataHash && dailyTrendChart) return;
     lastChartDataHash = dataHash;
@@ -6444,7 +6757,15 @@ function initSummary() {
     const visitors = data.map(r => r[2] || 0);
     const maxViewers = data.map(r => r[11] || 0);
 
-    if (dailyTrendChart) dailyTrendChart.destroy();
+    // 기존 차트가 있으면 데이터만 업데이트 (깜빡임 방지)
+    if (dailyTrendChart) {
+      dailyTrendChart.data.labels = labels;
+      dailyTrendChart.data.datasets[0].data = plays;
+      dailyTrendChart.data.datasets[1].data = visitors;
+      dailyTrendChart.data.datasets[2].data = maxViewers;
+      dailyTrendChart.update('none'); // 애니메이션 없이 업데이트
+      return;
+    }
 
     dailyTrendChart = new Chart(canvas, {
       type: 'line',
@@ -6512,6 +6833,66 @@ function initSummary() {
     });
   }
 
+  let summaryHourlyChart = null;
+  async function loadSummaryHourlyStats() {
+    console.log('[Summary] loadSummaryHourlyStats called');
+    const canvas = document.getElementById('summaryHourlyChart');
+    if (!canvas) {
+      console.log('[Summary] Canvas not found!');
+      return;
+    }
+    console.log('[Summary] Canvas found, fetching data...');
+
+    try {
+      const res = await fetch('/api/servers/logs/stats/timeline?period=24h');
+      const data = await res.json();
+      const dataset = data.dataset || [];
+      console.log('[Summary] Dataset length:', dataset.length);
+
+      if (dataset.length === 0) {
+        console.log('[Summary] Dataset empty, skipping chart');
+        return;
+      }
+
+      const labels = dataset.map(r => {
+        const d = new Date(r[0]);
+        return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' });
+      });
+      const requests = dataset.map(r => r[1]);
+      const bytes = dataset.map(r => r[2] / 1024 / 1024);
+
+      if (typeof Chart === 'undefined') {
+        console.log('[Summary] Chart.js not loaded!');
+        return;
+      }
+      console.log('[Summary] Creating chart...');
+      if (summaryHourlyChart) summaryHourlyChart.destroy();
+      summaryHourlyChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: '요청 수', data: requests, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.1)', fill: true, tension: 0.3, yAxisID: 'y' },
+            { label: '트래픽 (MB)', data: bytes, borderColor: '#ffa502', backgroundColor: 'rgba(255,165,2,0.1)', fill: true, tension: 0.3, yAxisID: 'y1' }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#888' } } },
+          scales: {
+            x: { ticks: { color: '#666' }, grid: { color: '#1a1a2e' } },
+            y: { position: 'left', ticks: { color: '#00d4ff' }, grid: { color: '#1a1a2e' } },
+            y1: { position: 'right', ticks: { color: '#ffa502' }, grid: { display: false } }
+          }
+        }
+      });
+      console.log('[Summary] Chart created successfully');
+    } catch (e) {
+      console.error('[Summary] 시간별 통계 로드 실패:', e);
+    }
+  }
+
   function render() {
     renderBreadcrumb();
     if (st.drillMonth && st.drillDay) {
@@ -6521,11 +6902,13 @@ function initSummary() {
       renderTotals(st.allData);
       renderCards(st.allData);
       renderDailyTrendChart();
+      // loadSummaryHourlyStats(); // removed
     } else {
       renderMonthlyTable(st.monthlyData, st.allData);  // monthlyData 사용 (정확한 고유 방문자)
       renderTotals(st.allData);
       renderCards(st.allData);
       renderDailyTrendChart();
+      // loadSummaryHourlyStats(); // removed
     }
   }
 
@@ -6545,10 +6928,13 @@ function initSummary() {
       if (st.view === 'daily') {
         fetch(`/api/history/stats?period=30d&sample=1h&_t=${t}`).then(r => r.json()).then(histData => {
           st.allData = histData.dataset || [];
+          // 드릴다운 상태면 새 데이터로 다시 렌더
+          if (st.drillMonth && st.drillDay) render();
         });
       } else {
         fetch(`/api/history/stats?period=365d&sample=1d&_t=${t}`).then(r => r.json()).then(histData => {
           st.allData = histData.dataset || [];
+          if (st.drillMonth && st.drillDay) render();
         });
       }
     } catch (e) { console.error('Summary load error:', e); }
