@@ -125,15 +125,9 @@ struct PlayerStats {
     http_bytes: u64,
     p2p_bytes: u64,
     p2p_up_bytes: u64,
-    // Delta values for current interval
     r_http_bytes: u64,
     r_p2p_bytes: u64,
     r_p2p_up_bytes: u64,
-    // Last known speed (preserved after reset for API)
-    last_http_speed: u64,
-    last_p2p_speed: u64,
-    last_p2p_up_speed: u64,
-    // 플레이어별 고유 IP 카운트
     unique_ips: HashMap<String, u64>,
 }
 
@@ -283,10 +277,11 @@ fn main() {
                 .layer(CorsLayer::permissive());
 
             let addr = SocketAddr::from(([127, 0, 0, 1], 8444));
-            eprintln!("API server listening on {} (dedicated runtime, localhost only)", addr);
-
             let listener = match tokio::net::TcpListener::bind(addr).await {
-                Ok(l) => l,
+                Ok(l) => {
+                    eprintln!("API server listening on {} (dedicated runtime, localhost only)", addr);
+                    l
+                }
                 Err(e) => {
                     eprintln!("Failed to bind API listener on {}: {}", addr, e);
                     return;
@@ -324,7 +319,7 @@ async fn async_main() {
     spawn_stats_aggregator(stats_rx);
 
     spawn_cache_updater();
-    tokio::spawn(clickhouse_flush_task());
+    spawn_clickhouse_flusher();
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
@@ -524,116 +519,139 @@ fn spawn_cache_updater() {
         .expect("Failed to spawn cache-updater thread");
 }
 
-async fn clickhouse_flush_task() {
-    let mut interval = tokio::time::interval(Duration::from_secs(CLICKHOUSE_FLUSH_SECS));
-    let client = HttpClient::new();
-    let mut tick_count: u64 = 0;
-    let mut prev_snapshot = FlushSnapshot {
-        r_http_bytes: 0, r_p2p_bytes: 0, r_p2p_up_bytes: 0,
-        viewers: 0, unique_ips_count: 0,
-        http_bytes: 0, p2p_bytes: 0, p2p_up_bytes: 0,
-        peers: 0, swarms_count: 0, swarm_data: Vec::new(),
-    };
+/// ClickHouse flush on dedicated OS thread (immune to WS runtime starvation).
+/// Parallel query execution with short timeouts to prevent cascading retry blocks.
+fn spawn_clickhouse_flusher() {
+    std::thread::Builder::new()
+        .name("ch-flusher".into())
+        .spawn(|| {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("flusher runtime");
 
-    loop {
-        interval.tick().await;
-        tick_count += 1;
+            rt.block_on(async {
+                let client = HttpClient::new();
+                let mut tick_count: u64 = 0;
+                let mut prev_snapshot = FlushSnapshot {
+                    r_http_bytes: 0, r_p2p_bytes: 0, r_p2p_up_bytes: 0,
+                    viewers: 0, unique_ips_count: 0,
+                    http_bytes: 0, p2p_bytes: 0, p2p_up_bytes: 0,
+                    peers: 0, swarms_count: 0, swarm_data: Vec::new(),
+                };
 
-        let prev = prev_snapshot.clone();
-        let snapshot = tokio::task::spawn_blocking(move || take_flush_snapshot(&prev))
-            .await
-            .expect("flush blocking task panicked");
+                loop {
+                    tokio::time::sleep(Duration::from_secs(CLICKHOUSE_FLUSH_SECS)).await;
+                    tick_count += 1;
 
-        let prev_swarm_map: HashMap<String, (u64, u64, u64)> = prev_snapshot.swarm_data.iter()
-            .map(|(id, h, p, pu, _)| (id.clone(), (*h, *p, *pu)))
-            .collect();
-        prev_snapshot = snapshot.clone();
+                    let prev = prev_snapshot.clone();
+                    let snapshot = take_flush_snapshot(&prev);
 
-        let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.6f").to_string();
-        let now_escaped = escape_sql(&now);
+                    let prev_swarm_map: HashMap<String, (u64, u64, u64)> = prev_snapshot.swarm_data.iter()
+                        .map(|(id, h, p, pu, _)| (id.clone(), (*h, *p, *pu)))
+                        .collect();
+                    prev_snapshot = snapshot.clone();
 
-        let stats_query = format!(
-            "INSERT INTO p2p_stats VALUES ('{}', {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
-            now_escaped, snapshot.viewers, snapshot.unique_ips_count,
-            snapshot.http_bytes, snapshot.p2p_bytes, snapshot.p2p_up_bytes,
-            snapshot.peers, snapshot.swarms_count,
-            snapshot.r_http_bytes, snapshot.r_p2p_bytes, snapshot.r_p2p_up_bytes
-        );
+                    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.6f").to_string();
+                    let now_escaped = escape_sql(&now);
 
-        let servers_query = {
-            let mut ss: HashMap<String, (u64, u64, u64, u64, u64, u64, u64)> = HashMap::new();
-            for (swarm_id, h, p, pu, uips) in &snapshot.swarm_data {
-                let server = swarm_id.split('.').next().unwrap_or("unknown").to_string();
-                let e = ss.entry(server).or_insert((0, 0, 0, 0, 0, 0, 0));
-                e.0 += h; e.1 += p; e.2 += pu;
-                let prev_vals = prev_swarm_map.get(swarm_id).copied().unwrap_or((0, 0, 0));
-                e.3 += h.saturating_sub(prev_vals.0);
-                e.4 += p.saturating_sub(prev_vals.1);
-                e.5 += pu.saturating_sub(prev_vals.2);
-                e.6 += *uips as u64;
-            }
-            if ss.is_empty() { None } else {
-                let vals: Vec<String> = ss.iter().map(|(srv, (h, p, pu, rh, rp, rpu, v))| {
-                    format!("('{}', {}, {}, {}, {}, '{}', {}, {}, {}, {})",
-                        escape_sql(srv), v, v, h, p, now_escaped, pu, rh, rp, rpu)
-                }).collect();
-                Some(format!("INSERT INTO p2p_servers VALUES {}", vals.join(",")))
-            }
-        };
+                    let stats_query = format!(
+                        "INSERT INTO p2p_stats VALUES ('{}', {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+                        now_escaped, snapshot.viewers, snapshot.unique_ips_count,
+                        snapshot.http_bytes, snapshot.p2p_bytes, snapshot.p2p_up_bytes,
+                        snapshot.peers, snapshot.swarms_count,
+                        snapshot.r_http_bytes, snapshot.r_p2p_bytes, snapshot.r_p2p_up_bytes
+                    );
 
-        let visitor_logs_query = {
-            let mut logs = VISITOR_LOGS.lock();
-            if logs.is_empty() { None } else {
-                let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.6f").to_string();
-                let collected: Vec<_> = logs.drain(..).collect();
-                let values: Vec<String> = collected.iter().map(|log| {
-                    format!("('{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', {}, '{}', {}, {}, {})",
-                        escape_sql(&log.ip), escape_sql(&log.session_id),
-                        escape_sql(&log.swarm_id), escape_sql(&log.filename),
-                        escape_sql(&log.device), escape_sql(&log.device_name),
-                        escape_sql(&log.browser), escape_sql(&log.referrer),
-                        escape_sql(&log.net_type), log.player_id, now,
-                        log.http_bytes, log.p2p_bytes, log.p2p_up_bytes)
-                }).collect();
-                Some(format!("INSERT INTO visitor_logs VALUES {}", values.join(",")))
-            }
-        };
-
-        let queries: Vec<String> = std::iter::once(stats_query)
-            .chain(servers_query)
-            .chain(visitor_logs_query)
-            .collect();
-
-        for query in queries {
-            for attempt in 0..3u32 {
-                match client.post(CLICKHOUSE_URL)
-                    .timeout(Duration::from_secs(5))
-                    .body(query.clone())
-                    .send()
-                    .await
-                {
-                    Ok(resp) if resp.status().is_success() => break,
-                    Ok(resp) => {
-                        if attempt == 2 {
-                            eprintln!("ClickHouse INSERT failed after 3 attempts: {}", resp.status());
+                    let server_queries = {
+                        let mut ss: HashMap<String, (u64, u64, u64, u64, u64, u64, u64)> = HashMap::new();
+                        for (swarm_id, h, p, pu, uips) in &snapshot.swarm_data {
+                            let server = swarm_id.split('.').next().unwrap_or("unknown").to_string();
+                            let e = ss.entry(server).or_insert((0, 0, 0, 0, 0, 0, 0));
+                            e.0 += h; e.1 += p; e.2 += pu;
+                            let prev_vals = prev_swarm_map.get(swarm_id).copied().unwrap_or((0, 0, 0));
+                            e.3 += h.saturating_sub(prev_vals.0);
+                            e.4 += p.saturating_sub(prev_vals.1);
+                            e.5 += pu.saturating_sub(prev_vals.2);
+                            e.6 += *uips as u64;
                         }
-                    }
-                    Err(e) => {
-                        if attempt == 2 {
-                            eprintln!("ClickHouse send failed after 3 attempts: {}", e);
+                        if ss.is_empty() {
+                            Vec::new()
+                        } else {
+                            const CHUNK_SIZE: usize = 500;
+                            let all_vals: Vec<String> = ss.iter().map(|(srv, (h, p, pu, rh, rp, rpu, v))| {
+                                format!("('{}', {}, {}, {}, {}, '{}', {}, {}, {}, {})",
+                                    escape_sql(srv), v, v, h, p, now_escaped, pu, rh, rp, rpu)
+                            }).collect();
+                            all_vals.chunks(CHUNK_SIZE)
+                                .map(|chunk| format!("INSERT INTO p2p_servers VALUES {}", chunk.join(",")))
+                                .collect()
                         }
-                        tokio::time::sleep(Duration::from_millis(50 * (attempt as u64 + 1))).await;
+                    };
+
+                    let visitor_logs_query = {
+                        let mut logs = VISITOR_LOGS.lock();
+                        if logs.is_empty() { None } else {
+                            let drain_count = logs.len().min(1000);
+                            let collected: Vec<_> = logs.drain(0..drain_count).collect();
+                            let values: Vec<String> = collected.iter().map(|log| {
+                                format!("('{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', {}, '{}', {}, {}, {})",
+                                    escape_sql(&log.ip), escape_sql(&log.session_id),
+                                    escape_sql(&log.swarm_id), escape_sql(&log.filename),
+                                    escape_sql(&log.device), escape_sql(&log.device_name),
+                                    escape_sql(&log.browser), escape_sql(&log.referrer),
+                                    escape_sql(&log.net_type), log.player_id, now_escaped,
+                                    log.http_bytes, log.p2p_bytes, log.p2p_up_bytes)
+                            }).collect();
+                            Some(format!("INSERT INTO visitor_logs VALUES {}", values.join(",")))
+                        }
+                    };
+
+                    let stats_fut = ch_send(&client, stats_query, 1000);
+                    let servers_fut = async {
+                        for q in server_queries {
+                            ch_send(&client, q, 2000).await;
+                        }
+                    };
+                    let visitor_fut = async {
+                        if let Some(q) = visitor_logs_query {
+                            ch_send(&client, q, 2000).await;
+                        }
+                    };
+                    tokio::join!(stats_fut, servers_fut, visitor_fut);
+
+                    if tick_count % 60 == 0 {
+                        let active_ips = P2P_STATS.read().unique_ips.clone();
+                        let mut ip_totals = IP_TOTALS.write();
+                        ip_totals.retain(|ip, _| active_ips.contains_key(ip));
                     }
                 }
-            }
-        }
+            });
+        })
+        .expect("Failed to spawn ch-flusher thread");
+}
 
-        if tick_count % 60 == 0 {
-            tokio::task::spawn_blocking(|| {
-                let active_ips = P2P_STATS.read().unique_ips.clone();
-                let mut ip_totals = IP_TOTALS.write();
-                ip_totals.retain(|ip, _| active_ips.contains_key(ip));
-            }).await.ok();
+/// Send a single INSERT to ClickHouse with short timeout and max 1 retry.
+async fn ch_send(client: &HttpClient, query: String, timeout_ms: u64) {
+    for attempt in 0..2u32 {
+        match client.post(CLICKHOUSE_URL)
+            .timeout(Duration::from_millis(timeout_ms))
+            .body(query.clone())
+            .send()
+            .await
+        {
+            Ok(resp) if resp.status().is_success() => return,
+            Ok(resp) => {
+                if attempt == 1 {
+                    eprintln!("[ch-flush] INSERT failed ({}): {}", resp.status(), &query[..query.len().min(120)]);
+                }
+            }
+            Err(e) => {
+                if attempt == 1 {
+                    eprintln!("[ch-flush] send error: {}", e);
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
         }
     }
 }
@@ -838,9 +856,9 @@ fn build_realtime_response_from_stats(stats: &P2PStats) -> RealtimeResponse {
             p2p_bytes: stats.player1.p2p_bytes,
             p2p_up_bytes: stats.player1.p2p_up_bytes,
             p2p_ratio: p1_ratio,
-            r_http_bytes: stats.player1.last_http_speed,
-            r_p2p_bytes: stats.player1.last_p2p_speed,
-            r_p2p_up_bytes: stats.player1.last_p2p_up_speed,
+            r_http_bytes: 0,
+            r_p2p_bytes: 0,
+            r_p2p_up_bytes: 0,
         },
 
         active_swarms: stats.swarms.len(),
