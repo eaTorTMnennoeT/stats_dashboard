@@ -9,6 +9,7 @@ use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 const REPORT_INTERVAL_SECS: u64 = 5;
 const BLOCK_CHECK_INTERVAL_SECS: u64 = 10;
 const NGINX_BLOCK_CONF: &str = "/etc/nginx/apiblack.conf";
+const KST_OFFSET_HOURS: i64 = 9;
 
 #[derive(Serialize)]
 struct ServerReport {
@@ -129,9 +130,16 @@ fn is_ip_blocked(ip: &str) -> bool {
     false
 }
 
-// IP를 차단 목록에 추가
+fn is_valid_ip(ip: &str) -> bool {
+    ip.parse::<std::net::IpAddr>().is_ok()
+}
+
 fn block_ip(ip: &str, reason: &str) -> bool {
-    // 이미 차단되어 있으면 스킵
+    if !is_valid_ip(ip) {
+        eprintln!("[BLOCK] Invalid IP address: {}", ip);
+        return false;
+    }
+
     if is_ip_blocked(ip) {
         eprintln!("[BLOCK] {} already blocked, skipping", ip);
         return true;
@@ -151,7 +159,7 @@ fn block_ip(ip: &str, reason: &str) -> bool {
     };
 
     // 현재 시간 (KST)
-    let now = chrono::Utc::now() + chrono::Duration::hours(9);
+    let now = chrono::Utc::now() + chrono::Duration::hours(KST_OFFSET_HOURS);
     let timestamp = now.format("%Y-%m-%d %H:%M:%S").to_string();
 
     // deny IP; # 시간 - 사유
@@ -168,16 +176,28 @@ fn block_ip(ip: &str, reason: &str) -> bool {
     reload_nginx()
 }
 
-// IP 차단 해제
 fn unblock_ip(ip: &str) -> bool {
+    if !is_valid_ip(ip) {
+        eprintln!("[UNBLOCK] Invalid IP address: {}", ip);
+        return false;
+    }
+
     let content = match fs::read_to_string(NGINX_BLOCK_CONF) {
         Ok(c) => c,
-        Err(_) => return true, // 파일이 없으면 이미 해제된 것
+        Err(_) => {
+            eprintln!(
+                "[UNBLOCK] {} not found, treating {} as already unblocked",
+                NGINX_BLOCK_CONF, ip
+            );
+            return true;
+        }
     };
 
     let new_content: String = content
         .lines()
-        .filter(|line| !line.contains(&format!("deny {};", ip)) && !line.contains(&format!("deny {} ;", ip)))
+        .filter(|line| {
+            !line.contains(&format!("deny {};", ip)) && !line.contains(&format!("deny {} ;", ip))
+        })
         .map(|line| format!("{}\n", line))
         .collect();
 
@@ -199,7 +219,10 @@ fn reload_nginx() -> bool {
                 eprintln!("[NGINX] Reloaded successfully");
                 true
             } else {
-                eprintln!("[NGINX] Reload failed: {:?}", String::from_utf8_lossy(&output.stderr));
+                eprintln!(
+                    "[NGINX] Reload failed: {:?}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
                 false
             }
         }
@@ -211,10 +234,22 @@ fn reload_nginx() -> bool {
 }
 
 // 대기 중인 차단 명령 폴링
-fn poll_block_commands(server_url: &str, server_id: &str, last_timestamp: &mut u64) {
-    let url = format!("{}/api/blacklist/pending?since={}", server_url, last_timestamp);
+fn poll_block_commands(
+    server_url: &str,
+    server_id: &str,
+    last_timestamp: &mut u64,
+    agent_secret: &Option<String>,
+) {
+    let url = format!(
+        "{}/api/blacklist/pending?since={}",
+        server_url, last_timestamp
+    );
 
-    match ureq::get(&url).call() {
+    let mut req = ureq::get(&url);
+    if let Some(secret) = agent_secret {
+        req = req.set("X-Agent-Secret", secret);
+    }
+    match req.call() {
         Ok(resp) => {
             if let Ok(data) = resp.into_json::<PendingResponse>() {
                 if data.status == "ok" {
@@ -230,8 +265,14 @@ fn poll_block_commands(server_url: &str, server_id: &str, last_timestamp: &mut u
                             false
                         };
 
-                        // 결과 확인 전송
-                        confirm_block(server_url, server_id, &cmd.ip, &cmd.action, success);
+                        confirm_block(
+                            server_url,
+                            server_id,
+                            &cmd.ip,
+                            &cmd.action,
+                            success,
+                            agent_secret,
+                        );
 
                         // 타임스탬프 업데이트
                         if cmd.timestamp > *last_timestamp {
@@ -239,6 +280,8 @@ fn poll_block_commands(server_url: &str, server_id: &str, last_timestamp: &mut u
                         }
                     }
                 }
+            } else {
+                eprintln!("[POLL] Failed to parse response JSON");
             }
         }
         Err(e) => {
@@ -248,7 +291,14 @@ fn poll_block_commands(server_url: &str, server_id: &str, last_timestamp: &mut u
 }
 
 // 차단 결과 확인 전송
-fn confirm_block(server_url: &str, server_id: &str, ip: &str, action: &str, success: bool) {
+fn confirm_block(
+    server_url: &str,
+    server_id: &str,
+    ip: &str,
+    action: &str,
+    success: bool,
+    agent_secret: &Option<String>,
+) {
     let url = format!("{}/api/blacklist/confirm", server_url);
     let req = ConfirmRequest {
         server_id: server_id.to_string(),
@@ -258,13 +308,19 @@ fn confirm_block(server_url: &str, server_id: &str, ip: &str, action: &str, succ
     };
 
     if let Ok(body) = serde_json::to_string(&req) {
-        match ureq::post(&url)
-            .set("Content-Type", "application/json")
-            .send_string(&body)
-        {
+        let mut http_req = ureq::post(&url).set("Content-Type", "application/json");
+        if let Some(secret) = agent_secret {
+            http_req = http_req.set("X-Agent-Secret", secret);
+        }
+        match http_req.send_string(&body) {
             Ok(_) => eprintln!("[CONFIRM] {} {} success={}", action, ip, success),
             Err(e) => eprintln!("[CONFIRM] Error: {}", e),
         }
+    } else {
+        eprintln!(
+            "[CONFIRM] Failed to serialize request for {} {}",
+            action, ip
+        );
     }
 }
 
@@ -282,6 +338,7 @@ fn main() {
     let report_url = format!("{}/api/servers/report", server_url);
     let server_id = get_server_id();
     let server_name = get_server_name();
+    let agent_secret = std::env::var("AGENT_SECRET").ok();
 
     eprintln!("Server Agent started");
     eprintln!("  ID: {}", server_id);
@@ -344,12 +401,20 @@ fn main() {
             uptime,
         };
 
-        let body = serde_json::to_string(&report).unwrap_or_default();
+        let body = match serde_json::to_string(&report) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("[ERR] Failed to serialize report: {}", e);
+                thread::sleep(Duration::from_secs(REPORT_INTERVAL_SECS));
+                continue;
+            }
+        };
 
-        match ureq::post(&report_url)
-            .set("Content-Type", "application/json")
-            .send_string(&body)
-        {
+        let mut req = ureq::post(&report_url).set("Content-Type", "application/json");
+        if let Some(ref secret) = agent_secret {
+            req = req.set("X-Agent-Secret", secret);
+        }
+        match req.send_string(&body) {
             Ok(_) => {
                 eprintln!(
                     "[OK] CPU: {:.1}% | Mem: {}/{} MB | Net: {}/{} MB/s | Conn: {}",
@@ -368,7 +433,12 @@ fn main() {
 
         // 차단 명령 폴링 (10초마다)
         if last_block_check.elapsed().as_secs() >= BLOCK_CHECK_INTERVAL_SECS {
-            poll_block_commands(&server_url, &server_id, &mut last_block_timestamp);
+            poll_block_commands(
+                &server_url,
+                &server_id,
+                &mut last_block_timestamp,
+                &agent_secret,
+            );
             last_block_check = std::time::Instant::now();
         }
 
