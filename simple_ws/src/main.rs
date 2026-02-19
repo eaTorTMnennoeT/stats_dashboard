@@ -18,6 +18,7 @@ use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 
 use reqwest::Client as HttpClient;
 use tower_http::cors::CorsLayer;
+use tokio::sync::mpsc;
 
 const WORKER_THREADS: usize = 72;
 const BLOCKING_THREADS: usize = 128;
@@ -28,16 +29,39 @@ const PING_INTERVAL_SECS: u64 = 15;
 const CLICKHOUSE_URL: &str = "http://127.0.0.1:8123";
 const CLICKHOUSE_FLUSH_SECS: u64 = 1;
 
-/// Saved delta values captured before reset, used for accurate ClickHouse flush
-struct SavedDeltas {
+/// Captured via READ lock; query building is lock-free. Deltas from cumulative diffs.
+#[derive(Clone)]
+struct FlushSnapshot {
     r_http_bytes: u64,
     r_p2p_bytes: u64,
     r_p2p_up_bytes: u64,
-    /// swarm_id -> (r_http_bytes, r_p2p_bytes, r_p2p_up_bytes)
-    swarm_deltas: HashMap<String, (u64, u64, u64)>,
+    viewers: u64,
+    unique_ips_count: usize,
+    http_bytes: u64,
+    p2p_bytes: u64,
+    p2p_up_bytes: u64,
+    peers: u64,
+    swarms_count: usize,
+    /// (swarm_id, http_bytes, p2p_bytes, p2p_up_bytes, unique_ips)
+    swarm_data: Vec<(String, u64, u64, u64, usize)>,
 }
 
-// Global stats
+struct StatsUpdate {
+    http_diff: u64,
+    p2p_diff: u64,
+    up_diff: u64,
+    peer_diff: i64,
+    player_id: u8,
+    swarm_id: String,
+    user_ip: String,
+}
+
+static STATS_TX: std::sync::OnceLock<mpsc::UnboundedSender<StatsUpdate>> = std::sync::OnceLock::new();
+
+static ATOMIC_HTTP_BYTES: AtomicU64 = AtomicU64::new(0);
+static ATOMIC_P2P_BYTES: AtomicU64 = AtomicU64::new(0);
+static ATOMIC_P2P_UP_BYTES: AtomicU64 = AtomicU64::new(0);
+
 static TOTAL_CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
 static SYSTEM: std::sync::OnceLock<Mutex<System>> = std::sync::OnceLock::new();
 static START_TIME: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
@@ -295,6 +319,10 @@ async fn async_main() {
         }
     }
 
+    let (stats_tx, stats_rx) = mpsc::unbounded_channel::<StatsUpdate>();
+    STATS_TX.set(stats_tx).expect("STATS_TX already set");
+    spawn_stats_aggregator(stats_rx);
+
     spawn_cache_updater();
     tokio::spawn(clickhouse_flush_task());
 
@@ -323,63 +351,173 @@ async fn async_main() {
     }
 }
 
-/// 전용 OS 스레드: READ 락만 사용하여 1초마다 캐시 갱신 + 속도 계산
-/// WRITE 락 contention에 영향받지 않음 (parking_lot은 다수 reader 동시 허용)
-/// 속도 = EMA(α=0.3) 적용하여 안정적 표시 (약 3~4초 평균 효과)
+fn spawn_stats_aggregator(mut rx: mpsc::UnboundedReceiver<StatsUpdate>) {
+    std::thread::Builder::new()
+        .name("stats-aggregator".into())
+        .spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("aggregator runtime");
+
+            rt.block_on(async move {
+                let mut batch: Vec<StatsUpdate> = Vec::with_capacity(4096);
+                loop {
+                    batch.clear();
+                    match rx.recv().await {
+                        Some(msg) => batch.push(msg),
+                        None => return,
+                    }
+                    while let Ok(msg) = rx.try_recv() {
+                        batch.push(msg);
+                    }
+
+                    let mut total_http: u64 = 0;
+                    let mut total_p2p: u64 = 0;
+                    let mut total_up: u64 = 0;
+                    let mut total_peer_diff: i64 = 0;
+                    let mut p1_http: u64 = 0;
+                    let mut p1_p2p: u64 = 0;
+                    let mut p1_up: u64 = 0;
+                    let mut swarm_deltas: HashMap<String, (u64, u64, u64)> = HashMap::new();
+                    let mut ip_deltas: HashMap<String, u64> = HashMap::new();
+
+                    for msg in &batch {
+                        total_http = total_http.saturating_add(msg.http_diff);
+                        total_p2p = total_p2p.saturating_add(msg.p2p_diff);
+                        total_up = total_up.saturating_add(msg.up_diff);
+                        total_peer_diff += msg.peer_diff;
+
+                        if msg.player_id == 1 {
+                            p1_http = p1_http.saturating_add(msg.http_diff);
+                            p1_p2p = p1_p2p.saturating_add(msg.p2p_diff);
+                            p1_up = p1_up.saturating_add(msg.up_diff);
+                        }
+
+                        if !msg.swarm_id.is_empty() {
+                            let e = swarm_deltas.entry(msg.swarm_id.clone()).or_insert((0, 0, 0));
+                            e.0 = e.0.saturating_add(msg.http_diff);
+                            e.1 = e.1.saturating_add(msg.p2p_diff);
+                            e.2 = e.2.saturating_add(msg.up_diff);
+                        }
+
+                        let ip_total = msg.http_diff.saturating_add(msg.p2p_diff);
+                        if ip_total > 0 && !msg.user_ip.is_empty() {
+                            *ip_deltas.entry(msg.user_ip.clone()).or_insert(0) += ip_total;
+                        }
+                    }
+
+                    if !ip_deltas.is_empty() {
+                        let mut ip_totals = IP_TOTALS.write();
+                        for (ip, delta) in &ip_deltas {
+                            let entry = ip_totals.entry(ip.clone()).or_insert(0);
+                            *entry = entry.saturating_add(*delta);
+                        }
+                    }
+
+                    let mut stats = P2P_STATS.write();
+                    stats.http_bytes = stats.http_bytes.saturating_add(total_http);
+                    stats.p2p_bytes = stats.p2p_bytes.saturating_add(total_p2p);
+                    stats.p2p_up_bytes = stats.p2p_up_bytes.saturating_add(total_up);
+                    stats.r_http_bytes = stats.r_http_bytes.saturating_add(total_http);
+                    stats.r_p2p_bytes = stats.r_p2p_bytes.saturating_add(total_p2p);
+                    stats.r_p2p_up_bytes = stats.r_p2p_up_bytes.saturating_add(total_up);
+
+                    if total_peer_diff > 0 {
+                        stats.peers += total_peer_diff as u64;
+                    } else {
+                        stats.peers = stats.peers.saturating_sub((-total_peer_diff) as u64);
+                    }
+
+                    stats.player1.http_bytes = stats.player1.http_bytes.saturating_add(p1_http);
+                    stats.player1.p2p_bytes = stats.player1.p2p_bytes.saturating_add(p1_p2p);
+                    stats.player1.p2p_up_bytes = stats.player1.p2p_up_bytes.saturating_add(p1_up);
+                    stats.player1.r_http_bytes = stats.player1.r_http_bytes.saturating_add(p1_http);
+                    stats.player1.r_p2p_bytes = stats.player1.r_p2p_bytes.saturating_add(p1_p2p);
+                    stats.player1.r_p2p_up_bytes = stats.player1.r_p2p_up_bytes.saturating_add(p1_up);
+
+                    for (swarm_id, (h, p, u)) in &swarm_deltas {
+                        if let Some(swarm) = stats.swarms.get_mut(swarm_id) {
+                            swarm.http_bytes = swarm.http_bytes.saturating_add(*h);
+                            swarm.p2p_bytes = swarm.p2p_bytes.saturating_add(*p);
+                            swarm.p2p_up_bytes = swarm.p2p_up_bytes.saturating_add(*u);
+                            swarm.r_http_bytes = swarm.r_http_bytes.saturating_add(*h);
+                            swarm.r_p2p_bytes = swarm.r_p2p_bytes.saturating_add(*p);
+                            swarm.r_p2p_up_bytes = swarm.r_p2p_up_bytes.saturating_add(*u);
+                        }
+                    }
+                    drop(stats);
+                }
+            });
+        })
+        .expect("Failed to spawn stats-aggregator thread");
+}
+
+/// EMA(α=0.03, 반감기 ~23초) + 5샘플 워밍업. Speed from atomics (lock-free).
 fn spawn_cache_updater() {
     std::thread::Builder::new()
         .name("cache-updater".into())
         .spawn(|| {
             let mut prev_time = std::time::Instant::now();
-            let mut prev_p1 = {
-                let stats = P2P_STATS.read();
-                (stats.player1.http_bytes, stats.player1.p2p_bytes, stats.player1.p2p_up_bytes)
-            };
+            let mut prev_bytes = (
+                ATOMIC_HTTP_BYTES.load(Ordering::Relaxed),
+                ATOMIC_P2P_BYTES.load(Ordering::Relaxed),
+                ATOMIC_P2P_UP_BYTES.load(Ordering::Relaxed),
+            );
 
-            // EMA smoothed speeds (bytes/sec as f64 for precision)
-            const EMA_ALPHA: f64 = 0.15;
+            const EMA_ALPHA: f64 = 0.03;
             let mut ema_http: f64 = 0.0;
             let mut ema_p2p: f64 = 0.0;
             let mut ema_up: f64 = 0.0;
-            let mut first_sample = true;
+
+            const WARMUP_SAMPLES: usize = 5;
+            let mut warmup_count: usize = 0;
+            let mut warmup_http: f64 = 0.0;
+            let mut warmup_p2p: f64 = 0.0;
+            let mut warmup_up: f64 = 0.0;
 
             loop {
                 std::thread::sleep(Duration::from_secs(1));
                 let now = std::time::Instant::now();
                 let elapsed = now.duration_since(prev_time).as_secs_f64().max(0.1);
 
-                let stats = P2P_STATS.read();
+                let cur_bytes = (
+                    ATOMIC_HTTP_BYTES.load(Ordering::Relaxed),
+                    ATOMIC_P2P_BYTES.load(Ordering::Relaxed),
+                    ATOMIC_P2P_UP_BYTES.load(Ordering::Relaxed),
+                );
 
-                let cur_p1 = (stats.player1.http_bytes, stats.player1.p2p_bytes, stats.player1.p2p_up_bytes);
+                let raw_http = cur_bytes.0.saturating_sub(prev_bytes.0) as f64 / elapsed;
+                let raw_p2p = cur_bytes.1.saturating_sub(prev_bytes.1) as f64 / elapsed;
+                let raw_up = cur_bytes.2.saturating_sub(prev_bytes.2) as f64 / elapsed;
 
-                let raw_http = cur_p1.0.saturating_sub(prev_p1.0) as f64 / elapsed;
-                let raw_p2p = cur_p1.1.saturating_sub(prev_p1.1) as f64 / elapsed;
-                let raw_up = cur_p1.2.saturating_sub(prev_p1.2) as f64 / elapsed;
-
-                // EMA: 첫 샘플은 그대로, 이후 α*new + (1-α)*prev
-                if first_sample {
-                    ema_http = raw_http;
-                    ema_p2p = raw_p2p;
-                    ema_up = raw_up;
-                    first_sample = false;
+                if warmup_count < WARMUP_SAMPLES {
+                    warmup_http += raw_http;
+                    warmup_p2p += raw_p2p;
+                    warmup_up += raw_up;
+                    warmup_count += 1;
+                    ema_http = warmup_http / warmup_count as f64;
+                    ema_p2p = warmup_p2p / warmup_count as f64;
+                    ema_up = warmup_up / warmup_count as f64;
                 } else {
                     ema_http = EMA_ALPHA * raw_http + (1.0 - EMA_ALPHA) * ema_http;
                     ema_p2p = EMA_ALPHA * raw_p2p + (1.0 - EMA_ALPHA) * ema_p2p;
                     ema_up = EMA_ALPHA * raw_up + (1.0 - EMA_ALPHA) * ema_up;
                 }
 
+                let stats = P2P_STATS.read();
                 let mut response = build_realtime_response_from_stats(&stats);
                 drop(stats);
 
-                response.player1.r_http_bytes = ema_http as u64;
-                response.player1.r_p2p_bytes = ema_p2p as u64;
-                response.player1.r_p2p_up_bytes = ema_up as u64;
+                response.player1.r_http_bytes = ema_http.round() as u64;
+                response.player1.r_p2p_bytes = ema_p2p.round() as u64;
+                response.player1.r_p2p_up_bytes = ema_up.round() as u64;
 
                 if let Ok(json) = serde_json::to_string(&response) {
                     REALTIME_CACHE.store(Arc::new(json));
                 }
 
-                prev_p1 = cur_p1;
+                prev_bytes = cur_bytes;
                 prev_time = now;
             }
         })
@@ -390,52 +528,58 @@ async fn clickhouse_flush_task() {
     let mut interval = tokio::time::interval(Duration::from_secs(CLICKHOUSE_FLUSH_SECS));
     let client = HttpClient::new();
     let mut tick_count: u64 = 0;
+    let mut prev_snapshot = FlushSnapshot {
+        r_http_bytes: 0, r_p2p_bytes: 0, r_p2p_up_bytes: 0,
+        viewers: 0, unique_ips_count: 0,
+        http_bytes: 0, p2p_bytes: 0, p2p_up_bytes: 0,
+        peers: 0, swarms_count: 0, swarm_data: Vec::new(),
+    };
 
     loop {
         interval.tick().await;
         tick_count += 1;
 
-        let (_saved, ch_queries) = tokio::task::spawn_blocking(|| {
-            let saved = calculate_speeds_and_reset_deltas();
+        let prev = prev_snapshot.clone();
+        let snapshot = tokio::task::spawn_blocking(move || take_flush_snapshot(&prev))
+            .await
+            .expect("flush blocking task panicked");
 
-            let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.6f").to_string();
-            let now_escaped = escape_sql(&now);
+        let prev_swarm_map: HashMap<String, (u64, u64, u64)> = prev_snapshot.swarm_data.iter()
+            .map(|(id, h, p, pu, _)| (id.clone(), (*h, *p, *pu)))
+            .collect();
+        prev_snapshot = snapshot.clone();
 
-            let stats_query = {
-                let stats = P2P_STATS.read();
-                format!(
-                    "INSERT INTO p2p_stats VALUES ('{}', {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
-                    now_escaped, stats.viewers, stats.unique_ips.len(),
-                    stats.http_bytes, stats.p2p_bytes, stats.p2p_up_bytes,
-                    stats.peers, stats.swarms.len(),
-                    saved.r_http_bytes, saved.r_p2p_bytes, saved.r_p2p_up_bytes
-                )
-            };
+        let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.6f").to_string();
+        let now_escaped = escape_sql(&now);
 
-            let servers_query = {
-                let stats = P2P_STATS.read();
-                let mut ss: HashMap<String, (u64, u64, u64, u64, u64, u64, u64)> = HashMap::new();
-                for (swarm_id, swarm) in stats.swarms.iter() {
-                    let server = swarm_id.split('.').next().unwrap_or("unknown").to_string();
-                    let e = ss.entry(server).or_insert((0, 0, 0, 0, 0, 0, 0));
-                    e.0 += swarm.http_bytes;
-                    e.1 += swarm.p2p_bytes;
-                    e.2 += swarm.p2p_up_bytes;
-                    let sd = saved.swarm_deltas.get(swarm_id).copied().unwrap_or((0, 0, 0));
-                    e.3 += sd.0; e.4 += sd.1; e.5 += sd.2;
-                    e.6 += swarm.unique_ips.len() as u64;
-                }
-                if ss.is_empty() { None } else {
-                    let vals: Vec<String> = ss.iter().map(|(srv, (h, p, pu, rh, rp, rpu, v))| {
-                        format!("('{}', {}, {}, {}, {}, '{}', {}, {}, {}, {})",
-                            escape_sql(srv), v, v, h, p, now_escaped, pu, rh, rp, rpu)
-                    }).collect();
-                    Some(format!("INSERT INTO p2p_servers VALUES {}", vals.join(",")))
-                }
-            };
+        let stats_query = format!(
+            "INSERT INTO p2p_stats VALUES ('{}', {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+            now_escaped, snapshot.viewers, snapshot.unique_ips_count,
+            snapshot.http_bytes, snapshot.p2p_bytes, snapshot.p2p_up_bytes,
+            snapshot.peers, snapshot.swarms_count,
+            snapshot.r_http_bytes, snapshot.r_p2p_bytes, snapshot.r_p2p_up_bytes
+        );
 
-            (saved, (stats_query, servers_query))
-        }).await.expect("flush blocking task panicked");
+        let servers_query = {
+            let mut ss: HashMap<String, (u64, u64, u64, u64, u64, u64, u64)> = HashMap::new();
+            for (swarm_id, h, p, pu, uips) in &snapshot.swarm_data {
+                let server = swarm_id.split('.').next().unwrap_or("unknown").to_string();
+                let e = ss.entry(server).or_insert((0, 0, 0, 0, 0, 0, 0));
+                e.0 += h; e.1 += p; e.2 += pu;
+                let prev_vals = prev_swarm_map.get(swarm_id).copied().unwrap_or((0, 0, 0));
+                e.3 += h.saturating_sub(prev_vals.0);
+                e.4 += p.saturating_sub(prev_vals.1);
+                e.5 += pu.saturating_sub(prev_vals.2);
+                e.6 += *uips as u64;
+            }
+            if ss.is_empty() { None } else {
+                let vals: Vec<String> = ss.iter().map(|(srv, (h, p, pu, rh, rp, rpu, v))| {
+                    format!("('{}', {}, {}, {}, {}, '{}', {}, {}, {}, {})",
+                        escape_sql(srv), v, v, h, p, now_escaped, pu, rh, rp, rpu)
+                }).collect();
+                Some(format!("INSERT INTO p2p_servers VALUES {}", vals.join(",")))
+            }
+        };
 
         let visitor_logs_query = {
             let mut logs = VISITOR_LOGS.lock();
@@ -455,8 +599,8 @@ async fn clickhouse_flush_task() {
             }
         };
 
-        let queries: Vec<String> = std::iter::once(ch_queries.0)
-            .chain(ch_queries.1)
+        let queries: Vec<String> = std::iter::once(stats_query)
+            .chain(servers_query)
             .chain(visitor_logs_query)
             .collect();
 
@@ -494,42 +638,29 @@ async fn clickhouse_flush_task() {
     }
 }
 
-fn calculate_speeds_and_reset_deltas() -> SavedDeltas {
-    let mut stats = P2P_STATS.write();
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64;
+fn take_flush_snapshot(prev: &FlushSnapshot) -> FlushSnapshot {
+    let cur_http = ATOMIC_HTTP_BYTES.load(Ordering::Relaxed);
+    let cur_p2p = ATOMIC_P2P_BYTES.load(Ordering::Relaxed);
+    let cur_up = ATOMIC_P2P_UP_BYTES.load(Ordering::Relaxed);
 
-    let elapsed_ms = if stats.last_reset_ms > 0 { now_ms.saturating_sub(stats.last_reset_ms) } else { 1000 };
-    let elapsed_secs = (elapsed_ms as f64 / 1000.0).max(0.1);
-
-    stats.player1.last_http_speed = (stats.player1.r_http_bytes as f64 / elapsed_secs) as u64;
-    stats.player1.last_p2p_speed = (stats.player1.r_p2p_bytes as f64 / elapsed_secs) as u64;
-    stats.player1.last_p2p_up_speed = (stats.player1.r_p2p_up_bytes as f64 / elapsed_secs) as u64;
-    let saved = SavedDeltas {
-        r_http_bytes: stats.r_http_bytes,
-        r_p2p_bytes: stats.r_p2p_bytes,
-        r_p2p_up_bytes: stats.r_p2p_up_bytes,
-        swarm_deltas: stats.swarms.iter().map(|(id, s)| {
-            (id.clone(), (s.r_http_bytes, s.r_p2p_bytes, s.r_p2p_up_bytes))
+    let stats = P2P_STATS.read();
+    let snapshot = FlushSnapshot {
+        r_http_bytes: cur_http.saturating_sub(prev.http_bytes),
+        r_p2p_bytes: cur_p2p.saturating_sub(prev.p2p_bytes),
+        r_p2p_up_bytes: cur_up.saturating_sub(prev.p2p_up_bytes),
+        viewers: stats.viewers,
+        unique_ips_count: stats.unique_ips.len(),
+        http_bytes: cur_http,
+        p2p_bytes: cur_p2p,
+        p2p_up_bytes: cur_up,
+        peers: stats.peers,
+        swarms_count: stats.swarms.len(),
+        swarm_data: stats.swarms.iter().map(|(id, s)| {
+            (id.clone(), s.http_bytes, s.p2p_bytes, s.p2p_up_bytes, s.unique_ips.len())
         }).collect(),
     };
-
-    stats.last_reset_ms = now_ms;
-    stats.r_http_bytes = 0;
-    stats.r_p2p_bytes = 0;
-    stats.r_p2p_up_bytes = 0;
-    stats.player1.r_http_bytes = 0;
-    stats.player1.r_p2p_bytes = 0;
-    stats.player1.r_p2p_up_bytes = 0;
-    for swarm in stats.swarms.values_mut() {
-        swarm.r_http_bytes = 0;
-        swarm.r_p2p_bytes = 0;
-        swarm.r_p2p_up_bytes = 0;
-    }
-
-    saved
+    drop(stats);
+    snapshot
 }
 
 
@@ -1413,44 +1544,20 @@ fn handle_stats_update(session_id: &str, msg: ClientMessage) {
 
     drop(sessions);
 
-    let total_diff = http_diff.saturating_add(p2p_diff);
-    if total_diff > 0 {
-        let mut ip_totals = IP_TOTALS.write();
-        let entry = ip_totals.entry(user_ip).or_insert(0);
-        *entry = entry.saturating_add(total_diff);
-    }
+    ATOMIC_HTTP_BYTES.fetch_add(http_diff, Ordering::Relaxed);
+    ATOMIC_P2P_BYTES.fetch_add(p2p_diff, Ordering::Relaxed);
+    ATOMIC_P2P_UP_BYTES.fetch_add(up_diff, Ordering::Relaxed);
 
-    let mut stats = P2P_STATS.write();
-    stats.http_bytes = stats.http_bytes.saturating_add(http_diff);
-    stats.p2p_bytes = stats.p2p_bytes.saturating_add(p2p_diff);
-    stats.p2p_up_bytes = stats.p2p_up_bytes.saturating_add(up_diff);
-    stats.r_http_bytes = stats.r_http_bytes.saturating_add(http_diff);
-    stats.r_p2p_bytes = stats.r_p2p_bytes.saturating_add(p2p_diff);
-    stats.r_p2p_up_bytes = stats.r_p2p_up_bytes.saturating_add(up_diff);
-    if peer_diff > 0 {
-        stats.peers += peer_diff as u64;
-    } else {
-        stats.peers = stats.peers.saturating_sub((-peer_diff) as u64);
-    }
-
-    if player_id == 1 {
-        stats.player1.http_bytes = stats.player1.http_bytes.saturating_add(http_diff);
-        stats.player1.p2p_bytes = stats.player1.p2p_bytes.saturating_add(p2p_diff);
-        stats.player1.p2p_up_bytes = stats.player1.p2p_up_bytes.saturating_add(up_diff);
-        stats.player1.r_http_bytes = stats.player1.r_http_bytes.saturating_add(http_diff);
-        stats.player1.r_p2p_bytes = stats.player1.r_p2p_bytes.saturating_add(p2p_diff);
-        stats.player1.r_p2p_up_bytes = stats.player1.r_p2p_up_bytes.saturating_add(up_diff);
-    }
-
-    if !swarm_id.is_empty() {
-        if let Some(swarm) = stats.swarms.get_mut(&swarm_id) {
-            swarm.http_bytes = swarm.http_bytes.saturating_add(http_diff);
-            swarm.p2p_bytes = swarm.p2p_bytes.saturating_add(p2p_diff);
-            swarm.p2p_up_bytes = swarm.p2p_up_bytes.saturating_add(up_diff);
-            swarm.r_http_bytes = swarm.r_http_bytes.saturating_add(http_diff);
-            swarm.r_p2p_bytes = swarm.r_p2p_bytes.saturating_add(p2p_diff);
-            swarm.r_p2p_up_bytes = swarm.r_p2p_up_bytes.saturating_add(up_diff);
-        }
+    if let Some(tx) = STATS_TX.get() {
+        let _ = tx.send(StatsUpdate {
+            http_diff,
+            p2p_diff,
+            up_diff,
+            peer_diff,
+            player_id,
+            swarm_id,
+            user_ip,
+        });
     }
 }
 
