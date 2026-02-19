@@ -23,9 +23,19 @@ const WORKER_THREADS: usize = 72;
 const BLOCKING_THREADS: usize = 128;
 const MAX_CONNECTIONS: usize = 1_000_000;
 const IDLE_TIMEOUT_SECS: u64 = 120;
+const MAX_TRACKING_ENTRIES: usize = 10_000;
 const PING_INTERVAL_SECS: u64 = 15;
 const CLICKHOUSE_URL: &str = "http://127.0.0.1:8123";
 const CLICKHOUSE_FLUSH_SECS: u64 = 1;
+
+/// Saved delta values captured before reset, used for accurate ClickHouse flush
+struct SavedDeltas {
+    r_http_bytes: u64,
+    r_p2p_bytes: u64,
+    r_p2p_up_bytes: u64,
+    /// swarm_id -> (r_http_bytes, r_p2p_bytes, r_p2p_up_bytes)
+    swarm_deltas: HashMap<String, (u64, u64, u64)>,
+}
 
 // Global stats
 static TOTAL_CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -248,11 +258,19 @@ fn main() {
                 .route("/api/ip_stats", get(api_ip_stats))
                 .layer(CorsLayer::permissive());
 
-            let addr = SocketAddr::from(([0, 0, 0, 0], 8444));
-            eprintln!("API server listening on {} (dedicated runtime)", addr);
+            let addr = SocketAddr::from(([127, 0, 0, 1], 8444));
+            eprintln!("API server listening on {} (dedicated runtime, localhost only)", addr);
 
-            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-            axum::serve(listener, api_app.into_make_service()).await.unwrap();
+            let listener = match tokio::net::TcpListener::bind(addr).await {
+                Ok(l) => l,
+                Err(e) => {
+                    eprintln!("Failed to bind API listener on {}: {}", addr, e);
+                    return;
+                }
+            };
+            if let Err(e) = axum::serve(listener, api_app.into_make_service()).await {
+                eprintln!("API server error: {}", e);
+            }
         });
     });
 
@@ -300,38 +318,38 @@ async fn async_main() {
 async fn clickhouse_flush_task() {
     let mut interval = tokio::time::interval(Duration::from_secs(CLICKHOUSE_FLUSH_SECS));
     let client = HttpClient::new();
+    let mut tick_count: u64 = 0;
 
     loop {
         interval.tick().await;
+        tick_count += 1;
 
-        // 1. 속도 계산 (last_http_speed 등 갱신)
-        calculate_speeds();
+        let saved_deltas = calculate_speeds_and_reset_deltas();
 
-        // 2. API 캐시 업데이트 (last_http_speed 사용)
         update_realtime_cache();
 
-        // 3. ClickHouse 전송 (r_http_bytes 등 델타값 전송)
-        if let Err(e) = flush_to_clickhouse(&client).await {
+        if let Err(e) = flush_to_clickhouse(&client, &saved_deltas).await {
             eprintln!("ClickHouse flush error: {}", e);
         }
 
-        // 4. 델타 리셋 (ClickHouse 전송 후)
-        reset_deltas();
+        if tick_count % 60 == 0 {
+            let active_ips = P2P_STATS.read().unique_ips.clone();
+            let mut ip_totals = IP_TOTALS.write();
+            ip_totals.retain(|ip, _| active_ips.contains_key(ip));
+        }
     }
 }
 
-fn calculate_speeds() {
+fn calculate_speeds_and_reset_deltas() -> SavedDeltas {
     let mut stats = P2P_STATS.write();
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64;
 
-    // Calculate actual elapsed time (avoid divide by zero)
     let elapsed_ms = if stats.last_reset_ms > 0 { now_ms - stats.last_reset_ms } else { 1000 };
     let elapsed_secs = (elapsed_ms as f64 / 1000.0).max(0.1);
 
-    // Normalize speed: bytes accumulated / actual elapsed seconds = bytes per second
     stats.player1.last_http_speed = (stats.player1.r_http_bytes as f64 / elapsed_secs) as u64;
     stats.player1.last_p2p_speed = (stats.player1.r_p2p_bytes as f64 / elapsed_secs) as u64;
     stats.player1.last_p2p_up_speed = (stats.player1.r_p2p_up_bytes as f64 / elapsed_secs) as u64;
@@ -339,30 +357,33 @@ fn calculate_speeds() {
     stats.player2.last_p2p_speed = (stats.player2.r_p2p_bytes as f64 / elapsed_secs) as u64;
     stats.player2.last_p2p_up_speed = (stats.player2.r_p2p_up_bytes as f64 / elapsed_secs) as u64;
 
-    // Update timestamp for next calculation
+    let saved = SavedDeltas {
+        r_http_bytes: stats.r_http_bytes,
+        r_p2p_bytes: stats.r_p2p_bytes,
+        r_p2p_up_bytes: stats.r_p2p_up_bytes,
+        swarm_deltas: stats.swarms.iter().map(|(id, s)| {
+            (id.clone(), (s.r_http_bytes, s.r_p2p_bytes, s.r_p2p_up_bytes))
+        }).collect(),
+    };
+
     stats.last_reset_ms = now_ms;
-}
 
-fn reset_deltas() {
-    let mut stats = P2P_STATS.write();
-
-    // Reset main delta values
     stats.r_http_bytes = 0;
     stats.r_p2p_bytes = 0;
     stats.r_p2p_up_bytes = 0;
-    // Reset per-player delta values
     stats.player1.r_http_bytes = 0;
     stats.player1.r_p2p_bytes = 0;
     stats.player1.r_p2p_up_bytes = 0;
     stats.player2.r_http_bytes = 0;
     stats.player2.r_p2p_bytes = 0;
     stats.player2.r_p2p_up_bytes = 0;
-    // Reset per-swarm delta values
     for swarm in stats.swarms.values_mut() {
         swarm.r_http_bytes = 0;
         swarm.r_p2p_bytes = 0;
         swarm.r_p2p_up_bytes = 0;
     }
+
+    saved
 }
 
 fn update_realtime_cache() {
@@ -378,15 +399,15 @@ fn update_realtime_cache() {
     // 락 획득 실패 시 이전 캐시 유지
 }
 
-async fn flush_to_clickhouse(client: &HttpClient) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn flush_to_clickhouse(client: &HttpClient, saved: &SavedDeltas) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.6f").to_string();
+    let now_escaped = escape_sql(&now);
 
-    // Collect p2p_stats data
     let p2p_stats_query = {
         let stats = P2P_STATS.read();
         format!(
             "INSERT INTO p2p_stats VALUES ('{}', {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
-            now,
+            now_escaped,
             stats.viewers,
             stats.unique_ips.len(),
             stats.http_bytes,
@@ -394,13 +415,12 @@ async fn flush_to_clickhouse(client: &HttpClient) -> Result<(), Box<dyn std::err
             stats.p2p_up_bytes,
             stats.peers,
             stats.swarms.len(),
-            stats.r_http_bytes,
-            stats.r_p2p_bytes,
-            stats.r_p2p_up_bytes
+            saved.r_http_bytes,
+            saved.r_p2p_bytes,
+            saved.r_p2p_up_bytes
         )
     };
 
-    // Collect p2p_servers data
     let p2p_servers_query = {
         let stats = P2P_STATS.read();
         let mut server_stats: HashMap<String, (u64, u64, u64, u64, u64, u64, u64)> = HashMap::new();
@@ -410,9 +430,10 @@ async fn flush_to_clickhouse(client: &HttpClient) -> Result<(), Box<dyn std::err
             entry.0 += swarm.http_bytes;
             entry.1 += swarm.p2p_bytes;
             entry.2 += swarm.p2p_up_bytes;
-            entry.3 += swarm.r_http_bytes;
-            entry.4 += swarm.r_p2p_bytes;
-            entry.5 += swarm.r_p2p_up_bytes;
+            let swarm_saved = saved.swarm_deltas.get(swarm_id).copied().unwrap_or((0, 0, 0));
+            entry.3 += swarm_saved.0;
+            entry.4 += swarm_saved.1;
+            entry.5 += swarm_saved.2;
             entry.6 += swarm.unique_ips.len() as u64;
         }
         if server_stats.is_empty() {
@@ -420,7 +441,7 @@ async fn flush_to_clickhouse(client: &HttpClient) -> Result<(), Box<dyn std::err
         } else {
             let values: Vec<String> = server_stats.iter().map(|(server, (http, p2p, p2p_up, r_http, r_p2p, r_p2p_up, viewers))| {
                 format!("('{}', {}, {}, {}, {}, '{}', {}, {}, {}, {})",
-                    server, viewers, viewers, http, p2p, now, p2p_up, r_http, r_p2p, r_p2p_up)
+                    escape_sql(server), viewers, viewers, http, p2p, now_escaped, p2p_up, r_http, r_p2p, r_p2p_up)
             }).collect();
             Some(format!("INSERT INTO p2p_servers VALUES {}", values.join(",")))
         }
@@ -434,24 +455,45 @@ async fn flush_to_clickhouse(client: &HttpClient) -> Result<(), Box<dyn std::err
         } else {
             let collected: Vec<_> = logs.drain(..).collect();
             let values: Vec<String> = collected.iter().map(|log| {
-                let safe_filename = log.filename.replace("'", "''");
-                let safe_referrer = log.referrer.replace("'", "''");
                 format!("('{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', {}, '{}', {}, {}, {})",
-                    log.ip, log.session_id, log.swarm_id, safe_filename, log.device, log.device_name,
-                    log.browser, safe_referrer, log.net_type, log.player_id, now,
+                    escape_sql(&log.ip), escape_sql(&log.session_id),
+                    escape_sql(&log.swarm_id), escape_sql(&log.filename),
+                    escape_sql(&log.device), escape_sql(&log.device_name),
+                    escape_sql(&log.browser), escape_sql(&log.referrer),
+                    escape_sql(&log.net_type), log.player_id, now,
                     log.http_bytes, log.p2p_bytes, log.p2p_up_bytes)
             }).collect();
             Some(format!("INSERT INTO visitor_logs VALUES {}", values.join(",")))
         }
     };
 
-    // Send to ClickHouse
-    let _ = client.post(CLICKHOUSE_URL).body(p2p_stats_query).send().await;
-    if let Some(query) = p2p_servers_query {
-        let _ = client.post(CLICKHOUSE_URL).body(query).send().await;
-    }
-    if let Some(query) = visitor_logs_query {
-        let _ = client.post(CLICKHOUSE_URL).body(query).send().await;
+    let queries: Vec<String> = std::iter::once(p2p_stats_query)
+        .chain(p2p_servers_query)
+        .chain(visitor_logs_query)
+        .collect();
+
+    for query in queries {
+        for attempt in 0..3u32 {
+            match client.post(CLICKHOUSE_URL)
+                .timeout(Duration::from_secs(5))
+                .body(query.clone())
+                .send()
+                .await
+            {
+                Ok(resp) if resp.status().is_success() => break,
+                Ok(resp) => {
+                    if attempt == 2 {
+                        eprintln!("ClickHouse INSERT failed after 3 attempts: {}", resp.status());
+                    }
+                }
+                Err(e) => {
+                    if attempt == 2 {
+                        eprintln!("ClickHouse send failed after 3 attempts: {}", e);
+                    }
+                    tokio::time::sleep(Duration::from_millis(50 * (attempt as u64 + 1))).await;
+                }
+            }
+        }
     }
 
     Ok(())
@@ -916,7 +958,8 @@ async fn stats() -> Json<serde_json::Value> {
 
     let (cpu_usage, mem_used, mem_total) = {
         let mut sys = sys_mutex.lock();
-        sys.refresh_all();
+        sys.refresh_cpu();
+        sys.refresh_memory();
         let cpu = sys.global_cpu_info().cpu_usage();
         let mem_used = sys.used_memory() / 1024 / 1024;
         let mem_total = sys.total_memory() / 1024 / 1024;
@@ -962,18 +1005,27 @@ async fn handle_socket(socket: WebSocket, client_ip: String) {
         return;
     }
 
-    let session_id = format!("{}_{}", std::time::SystemTime::now()
+    let session_id = format!("{}_{:016x}", std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(),
-        rand::random::<u32>());
+        rand::random::<u64>());
 
     // Create session with client IP from socket connection
     let mut new_session = Session::default();
     new_session.user_ip = client_ip;
     SESSIONS.write().insert(session_id.clone(), new_session);
 
-    let _ = std::panic::AssertUnwindSafe(handle_socket_inner(socket, session_id.clone()))
+    match std::panic::AssertUnwindSafe(handle_socket_inner(socket, session_id.clone()))
         .catch_unwind()
-        .await;
+        .await
+    {
+        Ok(_) => {},
+        Err(e) => {
+            let msg = e.downcast_ref::<&str>().map(|s| s.to_string())
+                .or_else(|| e.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic".to_string());
+            eprintln!("[PANIC] session {}: {}", session_id, msg);
+        }
+    }
 
     cleanup_session(&session_id);
     TOTAL_CONNECTIONS.fetch_sub(1, Ordering::Relaxed);
@@ -1115,25 +1167,40 @@ fn cleanup_session(session_id: &str) {
             }
         }
 
+        // IP_TOTALS 정리: unique_ips에서 해당 IP가 제거되었으면 IP_TOTALS도 제거
+        if !sess.user_ip.is_empty() {
+            let stats = P2P_STATS.read();
+            if !stats.unique_ips.contains_key(&sess.user_ip) {
+                drop(stats);
+                IP_TOTALS.write().remove(&sess.user_ip);
+            }
+        }
+
         // 세션 종료 시 visitor_logs에 트래픽 정보 포함하여 저장
         let mut logs = VISITOR_LOGS.lock();
-        if logs.len() < 10000 {
-            logs.push(VisitorLog {
-                ip: sess.user_ip,
-                session_id: session_id.to_string(),
-                swarm_id: sess.swarm_id,
-                filename: sess.filename,
-                device: sess.device,
-                device_name: sess.device_name,
-                browser: sess.browser,
-                referrer: sess.referrer,
-                net_type: sess.net_type,
-                player_id: sess.player_id,
-                http_bytes: sess.http_bytes,
-                p2p_bytes: sess.p2p_bytes,
-                p2p_up_bytes: sess.p2p_up_bytes,
-            });
+        if logs.len() >= 10000 {
+            let drop_count = logs.len() - 5000;
+            eprintln!(
+                "[WARN] VISITOR_LOGS overflow: {} entries, dropping oldest {}",
+                logs.len(), drop_count
+            );
+            logs.drain(0..drop_count);
         }
+        logs.push(VisitorLog {
+            ip: sess.user_ip,
+            session_id: session_id.to_string(),
+            swarm_id: sess.swarm_id,
+            filename: sess.filename,
+            device: sess.device,
+            device_name: sess.device_name,
+            browser: sess.browser,
+            referrer: sess.referrer,
+            net_type: sess.net_type,
+            player_id: sess.player_id,
+            http_bytes: sess.http_bytes,
+            p2p_bytes: sess.p2p_bytes,
+            p2p_up_bytes: sess.p2p_up_bytes,
+        });
     }
 }
 
@@ -1268,8 +1335,7 @@ fn handle_init(session_id: &str, msg: ClientMessage) {
         stats.devices.unknown += 1;
     }
 
-    // Device name stats
-    if !device_name.is_empty() {
+    if !device_name.is_empty() && stats.device_names.len() < MAX_TRACKING_ENTRIES {
         *stats.device_names.entry(device_name).or_insert(0) += 1;
     }
 
@@ -1284,13 +1350,11 @@ fn handle_init(session_id: &str, msg: ClientMessage) {
         _ => stats.networks.unknown += 1,
     }
 
-    // Browser
-    if !browser.is_empty() {
+    if !browser.is_empty() && stats.browsers.len() < MAX_TRACKING_ENTRIES {
         *stats.browsers.entry(browser).or_insert(0) += 1;
     }
 
-    // Referrer
-    if !referrer.is_empty() {
+    if !referrer.is_empty() && stats.referrers.len() < MAX_TRACKING_ENTRIES {
         *stats.referrers.entry(referrer).or_insert(0) += 1;
     }
 
@@ -1406,6 +1470,10 @@ fn handle_stats_update(session_id: &str, msg: ClientMessage) {
             swarm.r_p2p_up_bytes += up_diff;
         }
     }
+}
+
+fn escape_sql(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('\'', "''")
 }
 
 fn extract_hostname(url: &str) -> String {
