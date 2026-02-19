@@ -489,8 +489,6 @@
     }
     .rt-player.p1 { border-left: 3px solid #00d4ff; }
     .rt-player.p1 .rt-player-num { color: #00d4ff; }
-    .rt-player.p2 { border-left: 3px solid #00ff88; }
-    .rt-player.p2 .rt-player-num { color: #00ff88; }
     .rt-device-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -689,7 +687,7 @@
 
     .dash-players {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr;
       gap: 16px;
     }
     .dash-player {
@@ -699,7 +697,6 @@
       text-align: center;
     }
     .dash-player.p1 { border-top: 3px solid #00d4ff; }
-    .dash-player.p2 { border-top: 3px solid #00ff88; }
     .dash-player-badge {
       font-size: 10px;
       color: #888;
@@ -715,7 +712,6 @@
       font-variant-numeric: tabular-nums;
     }
     .dash-player.p1 .dash-player-viewers { color: #00d4ff; }
-    .dash-player.p2 .dash-player-viewers { color: #00ff88; }
     .dash-player-stat {
       display: flex;
       justify-content: space-between;
@@ -1797,14 +1793,6 @@ const pages = {
             <div class="dash-player-stat"><span>P2P↑</span><span id="p1P2pUp">-</span></div>
             <div class="dash-player-ratio"><span id="p1Ratio">-</span>% P2P</div>
           </div>
-          <div class="dash-player p2">
-            <div class="dash-player-badge">Player 2</div>
-            <div class="dash-player-viewers" id="p2Viewers">-</div>
-            <div class="dash-player-stat"><span>HTTP</span><span id="p2Http">-</span></div>
-            <div class="dash-player-stat"><span>P2P↓</span><span id="p2P2p">-</span></div>
-            <div class="dash-player-stat"><span>P2P↑</span><span id="p2P2pUp">-</span></div>
-            <div class="dash-player-ratio"><span id="p2Ratio">-</span>% P2P</div>
-          </div>
         </div>
       </div>
 
@@ -1954,7 +1942,7 @@ const pages = {
     </div>
 
     <!-- 플레이어별 트래픽 비율 -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:16px">
       <div class="panel" style="border-top:3px solid #00d4ff">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <h3 style="color:#00d4ff;margin:0">Player 1</h3>
@@ -1963,16 +1951,6 @@ const pages = {
         <div style="display:flex;gap:20px;align-items:center">
           <div style="flex:0 0 120px"><canvas id="player1Pie" height="120"></canvas></div>
           <div id="p1Legend" style="flex:1;font-size:12px;color:#aaa"></div>
-        </div>
-      </div>
-      <div class="panel" style="border-top:3px solid #ff6b6b">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <h3 style="color:#ff6b6b;margin:0">Player 2</h3>
-          <span id="p2Viewers" style="font-size:20px;font-weight:bold;color:#fff">0</span>
-        </div>
-        <div style="display:flex;gap:20px;align-items:center">
-          <div style="flex:0 0 120px"><canvas id="player2Pie" height="120"></canvas></div>
-          <div id="p2Legend" style="flex:1;font-size:12px;color:#aaa"></div>
         </div>
       </div>
     </div>
@@ -1984,9 +1962,7 @@ const pages = {
         <thead>
           <tr style="border-bottom:2px solid #333">
             <th style="text-align:left;padding:10px 8px;color:#888">항목</th>
-            <th style="text-align:right;padding:10px 8px;color:#00d4ff;width:25%">Player 1</th>
-            <th style="text-align:right;padding:10px 8px;color:#ff6b6b;width:25%">Player 2</th>
-            <th style="text-align:right;padding:10px 8px;color:#888;width:20%">비율</th>
+            <th style="text-align:right;padding:10px 8px;color:#00d4ff;width:40%">Player 1</th>
           </tr>
         </thead>
         <tbody id="playerStatsBody"></tbody>
@@ -2129,6 +2105,7 @@ const pages = {
   analysis: () => `
     <div class="header">
       <h2>IP별 사용량 분석</h2>
+      <div class="header-right">${modeIndicator('analysis')}${settingsBtn('analysis')}</div>
     </div>
     <!-- 기간 버튼 -->
     <div id="analysisPeriodBtns" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
@@ -2419,6 +2396,7 @@ const pages = {
     <div class="header">
       <h2>🖥️ 외부서버 관리</h2>
       <div class="header-right">
+        ${modeIndicator('servers')}${settingsBtn('servers')}
         <button class="settings-btn" onclick="openAddServerModal()">+ 서버 추가</button>
         <button class="settings-btn" onclick="openAutoBlockSettings()" style="margin-left:5px">⚙️ 자동차단</button>
         <div id="serversStatus" class="status ok">Connected</div>
@@ -3032,8 +3010,7 @@ let serverCharts = {};
 
 async function initServers() {
   await loadServers();
-  const s = settings.servers || defaultSettings.servers;
-  setActiveInterval(loadServers, s.realtimeInterval);
+  setActiveInterval(loadServers, getPageInterval('servers'));
 }
 
 async function loadServers() {
@@ -5007,8 +4984,8 @@ async function initDashboard() {
       if (el('heroSwarms')) el('heroSwarms').textContent = formatNum(d.activeSwarms);
       if (el('heroSwarmsSub')) el('heroSwarmsSub').textContent = `P2P: ${formatBytes(d.total?.p2pBytes || 0)}`;
       // P2P 비율은 실시간 속도 값으로 계산 (변동하는 값)
-      const rHttp = (d.player1?.rHttpBytes || 0) + (d.player2?.rHttpBytes || 0);
-      const rP2p = (d.player1?.rP2pBytes || 0) + (d.player2?.rP2pBytes || 0);
+      const rHttp = d.player1?.rHttpBytes || 0;
+      const rP2p = d.player1?.rP2pBytes || 0;
       const rTotal = rHttp + rP2p;
       const heroP2pRatio = rTotal > 0 ? ((rP2p / rTotal) * 100).toFixed(1) : '0';
       if (el('heroRatio')) el('heroRatio').textContent = heroP2pRatio + '%';
@@ -5046,7 +5023,6 @@ async function initDashboard() {
 
       // 플레이어별 현황
       const p1 = d.player1 || {};
-      const p2 = d.player2 || {};
       if (el('p1Viewers')) el('p1Viewers').textContent = formatNum(p1.uniqueUsers);
       if (el('p1Http')) el('p1Http').textContent = formatBytes(p1.httpBytes || 0);
       if (el('p1P2p')) el('p1P2p').textContent = formatBytes(p1.p2pBytes || 0);
@@ -5055,13 +5031,6 @@ async function initDashboard() {
       const p1RTotal = (p1.rHttpBytes || 0) + (p1.rP2pBytes || 0);
       const p1Ratio = p1RTotal > 0 ? ((p1.rP2pBytes || 0) / p1RTotal * 100).toFixed(1) : '0';
       if (el('p1Ratio')) el('p1Ratio').textContent = p1Ratio;
-      if (el('p2Viewers')) el('p2Viewers').textContent = formatNum(p2.uniqueUsers);
-      if (el('p2Http')) el('p2Http').textContent = formatBytes(p2.httpBytes || 0);
-      if (el('p2P2p')) el('p2P2p').textContent = formatBytes(p2.p2pBytes || 0);
-      if (el('p2P2pUp')) el('p2P2pUp').textContent = formatBytes(p2.p2pUpBytes || 0);
-      const p2RTotal = (p2.rHttpBytes || 0) + (p2.rP2pBytes || 0);
-      const p2Ratio = p2RTotal > 0 ? ((p2.rP2pBytes || 0) / p2RTotal * 100).toFixed(1) : '0';
-      if (el('p2Ratio')) el('p2Ratio').textContent = p2Ratio;
 
       // 디바이스 분포
       const devices = d.devices || {};
@@ -5211,8 +5180,8 @@ function initTraffic() {
     if (isRealtime && realtimeData) {
       const rt = realtimeData;
       // P2P 비율은 실시간 속도 값으로 계산 (변동하는 값)
-      const rHttp = (rt.player1?.rHttpBytes || 0) + (rt.player2?.rHttpBytes || 0);
-      const rP2p = (rt.player1?.rP2pBytes || 0) + (rt.player2?.rP2pBytes || 0);
+      const rHttp = rt.player1?.rHttpBytes || 0;
+      const rP2p = rt.player1?.rP2pBytes || 0;
       const rTotal = rHttp + rP2p;
       const p2pRatio = rTotal > 0 ? ((rP2p / rTotal) * 100).toFixed(1) : '0';
       const httpGbps = totals.httpGbps || '0';
@@ -5308,9 +5277,9 @@ function initTraffic() {
     // 트래픽 비율 파이 차트 - 실시간이면 현재 트래픽 비율
     let pieHttp, pieP2p, pieP2pUp;
     if (isRealtime && realtimeData) {
-      pieHttp = (realtimeData.player1?.httpBytes || 0) + (realtimeData.player2?.httpBytes || 0);
-      pieP2p = (realtimeData.player1?.p2pBytes || 0) + (realtimeData.player2?.p2pBytes || 0);
-      pieP2pUp = (realtimeData.player1?.p2pUpBytes || 0) + (realtimeData.player2?.p2pUpBytes || 0);
+      pieHttp = realtimeData.player1?.httpBytes || 0;
+      pieP2p = realtimeData.player1?.p2pBytes || 0;
+      pieP2pUp = realtimeData.player1?.p2pUpBytes || 0;
     } else {
       pieHttp = totals.totalHttp || 0;
       pieP2p = totals.totalP2p || 0;
@@ -5334,11 +5303,8 @@ function initTraffic() {
     // 서버별 바 차트 - 실시간이면 현재 플레이어 시청자
     let barLabels, barData;
     if (isRealtime && realtimeData) {
-      barLabels = ['Player 1', 'Player 2'];
-      barData = [
-        (realtimeData.player1?.viewers || 0) / 1000,
-        (realtimeData.player2?.viewers || 0) / 1000
-      ];
+      barLabels = ['Player 1'];
+      barData = [(realtimeData.player1?.viewers || 0) / 1000];
     } else {
       const cdnServers = servers.filter(s => s.visitors);
       barLabels = cdnServers.map(s => s.server.replace(/^every/, ''));
@@ -5557,10 +5523,8 @@ async function initRealtime() {
       <div class="rt-big-card"><div class="rt-num">${fmt(swarms)}</div><div class="rt-label">활성 스웜</div></div>
     `;
     const p1 = d.player1?.viewers || 0;
-    const p2 = d.player2?.viewers || 0;
     document.getElementById('rtPlayers').innerHTML = `
       <div class="rt-player p1"><div class="rt-player-num">${fmt(p1)}</div><div class="rt-player-label">Player 1</div></div>
-      <div class="rt-player p2"><div class="rt-player-num">${fmt(p2)}</div><div class="rt-player-label">Player 2</div></div>
     `;
     const dev = d.devices || {};
     const total = (dev.mobile||0) + (dev.desktop||0) + (dev.tablet||0) + (dev.unknown||0) || 1;
@@ -5742,68 +5706,53 @@ function initSessions() {
   setActiveInterval(load, getPageInterval('sessions'));
 }
 
-let player1Pie = null, player2Pie = null, speedCompareChart = null, trafficShareChart = null;
+let player1Pie = null, speedCompareChart = null, trafficShareChart = null;
 function initPlayers() {
-  let playerSpeeds = { player1: {}, player2: {} };
+  let playerSpeeds = { player1: {} };
 
   function render(d) {
-    const p1 = d.player1 || {}, p2 = d.player2 || {};
+    const p1 = d.player1 || {};
     const p1Speed = playerSpeeds.player1 || {};
-    const p2Speed = playerSpeeds.player2 || {};
 
     // 시청자 수 업데이트 (고유 IP 기준)
     document.getElementById('p1Viewers').textContent = (p1.uniqueUsers || 0).toLocaleString() + ' 시청자';
-    document.getElementById('p2Viewers').textContent = (p2.uniqueUsers || 0).toLocaleString() + ' 시청자';
 
     // 속도 데이터
     const p1HttpGbps = parseFloat(p1Speed.httpGbps) || 0;
     const p1P2pGbps = parseFloat(p1Speed.p2pGbps) || 0;
     const p1UpGbps = parseFloat(p1Speed.p2pUpGbps) || 0;
-    const p2HttpGbps = parseFloat(p2Speed.httpGbps) || 0;
-    const p2P2pGbps = parseFloat(p2Speed.p2pGbps) || 0;
-    const p2UpGbps = parseFloat(p2Speed.p2pUpGbps) || 0;
 
     // 트래픽 데이터
     const p1Http = p1.httpBytes || 0, p1P2p = p1.p2pBytes || 0, p1Up = p1.p2pUpBytes || 0;
-    const p2Http = p2.httpBytes || 0, p2P2p = p2.p2pBytes || 0, p2Up = p2.p2pUpBytes || 0;
-    const totalTraffic = p1Http + p1P2p + p2Http + p2P2p;
+    const totalTraffic = p1Http + p1P2p;
 
     // P2P 비율 범례
     const p1Total = p1Http + p1P2p;
-    const p2Total = p2Http + p2P2p;
     const p1HttpPct = p1Total > 0 ? (p1Http / p1Total * 100).toFixed(1) : 0;
     const p1P2pPct = p1Total > 0 ? (p1P2p / p1Total * 100).toFixed(1) : 0;
-    const p2HttpPct = p2Total > 0 ? (p2Http / p2Total * 100).toFixed(1) : 0;
-    const p2P2pPct = p2Total > 0 ? (p2P2p / p2Total * 100).toFixed(1) : 0;
+    const p1P2pRatio = p1Total > 0 ? (p1P2p / p1Total * 100).toFixed(1) + '%' : '0%';
 
     document.getElementById('p1Legend').innerHTML = `
       <div style="margin-bottom:8px"><span style="color:#ff6b6b">●</span> HTTP: ${formatBytes(p1Http)} <span style="color:#666">(${p1HttpPct}%)</span></div>
       <div style="margin-bottom:8px"><span style="color:#00ff88">●</span> P2P↓: ${formatBytes(p1P2p)} <span style="color:#666">(${p1P2pPct}%)</span></div>
       <div><span style="color:#00d4ff">●</span> P2P↑: ${formatBytes(p1Up)}</div>
     `;
-    document.getElementById('p2Legend').innerHTML = `
-      <div style="margin-bottom:8px"><span style="color:#ff6b6b">●</span> HTTP: ${formatBytes(p2Http)} <span style="color:#666">(${p2HttpPct}%)</span></div>
-      <div style="margin-bottom:8px"><span style="color:#00ff88">●</span> P2P↓: ${formatBytes(p2P2p)} <span style="color:#666">(${p2P2pPct}%)</span></div>
-      <div><span style="color:#00d4ff">●</span> P2P↑: ${formatBytes(p2Up)}</div>
-    `;
 
     // 상세 통계 테이블
     const rows = [
-      { label: '시청자', p1: (p1.uniqueUsers || 0).toLocaleString(), p2: (p2.uniqueUsers || 0).toLocaleString(), ratio: ((p1.uniqueUsers || 0) + (p2.uniqueUsers || 0)) > 0 ? ((p1.uniqueUsers || 0) / ((p1.uniqueUsers || 0) + (p2.uniqueUsers || 0)) * 100).toFixed(1) + '%' : '-' },
-      { label: 'HTTP 트래픽', p1: formatBytes(p1Http), p2: formatBytes(p2Http), ratio: (p1Http + p2Http) > 0 ? (p1Http / (p1Http + p2Http) * 100).toFixed(1) + '%' : '-', color: 'http' },
-      { label: 'P2P 다운로드', p1: formatBytes(p1P2p), p2: formatBytes(p2P2p), ratio: (p1P2p + p2P2p) > 0 ? (p1P2p / (p1P2p + p2P2p) * 100).toFixed(1) + '%' : '-', color: 'p2p' },
-      { label: 'P2P 업로드', p1: formatBytes(p1Up), p2: formatBytes(p2Up), ratio: (p1Up + p2Up) > 0 ? (p1Up / (p1Up + p2Up) * 100).toFixed(1) + '%' : '-', color: 'p2p' },
-      { label: 'P2P 비율', p1: p1.p2pRatio + '%', p2: p2.p2pRatio + '%', ratio: '-', color: 'p2p' },
-      { label: 'HTTP 속도', p1: p1HttpGbps.toFixed(2) + ' GB/s', p2: p2HttpGbps.toFixed(2) + ' GB/s', ratio: '-', color: 'http' },
-      { label: 'P2P↓ 속도', p1: p1P2pGbps.toFixed(2) + ' GB/s', p2: p2P2pGbps.toFixed(2) + ' GB/s', ratio: '-', color: 'p2p' },
-      { label: 'P2P↑ 속도', p1: p1UpGbps.toFixed(2) + ' GB/s', p2: p2UpGbps.toFixed(2) + ' GB/s', ratio: '-', color: 'p2p' },
+      { label: '시청자', p1: (p1.uniqueUsers || 0).toLocaleString() },
+      { label: 'HTTP 트래픽', p1: formatBytes(p1Http), color: 'http' },
+      { label: 'P2P 다운로드', p1: formatBytes(p1P2p), color: 'p2p' },
+      { label: 'P2P 업로드', p1: formatBytes(p1Up), color: 'p2p' },
+      { label: 'P2P 비율', p1: p1P2pRatio, color: 'p2p' },
+      { label: 'HTTP 속도', p1: p1HttpGbps.toFixed(2) + ' GB/s', color: 'http' },
+      { label: 'P2P↓ 속도', p1: p1P2pGbps.toFixed(2) + ' GB/s', color: 'p2p' },
+      { label: 'P2P↑ 속도', p1: p1UpGbps.toFixed(2) + ' GB/s', color: 'p2p' },
     ];
     document.getElementById('playerStatsBody').innerHTML = rows.map(r => `
       <tr style="border-bottom:1px solid #222">
         <td style="padding:10px 8px;color:#aaa">${r.label}</td>
         <td style="padding:10px 8px;text-align:right;font-weight:500;color:${r.color === 'http' ? '#ff6b6b' : r.color === 'p2p' ? '#00ff88' : '#fff'}">${r.p1}</td>
-        <td style="padding:10px 8px;text-align:right;font-weight:500;color:${r.color === 'http' ? '#ff6b6b' : r.color === 'p2p' ? '#00ff88' : '#fff'}">${r.p2}</td>
-        <td style="padding:10px 8px;text-align:right;color:#666">${r.ratio}</td>
       </tr>
     `).join('');
 
@@ -5814,8 +5763,7 @@ function initPlayers() {
         data: {
           labels: ['HTTP', 'P2P↓', 'P2P↑'],
           datasets: [
-            { label: 'Player 1', data: [p1HttpGbps, p1P2pGbps, p1UpGbps], backgroundColor: '#00d4ff', borderRadius: 4 },
-            { label: 'Player 2', data: [p2HttpGbps, p2P2pGbps, p2UpGbps], backgroundColor: '#ff6b6b', borderRadius: 4 }
+            { label: 'Player 1', data: [p1HttpGbps, p1P2pGbps, p1UpGbps], backgroundColor: '#00d4ff', borderRadius: 4 }
           ]
         },
         options: {
@@ -5830,7 +5778,6 @@ function initPlayers() {
       });
     } else {
       speedCompareChart.data.datasets[0].data = [p1HttpGbps, p1P2pGbps, p1UpGbps];
-      speedCompareChart.data.datasets[1].data = [p2HttpGbps, p2P2pGbps, p2UpGbps];
       speedCompareChart.update('none');
     }
 
@@ -5841,8 +5788,7 @@ function initPlayers() {
         data: {
           labels: ['HTTP', 'P2P↓', 'P2P↑'],
           datasets: [
-            { label: 'Player 1', data: [p1Http, p1P2p, p1Up], backgroundColor: '#00d4ff', borderRadius: 4 },
-            { label: 'Player 2', data: [p2Http, p2P2p, p2Up], backgroundColor: '#ff6b6b', borderRadius: 4 }
+            { label: 'Player 1', data: [p1Http, p1P2p, p1Up], backgroundColor: '#00d4ff', borderRadius: 4 }
           ]
         },
         options: {
@@ -5858,7 +5804,6 @@ function initPlayers() {
       });
     } else {
       trafficShareChart.data.datasets[0].data = [p1Http, p1P2p, p1Up];
-      trafficShareChart.data.datasets[1].data = [p2Http, p2P2p, p2Up];
       trafficShareChart.update('none');
     }
 
@@ -5870,14 +5815,8 @@ function initPlayers() {
         data: { labels: ['HTTP', 'P2P'], datasets: [{ data: [p1Http, p1P2p], backgroundColor: ['#ff6b6b', '#00ff88'], borderWidth: 0 }] },
         options: pieOpts
       });
-      player2Pie = new Chart(document.getElementById('player2Pie'), {
-        type: 'doughnut',
-        data: { labels: ['HTTP', 'P2P'], datasets: [{ data: [p2Http, p2P2p], backgroundColor: ['#ff6b6b', '#00ff88'], borderWidth: 0 }] },
-        options: pieOpts
-      });
     } else {
       player1Pie.data.datasets[0].data = [p1Http, p1P2p]; player1Pie.update('none');
-      player2Pie.data.datasets[0].data = [p2Http, p2P2p]; player2Pie.update('none');
     }
 
     // 서버별 스웜 통계
@@ -5907,7 +5846,7 @@ function initPlayers() {
         fetch(`/api/traffic?period=realtime&_t=${t}`).then(r => r.json())
       ]);
       console.log('[Players] Data received:', { realtimeRes, trafficRes });
-      playerSpeeds = trafficRes.playerSpeeds || { player1: {}, player2: {} };
+      playerSpeeds = trafficRes.playerSpeeds || { player1: {} };
       render(realtimeRes);
       console.log('[Players] Render complete');
     } catch (e) { console.error('[Players] Error:', e); }
@@ -5916,7 +5855,7 @@ function initPlayers() {
   const interval = getPageInterval('players');
   console.log('[Players] Setting interval:', interval);
   setActiveInterval(update, interval);
-  window.addEventListener('hashchange', () => { player1Pie = null; player2Pie = null; speedCompareChart = null; trafficShareChart = null; }, { once: true });
+  window.addEventListener('hashchange', () => { player1Pie = null; speedCompareChart = null; trafficShareChart = null; }, { once: true });
 }
 
 function initLive() {
@@ -6034,7 +5973,7 @@ function initCharts() {
     const p2pBytes = d.total?.p2pBytes || 0;
     const p2pUpBytes = d.total?.p2pUpBytes || 0;
     const dev = d.devices || {};
-    const p1 = d.player1?.viewers || 0, p2 = d.player2?.viewers || 0;
+    const p1 = d.player1?.viewers || 0;
     const br = (d.browsers || []).slice(0, 5);
     const ref = (d.referrers || []).slice(0, 5);
     const dn = (d.deviceNames || []).slice(0, 5);
@@ -6064,12 +6003,10 @@ function initCharts() {
     }).join('');
 
     // 플레이어 범례
-    const playerTotal = p1 + p2;
+    const playerTotal = p1;
     const p1Pct = playerTotal > 0 ? (p1 / playerTotal * 100).toFixed(1) : 0;
-    const p2Pct = playerTotal > 0 ? (p2 / playerTotal * 100).toFixed(1) : 0;
     document.getElementById('playerLegend').innerHTML = `
-      <span><span style="color:#ff6b6b">●</span> Player1 ${p1.toLocaleString()} (${p1Pct}%)</span>
-      <span><span style="color:#a55eea">●</span> Player2 ${p2.toLocaleString()} (${p2Pct}%)</span>
+      <span><span style="color:#ff6b6b">●</span> Player 1 ${p1.toLocaleString()} (${p1Pct}%)</span>
     `;
 
     // 브라우저 범례
@@ -6106,7 +6043,7 @@ function initCharts() {
         options: { ...chartOpts, cutout: '60%', plugins: { legend: { display: false } } }
       });
       playerPie = new Chart(document.getElementById('playerPie'), {
-        type: 'doughnut', data: { labels: ['Player 1', 'Player 2'], datasets: [{ data: [p1, p2], backgroundColor: ['#ff6b6b', '#a55eea'], borderWidth: 0 }] },
+        type: 'doughnut', data: { labels: ['Player 1'], datasets: [{ data: [p1], backgroundColor: ['#ff6b6b'], borderWidth: 0 }] },
         options: { ...chartOpts, cutout: '60%', plugins: { legend: { display: false } } }
       });
       browserPie = new Chart(document.getElementById('browserPie'), {
@@ -6124,7 +6061,7 @@ function initCharts() {
     } else {
       trafficPie.data.datasets[0].data = [httpBytes, p2pBytes, p2pUpBytes]; trafficPie.update('none');
       devicePie.data.datasets[0].data = [dev.mobile||0, dev.desktop||0, dev.tablet||0, dev.unknown||0]; devicePie.update('none');
-      playerPie.data.datasets[0].data = [p1, p2]; playerPie.update('none');
+      playerPie.data.datasets[0].data = [p1]; playerPie.update('none');
       browserPie.data.labels = br.map(x => x.name); browserPie.data.datasets[0].data = br.map(x => x.count); browserPie.update('none');
       referrerPie.data.labels = ref.map(x => x.name || 'direct'); referrerPie.data.datasets[0].data = ref.map(x => x.count); referrerPie.update('none');
       deviceNameBar.data.labels = dn.map(x => x.name?.slice(0,15) || '-'); deviceNameBar.data.datasets[0].data = dn.map(x => x.count); deviceNameBar.update('none');

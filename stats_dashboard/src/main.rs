@@ -3064,13 +3064,9 @@ async fn build_traffic_realtime(client: &Client) -> String {
     let empty_player = serde_json::json!({});
     let (http_gbps, p2p_gbps, p2p_up_gbps) = {
         let p1 = realtime_data.get("player1").unwrap_or(&empty_player);
-        let p2 = realtime_data.get("player2").unwrap_or(&empty_player);
-        let r_http = p1.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0)
-                  + p2.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-        let r_p2p = p1.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0)
-                  + p2.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-        let r_p2p_up = p1.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0)
-                     + p2.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let r_http = p1.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let r_p2p = p1.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let r_p2p_up = p1.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
         (
             (r_http as f64) / 1_073_741_824.0,
             (r_p2p as f64) / 1_073_741_824.0,
@@ -3183,17 +3179,15 @@ async fn build_traffic_realtime(client: &Client) -> String {
     }
 
     let mut player_speeds: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-    for (key, player_key) in [("player1", "player1"), ("player2", "player2")] {
-        if let Some(p) = realtime_data.get(player_key) {
-            let r_http = p.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-            let r_p2p = p.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-            let r_p2p_up = p.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-            player_speeds.insert(key.to_string(), serde_json::json!({
-                "httpGbps": format!("{:.2}", (r_http as f64) / 1_073_741_824.0),
-                "p2pGbps": format!("{:.2}", (r_p2p as f64) / 1_073_741_824.0),
-                "p2pUpGbps": format!("{:.2}", (r_p2p_up as f64) / 1_073_741_824.0)
-            }));
-        }
+    if let Some(p) = realtime_data.get("player1") {
+        let r_http = p.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let r_p2p = p.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let r_p2p_up = p.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        player_speeds.insert("player1".to_string(), serde_json::json!({
+            "httpGbps": format!("{:.2}", (r_http as f64) / 1_073_741_824.0),
+            "p2pGbps": format!("{:.2}", (r_p2p as f64) / 1_073_741_824.0),
+            "p2pUpGbps": format!("{:.2}", (r_p2p_up as f64) / 1_073_741_824.0)
+        }));
     }
 
     let result = serde_json::json!({
@@ -3410,13 +3404,9 @@ async fn api_traffic(
     let empty_player = serde_json::json!({});
     let (http_gbps, p2p_gbps, p2p_up_gbps) = {
         let p1 = realtime_data.get("player1").unwrap_or(&empty_player);
-        let p2 = realtime_data.get("player2").unwrap_or(&empty_player);
-        let r_http = p1.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0)
-                  + p2.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-        let r_p2p = p1.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0)
-                  + p2.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-        let r_p2p_up = p1.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0)
-                     + p2.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let r_http = p1.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let r_p2p = p1.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let r_p2p_up = p1.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
         // bytes/sec -> GB/s
         let http_gbs = (r_http as f64) / 1_073_741_824.0;
         let p2p_gbs = (r_p2p as f64) / 1_073_741_824.0;
@@ -3554,21 +3544,19 @@ async fn api_traffic(
 
     // 플레이어별 속도 계산 - simple_ws realtime_data 사용 (bytes/sec -> GB/s)
     let mut player_speeds: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-    for (key, player_key) in [("player1", "player1"), ("player2", "player2")] {
-        if let Some(p) = realtime_data.get(player_key) {
-            let r_http = p.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-            let r_p2p = p.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-            let r_p2p_up = p.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-            // bytes/sec -> GB/s
-            let http_gbs = (r_http as f64) / 1_073_741_824.0;
-            let p2p_gbs = (r_p2p as f64) / 1_073_741_824.0;
-            let p2p_up_gbs = (r_p2p_up as f64) / 1_073_741_824.0;
-            player_speeds.insert(key.to_string(), serde_json::json!({
-                "httpGbps": format!("{:.2}", http_gbs),
-                "p2pGbps": format!("{:.2}", p2p_gbs),
-                "p2pUpGbps": format!("{:.2}", p2p_up_gbs)
-            }));
-        }
+    if let Some(p) = realtime_data.get("player1") {
+        let r_http = p.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let r_p2p = p.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let r_p2p_up = p.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        // bytes/sec -> GB/s
+        let http_gbs = (r_http as f64) / 1_073_741_824.0;
+        let p2p_gbs = (r_p2p as f64) / 1_073_741_824.0;
+        let p2p_up_gbs = (r_p2p_up as f64) / 1_073_741_824.0;
+        player_speeds.insert("player1".to_string(), serde_json::json!({
+            "httpGbps": format!("{:.2}", http_gbs),
+            "p2pGbps": format!("{:.2}", p2p_gbs),
+            "p2pUpGbps": format!("{:.2}", p2p_up_gbs)
+        }));
     }
 
     let result = serde_json::json!({
