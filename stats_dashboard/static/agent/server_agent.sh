@@ -2,7 +2,7 @@
 # Server Monitoring Agent (Shell Script Version)
 # 모든 Linux 배포판에서 동작
 
-VERSION="37"
+VERSION="44"
 DASHBOARD_URL="${1:-http://37.27.122.163:8080}"
 AGENT_SECRET="${2:-}"  # 두 번째 인자로 시크릿 키 받음
 REPORT_URL="${DASHBOARD_URL}/api/servers/report"
@@ -82,6 +82,19 @@ calculate_checksum() {
 # 서비스 등록 실행
 setup_systemd_service
 
+# PID lock — 중복 실행 방지
+PIDFILE="/tmp/server_agent.pid"
+if [ -f "$PIDFILE" ]; then
+    OLD_PID=$(cat "$PIDFILE")
+    if kill -0 "$OLD_PID" 2>/dev/null; then
+        echo "[ERROR] Already running (PID $OLD_PID). Exiting."
+        exit 1
+    fi
+    rm -f "$PIDFILE"
+fi
+echo $$ > "$PIDFILE"
+trap 'rm -f "$PIDFILE"' EXIT
+
 # 로그 수집 설정
 LOG_DIR="/var/log/nginx"
 LOG_POS_FILE="/tmp/agent_log_pos"
@@ -158,19 +171,30 @@ check_update() {
 
 # IP 차단/해제 처리
 process_block_commands() {
-    # 대기 중인 차단 명령 가져오기
-    COMMANDS=$(curl -s --max-time 5 -H "$AUTH_HEADER" "${BLOCK_PENDING_URL}?since=${LAST_BLOCK_CHECK}" 2>/dev/null)
+    # 대기 중인 차단 명령 가져오기 (server_id 포함하여 이미 처리된 것 필터링)
+    COMMANDS=$(curl -s --max-time 5 -H "$AUTH_HEADER" "${BLOCK_PENDING_URL}?server_id=${SERVER_ID}" 2>/dev/null)
     if [ -z "$COMMANDS" ] || ! echo "$COMMANDS" | grep -q '"commands"'; then
         return
     fi
 
-    # 각 command 객체 추출 후 파싱
-    echo "$COMMANDS" | grep -o '{[^{}]*}' | while read -r obj; do
+    NEW_BLOCK_COUNT=0
+    ALREADY_BLOCKED_COUNT=0
+    NEED_RELOAD=0
+    MAX_PER_CYCLE=50  # 한 사이클에 최대 50개만 처리 (메인 루프 차단 방지)
+    PROCESSED=0
+
+    # 각 command 객체 추출 후 파싱 (process substitution으로 서브셸 방지)
+    while read -r obj; do
+        PROCESSED=$((PROCESSED + 1))
+        if [ $PROCESSED -gt $MAX_PER_CYCLE ]; then
+            echo "[BLOCK] Reached max $MAX_PER_CYCLE per cycle, remaining deferred"
+            break
+        fi
+
         # 객체에서 각 필드 추출
         IP=$(echo "$obj" | grep -o '"ip":"[^"]*"' | sed 's/"ip":"//;s/"//')
         ACTION=$(echo "$obj" | grep -o '"action":"[^"]*"' | sed 's/"action":"//;s/"//')
         REASON=$(echo "$obj" | grep -o '"reason":"[^"]*"' | sed 's/"reason":"//;s/"//')
-        TIMESTAMP=$(echo "$obj" | grep -o '"timestamp":[0-9]*' | sed 's/"timestamp"://')
 
         if [ -z "$ACTION" ]; then
             continue
@@ -181,7 +205,7 @@ process_block_commands() {
         if [ "$ACTION" = "block" ]; then
             # 이미 차단된 IP인지 확인
             if grep -q "deny $IP;" "$NGINX_BLOCK_FILE" 2>/dev/null; then
-                echo "[BLOCK] $IP already blocked"
+                ALREADY_BLOCKED_COUNT=$((ALREADY_BLOCKED_COUNT + 1))
                 SUCCESS="true"
             else
                 # 파일 없으면 생성
@@ -190,46 +214,42 @@ process_block_commands() {
                 # 차단 규칙 추가
                 BLOCK_TIME=$(date '+%Y-%m-%d %H:%M:%S')
                 echo "deny $IP; # $BLOCK_TIME | $REASON" >> "$NGINX_BLOCK_FILE"
-
-                # nginx reload
-                if [ -n "$NGINX_BIN" ] && $NGINX_BIN -t 2>/dev/null && $NGINX_BIN -s reload 2>/dev/null; then
-                    echo "[BLOCK] $IP blocked successfully"
-                    SUCCESS="true"
-                else
-                    echo "[BLOCK ERR] nginx reload failed for $IP (nginx=$NGINX_BIN)"
-                    # 추가한 줄 제거
-                    sed -i "/deny $IP;/d" "$NGINX_BLOCK_FILE"
-                fi
+                NEED_RELOAD=1
+                NEW_BLOCK_COUNT=$((NEW_BLOCK_COUNT + 1))
+                echo "[BLOCK] $IP added"
+                SUCCESS="true"
             fi
         elif [ "$ACTION" = "unblock" ]; then
             # 차단 해제
             if grep -q "deny $IP;" "$NGINX_BLOCK_FILE" 2>/dev/null; then
                 sed -i "/deny $IP;/d" "$NGINX_BLOCK_FILE"
-                if [ -n "$NGINX_BIN" ] && $NGINX_BIN -t 2>/dev/null && $NGINX_BIN -s reload 2>/dev/null; then
-                    echo "[UNBLOCK] $IP unblocked successfully"
-                    SUCCESS="true"
-                else
-                    echo "[UNBLOCK ERR] nginx reload failed"
-                fi
+                NEED_RELOAD=1
+                echo "[UNBLOCK] $IP removed"
+                SUCCESS="true"
             else
                 echo "[UNBLOCK] $IP was not blocked"
                 SUCCESS="true"
             fi
         fi
-        # add_ssh_key, exec 액션 제거됨 (보안상 위험)
 
-        # 결과 보고
+        # 결과 보고 (confirm)
         curl -s -X POST "$BLOCK_CONFIRM_URL" \
             -H "Content-Type: application/json" \
             -H "$AUTH_HEADER" \
             -d "{\"server_id\":\"$SERVER_ID\",\"ip\":\"$IP\",\"action\":\"$ACTION\",\"success\":$SUCCESS}" \
-            --max-time 5 >/dev/null 2>&1
+            --max-time 3 >/dev/null 2>&1
+    done < <(echo "$COMMANDS" | grep -o '{[^{}]*}')
 
-        # 타임스탬프 업데이트 (처리한 명령 중 가장 큰 값)
-        if [ -n "$TIMESTAMP" ] && [ "$TIMESTAMP" -gt "$LAST_BLOCK_CHECK" ] 2>/dev/null; then
-            LAST_BLOCK_CHECK=$TIMESTAMP
+    # nginx reload 한 번만 (새 차단/해제가 있을 때만)
+    if [ "$NEED_RELOAD" = "1" ]; then
+        if [ -n "$NGINX_BIN" ] && $NGINX_BIN -t 2>/dev/null && $NGINX_BIN -s reload 2>/dev/null; then
+            echo "[BLOCK] nginx reloaded ($NEW_BLOCK_COUNT new blocks)"
+        else
+            echo "[BLOCK ERR] nginx reload failed"
         fi
-    done
+    fi
+
+    [ $ALREADY_BLOCKED_COUNT -gt 0 ] && echo "[BLOCK] $ALREADY_BLOCKED_COUNT already blocked (confirmed)"
 }
 
 LOOP_COUNT=0
@@ -248,12 +268,15 @@ get_network_bytes() {
     } END { print max_rx, max_tx }'
 }
 
-# VOD 로그 파일 찾기 (vod2.log 우선, 없으면 vod.log)
+# VOD 로그 파일 찾기 (vod2.log 우선, 없으면 vod.log, 마지막으로 access.log)
+# -s 사용: 파일 존재 + 크기 > 0 (빈 파일 건너뜀)
 find_vod_log() {
-    if [ -f "$LOG_DIR/vod2.log" ]; then
+    if [ -s "$LOG_DIR/vod2.log" ]; then
         echo "$LOG_DIR/vod2.log"
-    elif [ -f "$LOG_DIR/vod.log" ]; then
+    elif [ -s "$LOG_DIR/vod.log" ]; then
         echo "$LOG_DIR/vod.log"
+    elif [ -s "$LOG_DIR/access.log" ]; then
+        echo "$LOG_DIR/access.log"
     fi
 }
 
@@ -276,9 +299,14 @@ collect_and_send_logs() {
         PREV_POS=0
     fi
 
-    # 파일이 로테이션됐거나 초기화됐으면 처음부터
+    # 파일이 로테이션됐거나 초기화됐으면 끝에서 시작
     if [ "$CURR_INODE" != "$PREV_INODE" ] || [ "$CURR_SIZE" -lt "$PREV_POS" ]; then
-        PREV_POS=0
+        if [ "$CURR_SIZE" -gt 5242880 ]; then
+            PREV_POS=$((CURR_SIZE - 5242880))
+        else
+            PREV_POS=0
+        fi
+        echo "[LOGS] File changed, starting from recent data"
     fi
 
     # 새 데이터 없으면 스킵
@@ -286,8 +314,15 @@ collect_and_send_logs() {
         return
     fi
 
-    # 새 로그 읽기 (최대 10000줄)
-    NEW_LOGS=$(tail -c +$((PREV_POS + 1)) "$LOG_FILE" 2>/dev/null | head -10000)
+    # 100MB 이상 밀렸으면 최근 5MB 지점으로 스킵
+    BEHIND=$((CURR_SIZE - PREV_POS))
+    if [ "$BEHIND" -gt 104857600 ]; then
+        PREV_POS=$((CURR_SIZE - 5242880))
+        echo "[LOGS] Too far behind ($(( BEHIND / 1048576 ))MB), skipping to recent"
+    fi
+
+    # 새 로그 읽기 (최대 30000줄)
+    NEW_LOGS=$(tail -c +$((PREV_POS + 1)) "$LOG_FILE" 2>/dev/null | head -30000)
     if [ -z "$NEW_LOGS" ]; then
         return
     fi
@@ -315,8 +350,15 @@ collect_and_send_logs() {
         my $ts = time() * 1_000_000_000;
         if ($t =~ /(\d+)\/(\w+)\/(\d+):(\d+):(\d+):(\d+)/) {
             my $mon = $m{$2} || 1;
-            my $y = $3 - 1970;
-            my $days = $y * 365 + int($y/4) + int(($mon-1)*30.44) + $1 - 1;
+            my $year = $3;
+            my $day = $1;
+            my @mdays = (0,31,59,90,120,151,181,212,243,273,304,334);
+            my $y = $year - 1970;
+            my $leap_years = int(($year - 1) / 4) - int(($year - 1) / 100) + int(($year - 1) / 400) - 477;
+            my $is_leap = ($year % 4 == 0 && $year % 100 != 0) || ($year % 400 == 0);
+            my $mon_days = $mdays[$mon - 1];
+            $mon_days++ if ($is_leap && $mon > 2);
+            my $days = $y * 365 + $leap_years + $mon_days + $day - 1;
             $ts = ($days * 86400 + $4 * 3600 + $5 * 60 + $6 - 32400) * 1_000_000_000;
         }
 
