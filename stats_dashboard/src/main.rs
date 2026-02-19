@@ -885,12 +885,12 @@ async fn main() {
         }
     });
 
-    // Background task: /api/traffic?period=realtime 전용 pre-compute (3초마다)
+    // Background task: /api/traffic?period=realtime 전용 pre-compute (1초마다)
     let traffic_rt_client = client.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(2)).await;
-        eprintln!("[TrafficRT] Background pre-compute started (3s interval)");
-        let mut interval = tokio::time::interval(Duration::from_secs(3));
+        eprintln!("[TrafficRT] Background pre-compute started (1s interval)");
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
         loop {
             interval.tick().await;
             let json = build_traffic_realtime(&traffic_rt_client).await;
@@ -898,11 +898,11 @@ async fn main() {
         }
     });
 
-    // Background task: init-data pre-compute (3초마다 — 8개 CH 쿼리 대신 메모리)
+    // Background task: init-data pre-compute (1초마다 — 8개 CH 쿼리 대신 메모리)
     let init_client = client.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(3)).await;
-        let mut interval = tokio::time::interval(Duration::from_secs(3));
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
         loop {
             interval.tick().await;
             let json = build_init_data(&init_client).await;
@@ -910,11 +910,11 @@ async fn main() {
         }
     });
 
-    // Background task: summary pre-compute (3초마다 — 4개 CH 쿼리)
+    // Background task: summary pre-compute (1초마다 — 4개 CH 쿼리)
     let summary_client = client.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(4)).await;
-        let mut interval = tokio::time::interval(Duration::from_secs(3));
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
         loop {
             interval.tick().await;
             let json = build_summary_bg(&summary_client).await;
@@ -922,11 +922,11 @@ async fn main() {
         }
     });
 
-    // Background task: servers/realtime pre-compute (5초마다)
+    // Background task: servers/realtime pre-compute (1초마다)
     let srv_rt_client = client.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(3)).await;
-        let mut interval = tokio::time::interval(Duration::from_secs(5));
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
         loop {
             interval.tick().await;
             let json = build_servers_realtime(&srv_rt_client).await;
@@ -934,11 +934,11 @@ async fn main() {
         }
     });
 
-    // Background task: ip-analysis pre-compute (3초마다 — 50 HTTP 호출 대신 메모리)
+    // Background task: ip-analysis pre-compute (1초마다 — 50 HTTP 호출 대신 메모리)
     let ip_client = client.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(5)).await;
-        let mut interval = tokio::time::interval(Duration::from_secs(3));
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
         loop {
             interval.tick().await;
             let json = build_ip_analysis(&ip_client).await;
@@ -946,11 +946,11 @@ async fn main() {
         }
     });
 
-    // Background task: popular pre-compute (30초마다 — uniqExact 풀스캔)
+    // Background task: popular pre-compute (5초마다 — uniqExact 풀스캔)
     let pop_client = client.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(5)).await;
-        let mut interval = tokio::time::interval(Duration::from_secs(30));
+        let mut interval = tokio::time::interval(Duration::from_secs(5));
         loop {
             interval.tick().await;
             let json = build_popular(&pop_client).await;
@@ -962,7 +962,7 @@ async fn main() {
     let abuser_client = client.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(8)).await;
-        eprintln!("[AbuserBG] Background pre-compute started (60s interval)");
+        eprintln!("[AbuserBG] Background pre-compute started (10s interval)");
         let periods = ["1h", "3h", "6h", "12h", "24h"];
         loop {
             let start = std::time::Instant::now();
@@ -974,7 +974,7 @@ async fn main() {
                 }
             }
             let elapsed = start.elapsed().as_secs();
-            let sleep_secs = if elapsed < 60 { 60 - elapsed } else { 5 };
+            let sleep_secs = if elapsed < 10 { 10 - elapsed } else { 2 };
             tokio::time::sleep(Duration::from_secs(sleep_secs)).await;
         }
     });
@@ -982,7 +982,7 @@ async fn main() {
     let logs_stats_client = client.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(5)).await;
-        eprintln!("[LogsStatsBG] Background pre-compute started (30s interval)");
+        eprintln!("[LogsStatsBG] Background pre-compute started (10s interval)");
         let periods = ["1h", "6h", "24h"];
         loop {
             let start = std::time::Instant::now();
@@ -990,7 +990,7 @@ async fn main() {
                 build_logs_stats_data(&logs_stats_client, period).await;
             }
             let elapsed = start.elapsed().as_secs();
-            let sleep_secs = if elapsed < 30 { 30 - elapsed } else { 5 };
+            let sleep_secs = if elapsed < 10 { 10 - elapsed } else { 2 };
             tokio::time::sleep(Duration::from_secs(sleep_secs)).await;
         }
     });
@@ -2106,7 +2106,7 @@ async fn api_summary(State(state): State<AppState>) -> Response {
             .unwrap();
     }
 
-    // ========== 캐시 확인 (30초 TTL) ==========
+    // ========== 캐시 확인 (1초 TTL) ==========
     {
         let cache = SUMMARY_CACHE.read();
         if let Some(ref entry) = *cache {
@@ -2182,12 +2182,12 @@ async fn api_summary(State(state): State<AppState>) -> Response {
         "yesterday": yesterday_data
     });
 
-    // ========== 결과 캐시 (30초 TTL) ==========
+    // ========== 결과 캐시 (1초 TTL) ==========
     {
         let mut cache = SUMMARY_CACHE.write();
         *cache = Some(CacheEntry {
             data: body.clone(),
-            expires_at: Instant::now() + Duration::from_secs(30),
+            expires_at: Instant::now() + Duration::from_secs(1),
         });
     }
 

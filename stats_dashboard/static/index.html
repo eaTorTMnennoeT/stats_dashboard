@@ -1409,23 +1409,23 @@ function setActiveInterval(fn, ms) {
 
 // Settings & Cache
 const defaultSettings = {
-  dashboard: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
-  traffic: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
-  realtime: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
-  sessions: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 5 },
-  players: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
-  live: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 5 },
-  charts: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 10 },
-  popular: { mode: 'cache', realtimeInterval: 30000, cacheMinutes: 10 },
-  summary: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 10 },
-    analysis: { mode: 'realtime', realtimeInterval: 3000, cacheMinutes: 5 },
-  visitors: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 5 },
-  history: { mode: 'realtime', realtimeInterval: 30000, cacheMinutes: 10 },
-  servers: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 5 }
+  dashboard: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 1 },
+  traffic: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 1 },
+  realtime: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 1 },
+  sessions: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 1 },
+  players: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 1 },
+  live: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 1 },
+  charts: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 1 },
+  popular: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 1 },
+  summary: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 1 },
+  analysis: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 1 },
+  visitors: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 1 },
+  history: { mode: 'realtime', realtimeInterval: 5000, cacheMinutes: 1 },
+  servers: { mode: 'realtime', realtimeInterval: 1000, cacheMinutes: 1 }
 };
 
 // 설정 초기화 (v5로 버전 업)
-const SETTINGS_KEY = 'p2p-settings-v7';
+const SETTINGS_KEY = 'p2p-settings-v8';
 const storedSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
 let settings = {};
 for (const page in defaultSettings) {
@@ -1435,6 +1435,7 @@ localStorage.removeItem('p2p-settings-v3');
 localStorage.removeItem('p2p-settings-v4');
 localStorage.removeItem('p2p-settings-v5');
 localStorage.removeItem('p2p-settings-v6');
+localStorage.removeItem('p2p-settings-v7');
 
 // Modal functions
 let currentModalPage = null;
