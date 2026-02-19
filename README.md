@@ -1,5 +1,18 @@
 # P2P Stats Dashboard
 
+> **📝 수정 내역 및 기술 문서는 Notion에서 관리합니다.**
+>
+> **문서 URL:** https://notion.newonnew6.com
+>
+> **API Docs:** https://notion.newonnew6.com/api-docs
+>
+> **API Key:** `ntn_c92d61b70728070f7707502dcbb9f151b8a678e9817f69d2c570a795c405a08c`
+>
+> 버전 기록, 서버 현황, 트러블슈팅 등 모든 운영 문서는 Notion 페이지에서 관리하세요.
+> 이 README는 프로젝트 개요용이며, 상세 변경사항은 Notion에 기록합니다.
+
+---
+
 P2P 스트리밍 서비스의 실시간 통계를 수집하고 시각화하는 대시보드 시스템
 
 ## 아키텍처
