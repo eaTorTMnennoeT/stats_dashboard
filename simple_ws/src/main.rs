@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use parking_lot::{Mutex, RwLock};
 use arc_swap::ArcSwap;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
-use tokio::time::timeout;
+
 use reqwest::Client as HttpClient;
 use tower_http::cors::CorsLayer;
 
@@ -231,6 +231,7 @@ struct ClientMessage {
 fn main() {
     std::panic::set_hook(Box::new(|info| {
         eprintln!("PANIC: {:?}", info);
+        std::process::exit(1);
     }));
 
     // API 전용 서버를 별도 스레드/런타임에서 실행 (WebSocket 부하에 영향받지 않음)
@@ -312,7 +313,9 @@ async fn async_main() {
     let server = axum_server::bind_rustls(addr, tls_config)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>());
 
-    server.await.unwrap();
+    if let Err(e) = server.await {
+        eprintln!("WSS server fatal error: {}", e);
+    }
 }
 
 async fn clickhouse_flush_task() {
@@ -347,7 +350,7 @@ fn calculate_speeds_and_reset_deltas() -> SavedDeltas {
         .unwrap_or_default()
         .as_millis() as u64;
 
-    let elapsed_ms = if stats.last_reset_ms > 0 { now_ms - stats.last_reset_ms } else { 1000 };
+    let elapsed_ms = if stats.last_reset_ms > 0 { now_ms.saturating_sub(stats.last_reset_ms) } else { 1000 };
     let elapsed_secs = (elapsed_ms as f64 / 1000.0).max(0.1);
 
     stats.player1.last_http_speed = (stats.player1.r_http_bytes as f64 / elapsed_secs) as u64;
@@ -387,16 +390,15 @@ fn calculate_speeds_and_reset_deltas() -> SavedDeltas {
 }
 
 fn update_realtime_cache() {
-    // try_read로 락 획득 시도 - 실패하면 이전 캐시 유지 (stale but available)
-    if let Some(stats) = P2P_STATS.try_read() {
-        let response = build_realtime_response_from_stats(&stats);
-        drop(stats); // 락 해제
-        if let Ok(json) = serde_json::to_string(&response) {
-            // lock-free atomic swap
-            REALTIME_CACHE.store(Arc::new(json));
-        }
+    // read()로 블로킹 락 획득 — try_read()는 writer 대기 중일 때 항상 실패하므로
+    // 188K+ 동시 연결 환경에서 캐시가 영원히 업데이트되지 않는 버그 발생
+    let stats = P2P_STATS.read();
+    let response = build_realtime_response_from_stats(&stats);
+    drop(stats); // 락 해제
+    if let Ok(json) = serde_json::to_string(&response) {
+        // lock-free atomic swap
+        REALTIME_CACHE.store(Arc::new(json));
     }
-    // 락 획득 실패 시 이전 캐시 유지
 }
 
 async fn flush_to_clickhouse(client: &HttpClient, saved: &SavedDeltas) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -1206,27 +1208,28 @@ fn cleanup_session(session_id: &str) {
 
 async fn handle_socket_inner(socket: WebSocket, session_id: String) {
     let (mut sender, mut receiver) = socket.split();
-    let (ping_tx, mut ping_rx) = tokio::sync::mpsc::channel::<()>(1);
-
-    let ping_task = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(PING_INTERVAL_SECS));
-        loop {
-            interval.tick().await;
-            if ping_tx.send(()).await.is_err() {
-                break;
-            }
-        }
-    });
+    let mut ping_interval = tokio::time::interval(Duration::from_secs(PING_INTERVAL_SECS));
+    let idle_deadline = tokio::time::sleep(Duration::from_secs(IDLE_TIMEOUT_SECS));
+    tokio::pin!(idle_deadline);
 
     loop {
         tokio::select! {
-            msg = timeout(Duration::from_secs(IDLE_TIMEOUT_SECS), receiver.next()) => {
-                match msg {
-                    Ok(Some(Ok(message))) => {
+            _ = &mut idle_deadline => {
+                let _ = sender.send(Message::Close(None)).await;
+                break;
+            }
+            _ = ping_interval.tick() => {
+                if sender.send(Message::Ping(vec![])).await.is_err() {
+                    break;
+                }
+            }
+            incoming = receiver.next() => {
+                match incoming {
+                    Some(Ok(message)) => {
+                        idle_deadline.as_mut().reset(tokio::time::Instant::now() + Duration::from_secs(IDLE_TIMEOUT_SECS));
                         match &message {
                             Message::Text(text) => {
                                 if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(text) {
-                                    // ping 메시지면 pong 응답
                                     if client_msg.msg_type == "ping" {
                                         let _ = sender.send(Message::Text(r#"{"type":"pong"}"#.to_string())).await;
                                     } else {
@@ -1241,22 +1244,11 @@ async fn handle_socket_inner(socket: WebSocket, session_id: String) {
                             _ => {}
                         }
                     }
-                    Ok(Some(Err(_))) | Ok(None) => break,
-                    Err(_) => {
-                        let _ = sender.send(Message::Close(None)).await;
-                        break;
-                    }
-                }
-            }
-            _ = ping_rx.recv() => {
-                if sender.send(Message::Ping(vec![])).await.is_err() {
-                    break;
+                    Some(Err(_)) | None => break,
                 }
             }
         }
     }
-
-    ping_task.abort();
 }
 
 fn handle_client_message(session_id: &str, msg: ClientMessage) {
@@ -1398,15 +1390,14 @@ fn handle_stats_update(session_id: &str, msg: ClientMessage) {
     let peer_diff = new_peers as i64 - session.peers as i64;
     session.peers = new_peers;
 
-    // r* 필드만 사용 (delta) - 구 클라이언트는 무시됨
-    let http_diff = msg.r_http_bytes.unwrap_or(0);
-    let p2p_diff = msg.r_p2p_bytes.unwrap_or(0);
-    let up_diff = msg.r_p2p_up_bytes.unwrap_or(0);
+    const MAX_DELTA: u64 = 512 * 1024 * 1024; // 512MB per report — clamp untrusted input
+    let http_diff = msg.r_http_bytes.unwrap_or(0).min(MAX_DELTA);
+    let p2p_diff = msg.r_p2p_bytes.unwrap_or(0).min(MAX_DELTA);
+    let up_diff = msg.r_p2p_up_bytes.unwrap_or(0).min(MAX_DELTA);
 
-    // Update session cumulative bytes
-    session.http_bytes += http_diff;
-    session.p2p_bytes += p2p_diff;
-    session.p2p_up_bytes += up_diff;
+    session.http_bytes = session.http_bytes.saturating_add(http_diff);
+    session.p2p_bytes = session.p2p_bytes.saturating_add(p2p_diff);
+    session.p2p_up_bytes = session.p2p_up_bytes.saturating_add(up_diff);
     // Update session delta bytes (for real-time speed display)
     session.r_http_bytes = http_diff;
     session.r_p2p_bytes = p2p_diff;
@@ -1420,54 +1411,50 @@ fn handle_stats_update(session_id: &str, msg: ClientMessage) {
 
     drop(sessions);
 
-    // Update IP totals (서버 시작 후 IP별 누적)
-    let total_diff = http_diff + p2p_diff;
+    let total_diff = http_diff.saturating_add(p2p_diff);
     if total_diff > 0 {
         let mut ip_totals = IP_TOTALS.write();
-        *ip_totals.entry(user_ip).or_insert(0) += total_diff;
+        let entry = ip_totals.entry(user_ip).or_insert(0);
+        *entry = entry.saturating_add(total_diff);
     }
 
-    // Update global stats
     let mut stats = P2P_STATS.write();
-    stats.http_bytes += http_diff;
-    stats.p2p_bytes += p2p_diff;
-    stats.p2p_up_bytes += up_diff;
-    // Delta tracking for current interval
-    stats.r_http_bytes += http_diff;
-    stats.r_p2p_bytes += p2p_diff;
-    stats.r_p2p_up_bytes += up_diff;
+    stats.http_bytes = stats.http_bytes.saturating_add(http_diff);
+    stats.p2p_bytes = stats.p2p_bytes.saturating_add(p2p_diff);
+    stats.p2p_up_bytes = stats.p2p_up_bytes.saturating_add(up_diff);
+    stats.r_http_bytes = stats.r_http_bytes.saturating_add(http_diff);
+    stats.r_p2p_bytes = stats.r_p2p_bytes.saturating_add(p2p_diff);
+    stats.r_p2p_up_bytes = stats.r_p2p_up_bytes.saturating_add(up_diff);
     if peer_diff > 0 {
         stats.peers += peer_diff as u64;
     } else {
         stats.peers = stats.peers.saturating_sub((-peer_diff) as u64);
     }
 
-    // Player stats
     if player_id == 1 {
-        stats.player1.http_bytes += http_diff;
-        stats.player1.p2p_bytes += p2p_diff;
-        stats.player1.p2p_up_bytes += up_diff;
-        stats.player1.r_http_bytes += http_diff;
-        stats.player1.r_p2p_bytes += p2p_diff;
-        stats.player1.r_p2p_up_bytes += up_diff;
+        stats.player1.http_bytes = stats.player1.http_bytes.saturating_add(http_diff);
+        stats.player1.p2p_bytes = stats.player1.p2p_bytes.saturating_add(p2p_diff);
+        stats.player1.p2p_up_bytes = stats.player1.p2p_up_bytes.saturating_add(up_diff);
+        stats.player1.r_http_bytes = stats.player1.r_http_bytes.saturating_add(http_diff);
+        stats.player1.r_p2p_bytes = stats.player1.r_p2p_bytes.saturating_add(p2p_diff);
+        stats.player1.r_p2p_up_bytes = stats.player1.r_p2p_up_bytes.saturating_add(up_diff);
     } else if player_id == 2 {
-        stats.player2.http_bytes += http_diff;
-        stats.player2.p2p_bytes += p2p_diff;
-        stats.player2.p2p_up_bytes += up_diff;
-        stats.player2.r_http_bytes += http_diff;
-        stats.player2.r_p2p_bytes += p2p_diff;
-        stats.player2.r_p2p_up_bytes += up_diff;
+        stats.player2.http_bytes = stats.player2.http_bytes.saturating_add(http_diff);
+        stats.player2.p2p_bytes = stats.player2.p2p_bytes.saturating_add(p2p_diff);
+        stats.player2.p2p_up_bytes = stats.player2.p2p_up_bytes.saturating_add(up_diff);
+        stats.player2.r_http_bytes = stats.player2.r_http_bytes.saturating_add(http_diff);
+        stats.player2.r_p2p_bytes = stats.player2.r_p2p_bytes.saturating_add(p2p_diff);
+        stats.player2.r_p2p_up_bytes = stats.player2.r_p2p_up_bytes.saturating_add(up_diff);
     }
 
-    // Swarm stats
     if !swarm_id.is_empty() {
         if let Some(swarm) = stats.swarms.get_mut(&swarm_id) {
-            swarm.http_bytes += http_diff;
-            swarm.p2p_bytes += p2p_diff;
-            swarm.p2p_up_bytes += up_diff;
-            swarm.r_http_bytes += http_diff;
-            swarm.r_p2p_bytes += p2p_diff;
-            swarm.r_p2p_up_bytes += up_diff;
+            swarm.http_bytes = swarm.http_bytes.saturating_add(http_diff);
+            swarm.p2p_bytes = swarm.p2p_bytes.saturating_add(p2p_diff);
+            swarm.p2p_up_bytes = swarm.p2p_up_bytes.saturating_add(up_diff);
+            swarm.r_http_bytes = swarm.r_http_bytes.saturating_add(http_diff);
+            swarm.r_p2p_bytes = swarm.r_p2p_bytes.saturating_add(p2p_diff);
+            swarm.r_p2p_up_bytes = swarm.r_p2p_up_bytes.saturating_add(up_diff);
         }
     }
 }
