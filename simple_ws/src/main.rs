@@ -12,13 +12,15 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use socket2::{Domain, Protocol, Socket, Type};
+use dashmap::DashMap;
 use parking_lot::{Mutex, RwLock};
 use arc_swap::ArcSwap;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 
 use reqwest::Client as HttpClient;
 use tower_http::cors::CorsLayer;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Semaphore};
 
 const WORKER_THREADS: usize = 72;
 const BLOCKING_THREADS: usize = 128;
@@ -42,8 +44,8 @@ struct FlushSnapshot {
     p2p_up_bytes: u64,
     peers: u64,
     swarms_count: usize,
-    /// (swarm_id, http_bytes, p2p_bytes, p2p_up_bytes, unique_ips)
-    swarm_data: Vec<(String, u64, u64, u64, usize)>,
+    /// (swarm_id, http_bytes, p2p_bytes, p2p_up_bytes, unique_ips, viewers, server)
+    swarm_data: Vec<(String, u64, u64, u64, usize, u64, String)>,
 }
 
 struct StatsUpdate {
@@ -69,11 +71,12 @@ static START_TIME: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 // P2P Stats
 lazy_static::lazy_static! {
     static ref P2P_STATS: Arc<RwLock<P2PStats>> = Arc::new(RwLock::new(P2PStats::default()));
-    static ref SESSIONS: Arc<RwLock<HashMap<String, Session>>> = Arc::new(RwLock::new(HashMap::new()));
+    static ref SESSIONS: Arc<DashMap<String, Session>> = Arc::new(DashMap::new());
     static ref VISITOR_LOGS: Arc<Mutex<Vec<VisitorLog>>> = Arc::new(Mutex::new(Vec::new()));
     static ref IP_TOTALS: Arc<RwLock<HashMap<String, u64>>> = Arc::new(RwLock::new(HashMap::new()));
     // API 응답 캐시 (lock-free 읽기)
     static ref REALTIME_CACHE: ArcSwap<String> = ArcSwap::from_pointee(String::from("{}"));
+    static ref NEW_CONN_LIMITER: Semaphore = Semaphore::new(3000);
 }
 
 #[derive(Clone)]
@@ -152,6 +155,7 @@ struct NetworkStats {
 #[derive(Default, Clone)]
 struct SwarmStats {
     filename: String,
+    server: String,
     viewers: u64,
     http_bytes: u64,
     p2p_bytes: u64,
@@ -164,8 +168,10 @@ struct SwarmStats {
     unique_ips: HashMap<String, u64>,
 }
 
+#[derive(Clone)]
 struct Session {
     swarm_id: String,
+    server: String,
     player_id: u8,
     filename: String,
     device: String,
@@ -190,6 +196,7 @@ impl Default for Session {
     fn default() -> Self {
         Session {
             swarm_id: String::new(),
+            server: String::new(),
             player_id: 0,
             filename: String::new(),
             device: String::new(),
@@ -243,6 +250,7 @@ struct ClientMessage {
     r_p2p_bytes: Option<u64>,
     #[serde(rename = "rp2pUpBytes")]
     r_p2p_up_bytes: Option<u64>,
+    server: Option<String>,
 }
 
 fn main() {
@@ -277,13 +285,40 @@ fn main() {
                 .layer(CorsLayer::permissive());
 
             let addr = SocketAddr::from(([127, 0, 0, 1], 8444));
-            let listener = match tokio::net::TcpListener::bind(addr).await {
+
+            // Use socket2 for SO_REUSEADDR/SO_REUSEPORT to prevent "Address already in use" on restart
+            let socket = match Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP)) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Failed to create API socket: {}", e);
+                    return;
+                }
+            };
+            if let Err(e) = socket.set_reuse_address(true) {
+                eprintln!("Failed to set SO_REUSEADDR on API socket: {}", e);
+            }
+            if let Err(e) = socket.set_reuse_port(true) {
+                eprintln!("Failed to set SO_REUSEPORT on API socket: {}", e);
+            }
+            socket.set_nonblocking(true).expect("Failed to set API socket nonblocking");
+
+            if let Err(e) = socket.bind(&addr.into()) {
+                eprintln!("Failed to bind API listener on {}: {}", addr, e);
+                return;
+            }
+            if let Err(e) = socket.listen(1024) {
+                eprintln!("Failed to listen on API socket: {}", e);
+                return;
+            }
+
+            let std_listener: std::net::TcpListener = socket.into();
+            let listener = match tokio::net::TcpListener::from_std(std_listener) {
                 Ok(l) => {
                     eprintln!("API server listening on {} (dedicated runtime, localhost only)", addr);
                     l
                 }
                 Err(e) => {
-                    eprintln!("Failed to bind API listener on {}: {}", addr, e);
+                    eprintln!("Failed to convert API listener: {}", e);
                     return;
                 }
             };
@@ -320,6 +355,7 @@ async fn async_main() {
 
     spawn_cache_updater();
     spawn_clickhouse_flusher();
+    spawn_stats_reconciler();
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
@@ -331,18 +367,47 @@ async fn async_main() {
         .route("/api/ip_stats", get(api_ip_stats))
         .layer(CorsLayer::permissive());
 
-    let tls_config = RustlsConfig::from_pem_file("certs/cert.pem", "certs/key.pem")
-        .await
-        .expect("Failed to load TLS config");
-
     let addr = SocketAddr::from(([0, 0, 0, 0], 8443));
-    eprintln!("WSS server listening on {} (workers: {})", addr, WORKER_THREADS);
 
-    let server = axum_server::bind_rustls(addr, tls_config)
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>());
+    loop {
+        let tls_config = RustlsConfig::from_pem_file("certs/cert.pem", "certs/key.pem")
+            .await
+            .expect("Failed to load TLS config");
 
-    if let Err(e) = server.await {
-        eprintln!("WSS server fatal error: {}", e);
+        let socket = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP))
+            .expect("Failed to create socket");
+        socket.set_reuse_address(true).expect("Failed to set SO_REUSEADDR");
+        socket.set_reuse_port(true).expect("Failed to set SO_REUSEPORT");
+        socket.set_nonblocking(true).expect("Failed to set nonblocking");
+
+        if let Err(e) = socket.bind(&addr.into()) {
+            eprintln!("[ERROR] Failed to bind {:?}: {} - retrying in 3s", addr, e);
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            continue;
+        }
+
+        if let Err(e) = socket.listen(4096) {
+            eprintln!("[ERROR] Failed to listen: {} - retrying in 3s", e);
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            continue;
+        }
+
+        let std_listener: std::net::TcpListener = socket.into();
+        eprintln!("[INFO] WSS server listening on {} (workers: {})", addr, WORKER_THREADS);
+
+        let server = axum_server::from_tcp_rustls(std_listener, tls_config)
+            .serve(app.clone().into_make_service_with_connect_info::<SocketAddr>());
+
+        match server.await {
+            Ok(()) => {
+                eprintln!("[WARN] WSS server exited Ok() unexpectedly - restarting in 1s");
+            }
+            Err(e) => {
+                eprintln!("[ERROR] WSS server error: {} - restarting in 1s", e);
+            }
+        }
+
+        tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }
 
@@ -432,14 +497,14 @@ fn spawn_stats_aggregator(mut rx: mpsc::UnboundedReceiver<StatsUpdate>) {
                     stats.player1.r_p2p_up_bytes = stats.player1.r_p2p_up_bytes.saturating_add(p1_up);
 
                     for (swarm_id, (h, p, u)) in &swarm_deltas {
-                        if let Some(swarm) = stats.swarms.get_mut(swarm_id) {
-                            swarm.http_bytes = swarm.http_bytes.saturating_add(*h);
-                            swarm.p2p_bytes = swarm.p2p_bytes.saturating_add(*p);
-                            swarm.p2p_up_bytes = swarm.p2p_up_bytes.saturating_add(*u);
-                            swarm.r_http_bytes = swarm.r_http_bytes.saturating_add(*h);
-                            swarm.r_p2p_bytes = swarm.r_p2p_bytes.saturating_add(*p);
-                            swarm.r_p2p_up_bytes = swarm.r_p2p_up_bytes.saturating_add(*u);
-                        }
+                        let swarm = stats.swarms.entry(swarm_id.clone())
+                            .or_insert_with(|| SwarmStats::default());
+                        swarm.http_bytes = swarm.http_bytes.saturating_add(*h);
+                        swarm.p2p_bytes = swarm.p2p_bytes.saturating_add(*p);
+                        swarm.p2p_up_bytes = swarm.p2p_up_bytes.saturating_add(*u);
+                        swarm.r_http_bytes = swarm.r_http_bytes.saturating_add(*h);
+                        swarm.r_p2p_bytes = swarm.r_p2p_bytes.saturating_add(*p);
+                        swarm.r_p2p_up_bytes = swarm.r_p2p_up_bytes.saturating_add(*u);
                     }
                     drop(stats);
                 }
@@ -460,7 +525,7 @@ fn spawn_cache_updater() {
                 ATOMIC_P2P_UP_BYTES.load(Ordering::Relaxed),
             );
 
-            const EMA_ALPHA: f64 = 0.03;
+            const EMA_ALPHA: f64 = 0.2;
             let mut ema_http: f64 = 0.0;
             let mut ema_p2p: f64 = 0.0;
             let mut ema_up: f64 = 0.0;
@@ -548,7 +613,7 @@ fn spawn_clickhouse_flusher() {
                     let snapshot = take_flush_snapshot(&prev);
 
                     let prev_swarm_map: HashMap<String, (u64, u64, u64)> = prev_snapshot.swarm_data.iter()
-                        .map(|(id, h, p, pu, _)| (id.clone(), (*h, *p, *pu)))
+                        .map(|(id, h, p, pu, _, _, _)| (id.clone(), (*h, *p, *pu)))
                         .collect();
                     prev_snapshot = snapshot.clone();
 
@@ -564,24 +629,25 @@ fn spawn_clickhouse_flusher() {
                     );
 
                     let server_queries = {
-                        let mut ss: HashMap<String, (u64, u64, u64, u64, u64, u64, u64)> = HashMap::new();
-                        for (swarm_id, h, p, pu, uips) in &snapshot.swarm_data {
-                            let server = swarm_id.split('.').next().unwrap_or("unknown").to_string();
-                            let e = ss.entry(server).or_insert((0, 0, 0, 0, 0, 0, 0));
+                        let mut ss: HashMap<String, (u64, u64, u64, u64, u64, u64, u64, u64)> = HashMap::new();
+                        for (swarm_id, h, p, pu, uips, swarm_viewers, srv_name) in &snapshot.swarm_data {
+                            if srv_name.is_empty() { continue; }
+                            let e = ss.entry(srv_name.clone()).or_insert((0, 0, 0, 0, 0, 0, 0, 0));
                             e.0 += h; e.1 += p; e.2 += pu;
                             let prev_vals = prev_swarm_map.get(swarm_id).copied().unwrap_or((0, 0, 0));
                             e.3 += h.saturating_sub(prev_vals.0);
                             e.4 += p.saturating_sub(prev_vals.1);
                             e.5 += pu.saturating_sub(prev_vals.2);
                             e.6 += *uips as u64;
+                            e.7 += *swarm_viewers;
                         }
                         if ss.is_empty() {
                             Vec::new()
                         } else {
                             const CHUNK_SIZE: usize = 500;
-                            let all_vals: Vec<String> = ss.iter().map(|(srv, (h, p, pu, rh, rp, rpu, v))| {
+                            let all_vals: Vec<String> = ss.iter().map(|(srv, (h, p, pu, rh, rp, rpu, unique_ips_sum, viewers_sum))| {
                                 format!("('{}', {}, {}, {}, {}, '{}', {}, {}, {}, {})",
-                                    escape_sql(srv), v, v, h, p, now_escaped, pu, rh, rp, rpu)
+                                    escape_sql(srv), viewers_sum, unique_ips_sum, h, p, now_escaped, pu, rh, rp, rpu)
                             }).collect();
                             all_vals.chunks(CHUNK_SIZE)
                                 .map(|chunk| format!("INSERT INTO p2p_servers VALUES {}", chunk.join(",")))
@@ -631,6 +697,190 @@ fn spawn_clickhouse_flusher() {
         .expect("Failed to spawn ch-flusher thread");
 }
 
+fn spawn_stats_reconciler() {
+    std::thread::Builder::new()
+        .name("stats-reconciler".into())
+        .spawn(|| {
+            loop {
+                std::thread::sleep(Duration::from_secs(5));
+
+                let sessions_snapshot: Vec<Session> = SESSIONS
+                    .iter()
+                    .map(|r| r.value().clone())
+                    .collect();
+
+                let (
+                    viewers,
+                    unique_ips,
+                    devices,
+                    device_names,
+                    networks,
+                    browsers,
+                    referrers,
+                    swarms,
+                    server_unique_ips,
+                    player1_viewers,
+                    player1_unique_ips,
+                    peers,
+                ) = {
+
+                    let mut viewers: u64 = 0;
+                    let mut unique_ips: HashMap<String, u64> = HashMap::new();
+                    let mut devices = DeviceStats::default();
+                    let mut device_names: HashMap<String, u64> = HashMap::new();
+                    let mut networks = NetworkStats::default();
+                    let mut browsers: HashMap<String, u64> = HashMap::new();
+                    let mut referrers: HashMap<String, u64> = HashMap::new();
+                    let mut swarms: HashMap<String, SwarmStats> = HashMap::new();
+                    let mut server_unique_ips: HashMap<String, HashMap<String, u64>> = HashMap::new();
+                    let mut player1_viewers: u64 = 0;
+                    let mut player1_unique_ips: HashMap<String, u64> = HashMap::new();
+                    let mut peers: u64 = 0;
+
+                    for session in sessions_snapshot.iter() {
+                        if !session.initialized {
+                            continue;
+                        }
+
+                        viewers = viewers.saturating_add(1);
+                        peers = peers.saturating_add(session.peers);
+
+                        if !session.user_ip.is_empty() {
+                            *unique_ips.entry(session.user_ip.clone()).or_insert(0) += 1;
+                        }
+
+                        if session.player_id == 1 {
+                            player1_viewers = player1_viewers.saturating_add(1);
+                            if !session.user_ip.is_empty() {
+                                *player1_unique_ips.entry(session.user_ip.clone()).or_insert(0) += 1;
+                            }
+                        }
+
+                        let dev = session.device.to_lowercase();
+                        if dev.contains("mobile") || dev.contains("phone") {
+                            devices.mobile = devices.mobile.saturating_add(1);
+                        } else if dev.contains("tablet") || dev.contains("ipad") {
+                            devices.tablet = devices.tablet.saturating_add(1);
+                        } else if dev.contains("desktop") || dev.contains("pc") || dev.contains("web") {
+                            devices.desktop = devices.desktop.saturating_add(1);
+                        } else {
+                            devices.unknown = devices.unknown.saturating_add(1);
+                        }
+
+                        if !session.device_name.is_empty() {
+                            if let Some(count) = device_names.get_mut(&session.device_name) {
+                                *count = count.saturating_add(1);
+                            } else if device_names.len() < MAX_TRACKING_ENTRIES {
+                                device_names.insert(session.device_name.clone(), 1);
+                            }
+                        }
+
+                        let net = session.net_type.to_lowercase();
+                        match net.as_str() {
+                            "wifi" => networks.wifi = networks.wifi.saturating_add(1),
+                            "cellular" => networks.cellular = networks.cellular.saturating_add(1),
+                            "4g" => networks.g4 = networks.g4.saturating_add(1),
+                            "5g" => networks.g5 = networks.g5.saturating_add(1),
+                            "ethernet" => networks.ethernet = networks.ethernet.saturating_add(1),
+                            _ => networks.unknown = networks.unknown.saturating_add(1),
+                        }
+
+                        if !session.browser.is_empty() {
+                            if let Some(count) = browsers.get_mut(&session.browser) {
+                                *count = count.saturating_add(1);
+                            } else if browsers.len() < MAX_TRACKING_ENTRIES {
+                                browsers.insert(session.browser.clone(), 1);
+                            }
+                        }
+
+                        if !session.referrer.is_empty() {
+                            if let Some(count) = referrers.get_mut(&session.referrer) {
+                                *count = count.saturating_add(1);
+                            } else if referrers.len() < MAX_TRACKING_ENTRIES {
+                                referrers.insert(session.referrer.clone(), 1);
+                            }
+                        }
+
+                        if !session.swarm_id.is_empty() {
+                            let swarm = swarms
+                                .entry(session.swarm_id.clone())
+                                .or_insert_with(|| SwarmStats {
+                                    filename: session.filename.clone(),
+                                    server: session.server.clone(),
+                                    ..Default::default()
+                                });
+                            swarm.viewers = swarm.viewers.saturating_add(1);
+
+                            if !session.user_ip.is_empty() {
+                                *swarm.unique_ips.entry(session.user_ip.clone()).or_insert(0) += 1;
+
+                                let server_name = if session.server.is_empty() {
+                                    session.swarm_id.split('.').next().unwrap_or("unknown").to_string()
+                                } else {
+                                    session.server.clone()
+                                };
+                                let server_ips =
+                                    server_unique_ips.entry(server_name).or_insert_with(HashMap::new);
+                                *server_ips.entry(session.user_ip.clone()).or_insert(0) += 1;
+                            }
+                        }
+                    }
+
+                    (
+                        viewers,
+                        unique_ips,
+                        devices,
+                        device_names,
+                        networks,
+                        browsers,
+                        referrers,
+                        swarms,
+                        server_unique_ips,
+                        player1_viewers,
+                        player1_unique_ips,
+                        peers,
+                    )
+                };
+
+                let new_unique = unique_ips.len() as u64;
+                let mut stats = P2P_STATS.write();
+                let old_viewers = stats.viewers;
+                let old_unique = stats.unique_ips.len() as u64;
+
+                stats.viewers = viewers;
+                stats.unique_ips = unique_ips;
+                stats.devices = devices;
+                stats.device_names = device_names;
+                stats.networks = networks;
+                stats.browsers = browsers;
+                stats.referrers = referrers;
+                stats.server_unique_ips = server_unique_ips;
+                stats.peers = peers;
+
+                stats.player1.viewers = player1_viewers;
+                stats.player1.unique_ips = player1_unique_ips;
+
+                stats.swarms.retain(|swarm_id, _| swarms.contains_key(swarm_id));
+                for (swarm_id, rebuilt_swarm) in swarms {
+                    if let Some(existing) = stats.swarms.get_mut(&swarm_id) {
+                        existing.viewers = rebuilt_swarm.viewers;
+                        existing.unique_ips = rebuilt_swarm.unique_ips;
+                    } else {
+                        stats.swarms.insert(swarm_id, rebuilt_swarm);
+                    }
+                }
+
+                if old_viewers.abs_diff(viewers) > 5 || old_unique.abs_diff(new_unique) > 5 {
+                    eprintln!(
+                        "[reconciler] drift corrected: viewers {} -> {}, unique_ips {} -> {}",
+                        old_viewers, viewers, old_unique, new_unique
+                    );
+                }
+            }
+        })
+        .expect("Failed to spawn stats-reconciler thread");
+}
+
 /// Send a single INSERT to ClickHouse with short timeout and max 1 retry.
 async fn ch_send(client: &HttpClient, query: String, timeout_ms: u64) {
     for attempt in 0..2u32 {
@@ -674,7 +924,7 @@ fn take_flush_snapshot(prev: &FlushSnapshot) -> FlushSnapshot {
         peers: stats.peers,
         swarms_count: stats.swarms.len(),
         swarm_data: stats.swarms.iter().map(|(id, s)| {
-            (id.clone(), s.http_bytes, s.p2p_bytes, s.p2p_up_bytes, s.unique_ips.len())
+            (id.clone(), s.http_bytes, s.p2p_bytes, s.p2p_up_bytes, s.unique_ips.len(), s.viewers, s.server.clone())
         }).collect(),
     };
     drop(stats);
@@ -788,15 +1038,22 @@ async fn api_realtime() -> axum::response::Response {
 fn build_realtime_response_from_stats(stats: &P2PStats) -> RealtimeResponse {
     // 서버별 스웜 수 계산
     let mut server_swarm_count: HashMap<String, u64> = HashMap::new();
-    for swarm_id in stats.swarms.keys() {
-        let server = swarm_id.split('.').next().unwrap_or("unknown").to_string();
+    for (_swarm_id, swarm) in stats.swarms.iter() {
+        let server = if swarm.server.is_empty() {
+            _swarm_id.split('.').next().unwrap_or("unknown").to_string()
+        } else {
+            swarm.server.clone()
+        };
         *server_swarm_count.entry(server).or_insert(0) += 1;
     }
 
-    // 서버별 viewers (연결 수) 계산
     let mut server_viewers: HashMap<String, u64> = HashMap::new();
-    for (swarm_id, swarm) in stats.swarms.iter() {
-        let server = swarm_id.split('.').next().unwrap_or("unknown").to_string();
+    for (_swarm_id, swarm) in stats.swarms.iter() {
+        let server = if swarm.server.is_empty() {
+            _swarm_id.split('.').next().unwrap_or("unknown").to_string()
+        } else {
+            swarm.server.clone()
+        };
         *server_viewers.entry(server).or_insert(0) += swarm.viewers;
     }
 
@@ -969,26 +1226,25 @@ async fn api_sessions(axum::extract::Query(params): axum::extract::Query<HashMap
     let sort_by = params.get("sort").map(|s| s.as_str()).unwrap_or("http_bytes");
     let search = params.get("search").map(|s| s.to_lowercase());
 
-    let sessions = SESSIONS.read();
     let ip_totals = IP_TOTALS.read();
-
-    // 검색 필터가 없으면 빠른 경로
     let has_search = search.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
 
-    // 참조만 수집 (String 복사 없음)
-    let mut refs: Vec<(&String, &Session, i64)> = sessions.iter()
-        .filter(|(_, s)| s.initialized)
-        .filter(|(id, s)| {
+    let mut refs: Vec<(String, Session, i64)> = SESSIONS.iter()
+        .filter(|r| r.value().initialized)
+        .filter(|r| {
             if !has_search { return true; }
             let q = search.as_ref().unwrap();
+            let s = r.value();
             s.user_ip.to_lowercase().contains(q) ||
             s.filename.to_lowercase().contains(q) ||
             s.browser.to_lowercase().contains(q) ||
             s.referrer.to_lowercase().contains(q) ||
             s.device_name.to_lowercase().contains(q) ||
-            id.to_lowercase().contains(q)
+            r.key().to_lowercase().contains(q)
         })
-        .map(|(id, s)| {
+        .map(|r| {
+            let id = r.key().clone();
+            let s = r.value().clone();
             let ts = id.split('_').next().and_then(|t| t.parse::<i64>().ok()).unwrap_or(0);
             let key = sort_by.trim_start_matches('-');
             let sort_key = match key {
@@ -997,8 +1253,8 @@ async fn api_sessions(axum::extract::Query(params): axum::extract::Query<HashMap
                 "total" => *ip_totals.get(&s.user_ip).unwrap_or(&0) as i64,
                 "peers" => s.peers as i64,
                 "speed" => (s.r_http_bytes + s.r_p2p_bytes) as i64,
-                "connected" => -ts,  // 오래된 순 (oldest first)
-                "recent" => ts,      // 최근 순 (newest first)
+                "connected" => -ts,
+                "recent" => ts,
                 _ => s.http_bytes as i64,
             };
             (id, s, sort_key)
@@ -1007,7 +1263,6 @@ async fn api_sessions(axum::extract::Query(params): axum::extract::Query<HashMap
 
     let total = refs.len();
 
-    // 정렬 (- prefix면 오름차순, 아니면 내림차순)
     let ascending = sort_by.starts_with('-');
     if ascending {
         refs.sort_unstable_by(|a, b| a.2.cmp(&b.2));
@@ -1015,7 +1270,6 @@ async fn api_sessions(axum::extract::Query(params): axum::extract::Query<HashMap
         refs.sort_unstable_by(|a, b| b.2.cmp(&a.2));
     }
 
-    // 페이지네이션 후 SessionItem 생성
     let now = Instant::now();
     let data: Vec<_> = refs.into_iter()
         .skip(offset)
@@ -1023,16 +1277,16 @@ async fn api_sessions(axum::extract::Query(params): axum::extract::Query<HashMap
         .map(|(id, s, _)| {
             let ip_total = *ip_totals.get(&s.user_ip).unwrap_or(&0);
             SessionItem {
-                session_id: id.clone(),
-                ip: s.user_ip.clone(),
-                filename: s.filename.clone(),
-                swarm_id: s.swarm_id.clone(),
+                session_id: id,
+                ip: s.user_ip,
+                filename: s.filename,
+                swarm_id: s.swarm_id,
                 player_id: s.player_id,
-                device: s.device.clone(),
-                device_name: s.device_name.clone(),
-                browser: s.browser.clone(),
-                referrer: s.referrer.clone(),
-                net_type: s.net_type.clone(),
+                device: s.device,
+                device_name: s.device_name,
+                browser: s.browser,
+                referrer: s.referrer,
+                net_type: s.net_type,
                 http_bytes: s.http_bytes,
                 p2p_bytes: s.p2p_bytes,
                 p2p_up_bytes: s.p2p_up_bytes,
@@ -1055,12 +1309,11 @@ async fn api_ip_stats(axum::extract::Query(params): axum::extract::Query<HashMap
     let sort_by = params.get("sort").map(|s| s.as_str()).unwrap_or("total");
     let search = params.get("search").map(|s| s.to_lowercase());
 
-    let sessions = SESSIONS.read();
     let ip_totals = IP_TOTALS.read();
 
-    // IP별로 그룹핑
     let mut ip_map: HashMap<String, (u64, u64, u64, u64)> = HashMap::new();
-    for (_, s) in sessions.iter().filter(|(_, s)| s.initialized) {
+    for r in SESSIONS.iter().filter(|r| r.value().initialized) {
+        let s = r.value();
         let entry = ip_map.entry(s.user_ip.clone()).or_insert((0, 0, 0, 0));
         entry.0 += 1;  // session count
         entry.1 += s.http_bytes;
@@ -1156,6 +1409,17 @@ async fn ws_handler(
     headers: axum::http::HeaderMap,
     axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
 ) -> Response {
+    let permit = match tokio::time::timeout(Duration::from_secs(10), NEW_CONN_LIMITER.acquire()).await
+    {
+        Ok(Ok(permit)) => permit,
+        _ => {
+            return axum::response::Response::builder()
+                .status(503)
+                .body(axum::body::Body::from("server busy"))
+                .unwrap();
+        }
+    };
+
     // CF-Connecting-IP (Cloudflare) 우선, 없으면 소켓 IP
     let client_ip = headers
         .get("CF-Connecting-IP")
@@ -1163,7 +1427,10 @@ async fn ws_handler(
         .map(|s| s.to_string())
         .unwrap_or_else(|| addr.ip().to_string());
 
-    ws.on_upgrade(move |socket| handle_socket(socket, client_ip))
+    ws.on_upgrade(move |socket| async move {
+        drop(permit);
+        handle_socket(socket, client_ip).await
+    })
 }
 
 async fn handle_socket(socket: WebSocket, client_ip: String) {
@@ -1180,7 +1447,7 @@ async fn handle_socket(socket: WebSocket, client_ip: String) {
     // Create session with client IP from socket connection
     let mut new_session = Session::default();
     new_session.user_ip = client_ip;
-    SESSIONS.write().insert(session_id.clone(), new_session);
+    SESSIONS.insert(session_id.clone(), new_session);
 
     match std::panic::AssertUnwindSafe(handle_socket_inner(socket, session_id.clone()))
         .catch_unwind()
@@ -1200,141 +1467,9 @@ async fn handle_socket(socket: WebSocket, client_ip: String) {
 }
 
 fn cleanup_session(session_id: &str) {
-    let session = {
-        let mut sessions = SESSIONS.write();
-        sessions.remove(session_id)
-    };
+    let session = SESSIONS.remove(session_id);
 
-    if let Some(sess) = session {
-        if sess.initialized {
-            // 락 밖에서 문자열 연산 수행 (락 범위 최소화)
-            let dev = sess.device.to_lowercase();
-            let net = sess.net_type.to_lowercase();
-
-            let mut stats = P2P_STATS.write();
-            stats.viewers = stats.viewers.saturating_sub(1);
-            stats.peers = stats.peers.saturating_sub(sess.peers);
-
-            // Player stats
-            if sess.player_id == 1 {
-                stats.player1.viewers = stats.player1.viewers.saturating_sub(1);
-                if !sess.user_ip.is_empty() {
-                    if let Some(count) = stats.player1.unique_ips.get_mut(&sess.user_ip) {
-                        *count = count.saturating_sub(1);
-                        if *count == 0 {
-                            stats.player1.unique_ips.remove(&sess.user_ip);
-                        }
-                    }
-                }
-            }
-
-            // Device stats
-            if dev.contains("mobile") || dev.contains("phone") {
-                stats.devices.mobile = stats.devices.mobile.saturating_sub(1);
-            } else if dev.contains("tablet") || dev.contains("ipad") {
-                stats.devices.tablet = stats.devices.tablet.saturating_sub(1);
-            } else if dev.contains("desktop") || dev.contains("pc") || dev.contains("web") {
-                stats.devices.desktop = stats.devices.desktop.saturating_sub(1);
-            } else {
-                stats.devices.unknown = stats.devices.unknown.saturating_sub(1);
-            }
-
-            // Device name stats
-            if !sess.device_name.is_empty() {
-                if let Some(count) = stats.device_names.get_mut(&sess.device_name) {
-                    *count = count.saturating_sub(1);
-                    if *count == 0 {
-                        stats.device_names.remove(&sess.device_name);
-                    }
-                }
-            }
-
-            // Network stats
-            match net.as_str() {
-                "wifi" => stats.networks.wifi = stats.networks.wifi.saturating_sub(1),
-                "cellular" => stats.networks.cellular = stats.networks.cellular.saturating_sub(1),
-                "4g" => stats.networks.g4 = stats.networks.g4.saturating_sub(1),
-                "5g" => stats.networks.g5 = stats.networks.g5.saturating_sub(1),
-                "ethernet" => stats.networks.ethernet = stats.networks.ethernet.saturating_sub(1),
-                _ => stats.networks.unknown = stats.networks.unknown.saturating_sub(1),
-            }
-
-            // Browser
-            if !sess.browser.is_empty() {
-                if let Some(count) = stats.browsers.get_mut(&sess.browser) {
-                    *count = count.saturating_sub(1);
-                    if *count == 0 {
-                        stats.browsers.remove(&sess.browser);
-                    }
-                }
-            }
-
-            // Referrer
-            if !sess.referrer.is_empty() {
-                if let Some(count) = stats.referrers.get_mut(&sess.referrer) {
-                    *count = count.saturating_sub(1);
-                    if *count == 0 {
-                        stats.referrers.remove(&sess.referrer);
-                    }
-                }
-            }
-
-            // Unique IP (카운트 감소, 0이면 삭제)
-            if !sess.user_ip.is_empty() {
-                if let Some(count) = stats.unique_ips.get_mut(&sess.user_ip) {
-                    *count = count.saturating_sub(1);
-                    if *count == 0 {
-                        stats.unique_ips.remove(&sess.user_ip);
-                    }
-                }
-            }
-
-            // Swarm
-            if !sess.swarm_id.is_empty() {
-                // 서버별 고유 IP 감소
-                let server_name = sess.swarm_id.split('.').next().unwrap_or("unknown").to_string();
-                if !sess.user_ip.is_empty() {
-                    if let Some(server_ips) = stats.server_unique_ips.get_mut(&server_name) {
-                        if let Some(count) = server_ips.get_mut(&sess.user_ip) {
-                            *count = count.saturating_sub(1);
-                            if *count == 0 {
-                                server_ips.remove(&sess.user_ip);
-                            }
-                        }
-                        if server_ips.is_empty() {
-                            stats.server_unique_ips.remove(&server_name);
-                        }
-                    }
-                }
-
-                if let Some(swarm) = stats.swarms.get_mut(&sess.swarm_id) {
-                    swarm.viewers = swarm.viewers.saturating_sub(1);
-                    // IP 카운트 감소
-                    if !sess.user_ip.is_empty() {
-                        if let Some(count) = swarm.unique_ips.get_mut(&sess.user_ip) {
-                            *count = count.saturating_sub(1);
-                            if *count == 0 {
-                                swarm.unique_ips.remove(&sess.user_ip);
-                            }
-                        }
-                    }
-                    if swarm.viewers == 0 {
-                        stats.swarms.remove(&sess.swarm_id);
-                    }
-                }
-            }
-        }
-
-        // IP_TOTALS 정리: unique_ips에서 해당 IP가 제거되었으면 IP_TOTALS도 제거
-        if !sess.user_ip.is_empty() {
-            let stats = P2P_STATS.read();
-            if !stats.unique_ips.contains_key(&sess.user_ip) {
-                drop(stats);
-                IP_TOTALS.write().remove(&sess.user_ip);
-            }
-        }
-
-        // 세션 종료 시 visitor_logs에 트래픽 정보 포함하여 저장
+    if let Some((_, sess)) = session {
         let mut logs = VISITOR_LOGS.lock();
         if logs.len() >= 10000 {
             let drop_count = logs.len() - 5000;
@@ -1416,119 +1551,32 @@ fn handle_client_message(session_id: &str, msg: ClientMessage) {
 }
 
 fn handle_init(session_id: &str, msg: ClientMessage) {
-    // 세션 데이터를 먼저 복사하고 락 해제 (레이스 컨디션 방지 + 락 범위 최소화)
-    let session_data = {
-        let mut sessions = SESSIONS.write();
-        let session = match sessions.get_mut(session_id) {
-            Some(s) => s,
-            None => return,
-        };
+    let mut session = match SESSIONS.get_mut(session_id) {
+        Some(s) => s,
+        None => return,
+    };
 
-        if session.initialized {
-            return; // Already initialized
-        }
-
-        session.swarm_id = msg.swarm_id.unwrap_or_default();
-        session.player_id = msg.player_id.unwrap_or(0);
-        session.filename = msg.filename.unwrap_or_default();
-        session.device = msg.device.unwrap_or_else(|| "unknown".to_string());
-        session.device_name = msg.device_name.unwrap_or_default();
-        session.net_type = msg.net_type.unwrap_or_else(|| "unknown".to_string());
-        session.browser = msg.browser.unwrap_or_default();
-        session.referrer = extract_hostname(&msg.referrer.unwrap_or_default());
-        session.initialized = true;
-
-        // 필요한 데이터 복사 (락 해제 전)
-        (
-            session.player_id,
-            session.user_ip.clone(),
-            session.device.clone(),
-            session.device_name.clone(),
-            session.net_type.clone(),
-            session.browser.clone(),
-            session.referrer.clone(),
-            session.swarm_id.clone(),
-            session.filename.clone(),
-        )
-    }; // SESSIONS 락 해제
-
-    let (player_id, user_ip, device, device_name, net_type, browser, referrer, swarm_id, filename) = session_data;
-
-    // P2P_STATS 업데이트 (복사된 데이터 사용)
-    let mut stats = P2P_STATS.write();
-    stats.viewers += 1;
-
-    // Player stats
-    if player_id == 1 {
-        stats.player1.viewers += 1;
-        if !user_ip.is_empty() {
-            *stats.player1.unique_ips.entry(user_ip.clone()).or_insert(0) += 1;
-        }
+    if session.initialized {
+        return;
     }
 
-    // Device stats
-    let dev = device.to_lowercase();
-    if dev.contains("mobile") || dev.contains("phone") {
-        stats.devices.mobile += 1;
-    } else if dev.contains("tablet") || dev.contains("ipad") {
-        stats.devices.tablet += 1;
-    } else if dev.contains("desktop") || dev.contains("pc") || dev.contains("web") {
-        stats.devices.desktop += 1;
-    } else {
-        stats.devices.unknown += 1;
-    }
-
-    if !device_name.is_empty() && stats.device_names.len() < MAX_TRACKING_ENTRIES {
-        *stats.device_names.entry(device_name).or_insert(0) += 1;
-    }
-
-    // Network stats
-    let net = net_type.to_lowercase();
-    match net.as_str() {
-        "wifi" => stats.networks.wifi += 1,
-        "cellular" => stats.networks.cellular += 1,
-        "4g" => stats.networks.g4 += 1,
-        "5g" => stats.networks.g5 += 1,
-        "ethernet" => stats.networks.ethernet += 1,
-        _ => stats.networks.unknown += 1,
-    }
-
-    if !browser.is_empty() && stats.browsers.len() < MAX_TRACKING_ENTRIES {
-        *stats.browsers.entry(browser).or_insert(0) += 1;
-    }
-
-    if !referrer.is_empty() && stats.referrers.len() < MAX_TRACKING_ENTRIES {
-        *stats.referrers.entry(referrer).or_insert(0) += 1;
-    }
-
-    // Unique IP (카운트 증가)
-    if !user_ip.is_empty() {
-        *stats.unique_ips.entry(user_ip.clone()).or_insert(0) += 1;
-    }
-
-    // Swarm
-    if !swarm_id.is_empty() {
-        // 서버별 고유 IP 추적 (swarm_id에서 서버 이름 추출)
-        let server_name = swarm_id.split('.').next().unwrap_or("unknown").to_string();
-        if !user_ip.is_empty() {
-            let server_ips = stats.server_unique_ips.entry(server_name).or_insert_with(HashMap::new);
-            *server_ips.entry(user_ip.clone()).or_insert(0) += 1;
-        }
-
-        let swarm = stats.swarms.entry(swarm_id).or_insert_with(|| SwarmStats {
-            filename,
-            ..Default::default()
-        });
-        swarm.viewers += 1;
-        if !user_ip.is_empty() {
-            *swarm.unique_ips.entry(user_ip).or_insert(0) += 1;
-        }
-    }
+    session.swarm_id = msg.swarm_id.unwrap_or_default();
+    session.server = msg.server
+        .filter(|s| !s.is_empty() && s != "999")
+        .map(|s| format!("every{}", s))
+        .unwrap_or_default();
+    session.player_id = msg.player_id.unwrap_or(0);
+    session.filename = msg.filename.unwrap_or_default();
+    session.device = msg.device.unwrap_or_else(|| "unknown".to_string());
+    session.device_name = msg.device_name.unwrap_or_default();
+    session.net_type = msg.net_type.unwrap_or_else(|| "unknown".to_string());
+    session.browser = msg.browser.unwrap_or_default();
+    session.referrer = extract_hostname(&msg.referrer.unwrap_or_default());
+    session.initialized = true;
 }
 
 fn handle_stats_update(session_id: &str, msg: ClientMessage) {
-    let mut sessions = SESSIONS.write();
-    let session = match sessions.get_mut(session_id) {
+    let mut session = match SESSIONS.get_mut(session_id) {
         Some(s) => s,
         None => return,
     };
@@ -1541,7 +1589,7 @@ fn handle_stats_update(session_id: &str, msg: ClientMessage) {
     let peer_diff = new_peers as i64 - session.peers as i64;
     session.peers = new_peers;
 
-    const MAX_DELTA: u64 = 512 * 1024 * 1024; // 512MB per report — clamp untrusted input
+    const MAX_DELTA: u64 = 512 * 1024 * 1024;
     let http_diff = msg.r_http_bytes.unwrap_or(0).min(MAX_DELTA);
     let p2p_diff = msg.r_p2p_bytes.unwrap_or(0).min(MAX_DELTA);
     let up_diff = msg.r_p2p_up_bytes.unwrap_or(0).min(MAX_DELTA);
@@ -1549,18 +1597,16 @@ fn handle_stats_update(session_id: &str, msg: ClientMessage) {
     session.http_bytes = session.http_bytes.saturating_add(http_diff);
     session.p2p_bytes = session.p2p_bytes.saturating_add(p2p_diff);
     session.p2p_up_bytes = session.p2p_up_bytes.saturating_add(up_diff);
-    // Update session delta bytes (for real-time speed display)
     session.r_http_bytes = http_diff;
     session.r_p2p_bytes = p2p_diff;
     session.r_p2p_up_bytes = up_diff;
-    // Update last active time
     session.last_active = Instant::now();
 
     let player_id = session.player_id;
     let swarm_id = session.swarm_id.clone();
     let user_ip = session.user_ip.clone();
 
-    drop(sessions);
+    drop(session);
 
     ATOMIC_HTTP_BYTES.fetch_add(http_diff, Ordering::Relaxed);
     ATOMIC_P2P_BYTES.fetch_add(p2p_diff, Ordering::Relaxed);

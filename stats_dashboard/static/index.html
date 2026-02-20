@@ -189,10 +189,10 @@
     #serverTable th:nth-child(5) { width: 7%; }   /* P2P% */
     #serverTable th:nth-child(6) { width: 8%; }   /* 접속자 */
     #serverTable th:nth-child(7) { width: 8%; }   /* 스웜 */
-    #serverTable th:nth-child(8) { width: 11%; }  /* HTTP GB/s */
-    #serverTable th:nth-child(9) { width: 11%; }  /* P2P↓ GB/s */
-    #serverTable th:nth-child(10) { width: 11%; } /* P2P↑ GB/s */
-    #serverTable th:nth-child(11) { width: 11%; } /* Total GB/s */
+    #serverTable th:nth-child(8) { width: 11%; }  /* HTTP Gbps */
+    #serverTable th:nth-child(9) { width: 11%; }  /* P2P↓ Gbps */
+    #serverTable th:nth-child(10) { width: 11%; } /* P2P↑ Gbps */
+    #serverTable th:nth-child(11) { width: 11%; } /* Total Gbps */
     @media (max-width: 768px) {
       #serverTable { font-size: 12px; }
       #serverTable th, #serverTable td { padding: 6px 4px; }
@@ -1753,21 +1753,21 @@ const pages = {
     <div class="dash-row">
       <!-- 트래픽 속도 -->
       <div class="dash-panel speed-panel">
-        <div class="dash-section-title">🚀 실시간 속도</div>
+        <div class="dash-section-title">🚀 실시간 속도 <span style="font-size:12px;color:#666;font-weight:normal">(EMA)</span></div>
         <div class="dash-speed-grid">
           <div class="dash-speed http">
             <div class="dash-speed-value" id="speedHttp">0</div>
-            <div class="dash-speed-unit">GB/s</div>
+            <div class="dash-speed-unit">Gbps</div>
             <div class="dash-speed-label">HTTP</div>
           </div>
           <div class="dash-speed p2p-down">
             <div class="dash-speed-value" id="speedP2p">0</div>
-            <div class="dash-speed-unit">GB/s</div>
+            <div class="dash-speed-unit">Gbps</div>
             <div class="dash-speed-label">P2P ↓</div>
           </div>
           <div class="dash-speed p2p-up">
             <div class="dash-speed-value" id="speedP2pUp">0</div>
-            <div class="dash-speed-unit">GB/s</div>
+            <div class="dash-speed-unit">Gbps</div>
             <div class="dash-speed-label">P2P ↑</div>
           </div>
         </div>
@@ -1828,8 +1828,7 @@ const pages = {
       </div>
     </div>
     <div class="stats-grid" id="trafficSummary"></div>
-    <div class="panel" style="background:linear-gradient(135deg,rgba(0,212,255,.08),rgba(0,255,136,.05));border:1px solid rgba(0,212,255,.3)">
-      <h3 style="color:#00d4ff;margin-bottom:15px">트래픽 추이</h3>
+    <div class="panel" style="display:none">
       <canvas id="trafficChart" height="280"></canvas>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px">
@@ -1853,8 +1852,8 @@ const pages = {
       <div class="panel" style="text-align:center;padding:20px"><div style="font-size:11px;color:#888;margin-bottom:8px">활성 스웜</div><div id="peakSwarms" style="font-size:26px;font-weight:bold;color:#8a2be2">-</div></div>
     </div>
     <div class="panel" style="margin-top:20px">
-      <h3 style="margin-bottom:15px">서버별 상세</h3>
-      <table id="serverTable"><thead><tr><th>서버</th><th>HTTP</th><th>P2P↓</th><th>P2P↑</th><th>P2P%</th><th>접속자</th><th>스웜</th><th>HTTP GB/s</th><th>P2P↓ GB/s</th><th>P2P↑ GB/s</th><th>Total GB/s</th></tr></thead><tbody></tbody></table>
+      <h3 style="margin-bottom:15px">서버별 상세 <span style="font-size:11px;color:#666;font-weight:normal">(30초 평균 속도)</span></h3>
+      <table id="serverTable"><thead><tr><th>서버</th><th>HTTP</th><th>P2P↓</th><th>P2P↑</th><th>P2P%</th><th>접속자</th><th>스웜</th><th>HTTP Gbps</th><th>P2P↓ Gbps</th><th>P2P↑ Gbps</th><th>Total Gbps</th></tr></thead><tbody></tbody></table>
     </div>
   `,
   realtime: () => `
@@ -1928,8 +1927,8 @@ const pages = {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
       <div class="panel">
         <h3 style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
-          <span style="color:#00d4ff">실시간 속도 비교</span>
-          <span style="font-size:11px;color:#666">(GB/s)</span>
+          <span style="color:#00d4ff">실시간 속도 비교 <span style="font-size:11px;color:#666;font-weight:normal">(30초 평균)</span></span>
+          <span style="font-size:11px;color:#666">(Gbps)</span>
         </h3>
         <canvas id="speedCompareChart" height="160"></canvas>
       </div>
@@ -5193,9 +5192,9 @@ function initTraffic() {
         ${card('현재 피어', (rt.total?.peers || 0).toLocaleString(), '개', 'p2p')}
         ${card('활성 스웜', (rt.activeSwarms || 0).toLocaleString(), '개', 'p2p')}
         ${card('P2P 비율', p2pRatio, '%', 'p2p')}
-        ${card('HTTP 속도', httpGbps, ' GB/s', 'http')}
-        ${card('P2P↓ 속도', p2pGbps, ' GB/s', 'p2p')}
-        ${card('P2P↑ 속도', p2pUpGbps, ' GB/s', 'p2p')}
+        ${card('HTTP 속도 (EMA)', httpGbps, ' Gbps', 'http')}
+        ${card('P2P↓ 속도 (EMA)', p2pGbps, ' Gbps', 'p2p')}
+        ${card('P2P↑ 속도 (EMA)', p2pUpGbps, ' Gbps', 'p2p')}
       `;
 
       // 피크 대신 현재 값 (uniqueUsers = IP 중복제거)
@@ -5218,9 +5217,9 @@ function initTraffic() {
         ${card('P2P 다운로드', formatBytes(totalP2p), '', 'p2p')}
         ${card('P2P 업로드', formatBytes(totalP2pUp), '', 'p2p')}
         ${card('P2P 비율', p2pRatio, '%', 'p2p')}
-        ${card('HTTP 속도', httpGbps, ' GB/s', 'http')}
-        ${card('P2P↓ 속도', p2pGbps, ' GB/s', 'p2p')}
-        ${card('P2P↑ 속도', p2pUpGbps, ' GB/s', 'p2p')}
+        ${card('HTTP 속도 (30초 평균)', httpGbps, ' Gbps', 'http')}
+        ${card('P2P↓ 속도 (30초 평균)', p2pGbps, ' Gbps', 'p2p')}
+        ${card('P2P↑ 속도 (30초 평균)', p2pUpGbps, ' Gbps', 'p2p')}
       `;
 
       // 피크 지표
@@ -5745,9 +5744,9 @@ function initPlayers() {
       { label: 'P2P 다운로드', p1: formatBytes(p1P2p), color: 'p2p' },
       { label: 'P2P 업로드', p1: formatBytes(p1Up), color: 'p2p' },
       { label: 'P2P 비율', p1: p1P2pRatio, color: 'p2p' },
-      { label: 'HTTP 속도', p1: p1HttpGbps.toFixed(2) + ' GB/s', color: 'http' },
-      { label: 'P2P↓ 속도', p1: p1P2pGbps.toFixed(2) + ' GB/s', color: 'p2p' },
-      { label: 'P2P↑ 속도', p1: p1UpGbps.toFixed(2) + ' GB/s', color: 'p2p' },
+      { label: 'HTTP 속도', p1: p1HttpGbps.toFixed(2) + ' Gbps', color: 'http' },
+      { label: 'P2P↓ 속도', p1: p1P2pGbps.toFixed(2) + ' Gbps', color: 'p2p' },
+      { label: 'P2P↑ 속도', p1: p1UpGbps.toFixed(2) + ' Gbps', color: 'p2p' },
     ];
     document.getElementById('playerStatsBody').innerHTML = rows.map(r => `
       <tr style="border-bottom:1px solid #222">
@@ -5772,7 +5771,7 @@ function initPlayers() {
           plugins: { legend: { position: 'top', labels: { color: '#aaa', padding: 15, usePointStyle: true } } },
           scales: {
             x: { grid: { display: false }, ticks: { color: '#888' } },
-            y: { grid: { color: '#333' }, ticks: { color: '#888', callback: v => v + ' GB/s' } }
+            y: { grid: { color: '#333' }, ticks: { color: '#888', callback: v => v + ' Gbps' } }
           }
         }
       });

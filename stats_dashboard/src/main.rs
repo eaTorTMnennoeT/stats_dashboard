@@ -2983,7 +2983,8 @@ async fn build_traffic_realtime(client: &Client) -> String {
         time_filter.replace("ts >", "timestamp >")
     );
 
-    let server_speed_query = "SELECT server, sum(r_http_bytes) as r_http, sum(r_p2p_bytes) as r_p2p, sum(r_p2p_up_bytes) as r_p2p_up \
+    let server_speed_query = "SELECT server, sum(r_http_bytes) as r_http, sum(r_p2p_bytes) as r_p2p, sum(r_p2p_up_bytes) as r_p2p_up, \
+         max(viewers) as viewers, max(unique_ips) as unique_ips \
          FROM p2p_servers WHERE timestamp > now() - INTERVAL 30 SECOND GROUP BY server";
 
     let timeline_url = format!("{}/?query={} FORMAT JSONCompact", CLICKHOUSE_URL, urlencoding::encode(&timeline_query));
@@ -3068,9 +3069,9 @@ async fn build_traffic_realtime(client: &Client) -> String {
         let r_p2p = p1.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
         let r_p2p_up = p1.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
         (
-            (r_http as f64) / 1_073_741_824.0,
-            (r_p2p as f64) / 1_073_741_824.0,
-            (r_p2p_up as f64) / 1_073_741_824.0,
+            (r_http as f64) * 8.0 / 1_000_000_000.0,
+            (r_p2p as f64) * 8.0 / 1_000_000_000.0,
+            (r_p2p_up as f64) * 8.0 / 1_000_000_000.0,
         )
     };
 
@@ -3117,7 +3118,7 @@ async fn build_traffic_realtime(client: &Client) -> String {
         }
     }
 
-    let mut server_speed_map: HashMap<String, (f64, f64, f64)> = HashMap::new();
+    let mut server_speed_map: HashMap<String, (f64, f64, f64, i64, i64)> = HashMap::new();
     if let Some(dataset) = server_speed_data.get("data").and_then(|d| d.as_array()) {
         for row in dataset {
             if let Some(arr) = row.as_array() {
@@ -3125,77 +3126,61 @@ async fn build_traffic_realtime(client: &Client) -> String {
                 let r_http = arr.get(1).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
                 let r_p2p = arr.get(2).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
                 let r_p2p_up = arr.get(3).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
+                let viewers = arr.get(4).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
+                let unique_ips = arr.get(5).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
                 server_speed_map.insert(server, (
-                    (r_http as f64) / 30.0 / 1_073_741_824.0,
-                    (r_p2p as f64) / 30.0 / 1_073_741_824.0,
-                    (r_p2p_up as f64) / 30.0 / 1_073_741_824.0,
+                    (r_http as f64) * 8.0 / 30.0 / 1_000_000_000.0,
+                    (r_p2p as f64) * 8.0 / 30.0 / 1_000_000_000.0,
+                    (r_p2p_up as f64) * 8.0 / 30.0 / 1_000_000_000.0,
+                    viewers,
+                    unique_ips,
                 ));
             }
         }
     }
 
     let mut all_servers: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for s in server_speed_map.keys() { all_servers.insert(s.clone()); }
     for s in server_traffic_map.keys() { all_servers.insert(s.clone()); }
-    for s in visitor_map.keys() { all_servers.insert(s.clone()); }
 
     let mut cdn_servers: Vec<(String, i64, i64, i64, i64, i64, i64, f64, f64, f64)> = all_servers.iter()
-        .filter(|s| !s.is_empty() && s.starts_with("every"))
+        .filter(|s| s.starts_with("every") && *s != "every999")
         .map(|s| {
             let (http, p2p, p2p_up, peak) = server_traffic_map.get(s).copied().unwrap_or((0, 0, 0, 0));
-            let (visitors, requests) = visitor_map.get(s).copied().unwrap_or((0, 0));
-            let (http_gbs, p2p_gbs, p2p_up_gbs) = server_speed_map.get(s).copied().unwrap_or((0.0, 0.0, 0.0));
-            (s.clone(), http, p2p, p2p_up, peak, visitors, requests, http_gbs, p2p_gbs, p2p_up_gbs)
+            let (http_gbs, p2p_gbs, p2p_up_gbs, viewers, unique_ips) = server_speed_map.get(s).copied().unwrap_or((0.0, 0.0, 0.0, 0, 0));
+            (s.clone(), http, p2p, p2p_up, peak, viewers, unique_ips, http_gbs, p2p_gbs, p2p_up_gbs)
         })
         .collect();
-    cdn_servers.sort_by(|a, b| b.1.cmp(&a.1));
+    cdn_servers.sort_by(|a, b| b.7.partial_cmp(&a.7).unwrap_or(std::cmp::Ordering::Equal));
 
-    let mut cdn_http_gbs_total: f64 = 0.0;
-    let mut cdn_p2p_gbs_total: f64 = 0.0;
-    let mut cdn_p2p_up_gbs_total: f64 = 0.0;
-    for (_, _, _, _, _, _, _, http_gbs, p2p_gbs, p2p_up_gbs) in &cdn_servers {
-        cdn_http_gbs_total += http_gbs;
-        cdn_p2p_gbs_total += p2p_gbs;
-        cdn_p2p_up_gbs_total += p2p_up_gbs.min(*p2p_gbs);
-    }
-
-    let http_scale = if cdn_http_gbs_total > 0.001 { http_gbps / cdn_http_gbs_total } else { 1.0 };
-    let p2p_scale = if cdn_p2p_gbs_total > 0.001 { p2p_gbps / cdn_p2p_gbs_total } else { 1.0 };
-    let p2p_up_scale = if cdn_p2p_up_gbs_total > 0.001 { p2p_up_gbps / cdn_p2p_up_gbs_total } else { 1.0 };
-
+    let mut sum_http_gbps: f64 = 0.0;
+    let mut sum_p2p_gbps: f64 = 0.0;
+    let mut sum_p2p_up_gbps: f64 = 0.0;
     let mut servers: Vec<serde_json::Value> = Vec::new();
-    for (server, http, p2p, p2p_up, _peak, visitors, requests, http_gbs, p2p_gbs, p2p_up_gbs) in cdn_servers {
+    for &(ref server, http, p2p, p2p_up, _peak, viewers, unique_ips, http_gbs, p2p_gbs, p2p_up_gbs) in &cdn_servers {
         let clamped_p2p_up = p2p_up.min(p2p);
         let clamped_p2p_up_gbs = p2p_up_gbs.min(p2p_gbs);
-        let scaled_http_gbs = http_gbs * http_scale;
-        let scaled_p2p_gbs = p2p_gbs * p2p_scale;
-        let scaled_p2p_up_gbs = (clamped_p2p_up_gbs * p2p_up_scale).min(scaled_p2p_gbs);
+        sum_http_gbps += http_gbs;
+        sum_p2p_gbps += p2p_gbs;
+        sum_p2p_up_gbps += clamped_p2p_up_gbs;
         servers.push(serde_json::json!({
             "server": server, "http": http, "p2p": p2p, "p2pUp": clamped_p2p_up,
-            "httpGbps": format!("{:.2}", scaled_http_gbs),
-            "p2pGbps": format!("{:.2}", scaled_p2p_gbs),
-            "p2pUpGbps": format!("{:.2}", scaled_p2p_up_gbs),
-            "visitors": visitors, "requests": requests
+            "httpGbps": format!("{:.2}", http_gbs),
+            "p2pGbps": format!("{:.2}", p2p_gbs),
+            "p2pUpGbps": format!("{:.2}", clamped_p2p_up_gbs),
+            "visitors": viewers, "requests": unique_ips
         }));
     }
 
-    let mut player_speeds: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-    if let Some(p) = realtime_data.get("player1") {
-        let r_http = p.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-        let r_p2p = p.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-        let r_p2p_up = p.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-        player_speeds.insert("player1".to_string(), serde_json::json!({
-            "httpGbps": format!("{:.2}", (r_http as f64) / 1_073_741_824.0),
-            "p2pGbps": format!("{:.2}", (r_p2p as f64) / 1_073_741_824.0),
-            "p2pUpGbps": format!("{:.2}", (r_p2p_up as f64) / 1_073_741_824.0)
-        }));
-    }
+    totals["httpGbps"] = serde_json::json!(format!("{:.2}", sum_http_gbps));
+    totals["p2pGbps"] = serde_json::json!(format!("{:.2}", sum_p2p_gbps));
+    totals["p2pUpGbps"] = serde_json::json!(format!("{:.2}", sum_p2p_up_gbps));
 
     let result = serde_json::json!({
         "period": "realtime",
         "timeline": timeline,
         "totals": totals,
-        "servers": servers,
-        "playerSpeeds": player_speeds
+        "servers": servers
     });
 
     result.to_string()
@@ -3290,7 +3275,8 @@ async fn api_traffic(
     );
 
     // 6. 서버별 실시간 속도 (최근 30초간 r_* 합산)
-    let server_speed_query = "SELECT server, sum(r_http_bytes) as r_http, sum(r_p2p_bytes) as r_p2p, sum(r_p2p_up_bytes) as r_p2p_up \
+    let server_speed_query = "SELECT server, sum(r_http_bytes) as r_http, sum(r_p2p_bytes) as r_p2p, sum(r_p2p_up_bytes) as r_p2p_up, \
+         max(viewers) as viewers, max(unique_ips) as unique_ips \
          FROM p2p_servers WHERE timestamp > now() - INTERVAL 30 SECOND GROUP BY server";
 
     // 7. 플레이어별 실시간 속도 (최근 30초간 r_* 합산)
@@ -3400,17 +3386,16 @@ async fn api_traffic(
         }
     }
 
-    // 실시간 속도 계산 (GB/s) - simple_ws의 rHttpBytes 등 사용 (이미 bytes/sec)
+    // 실시간 속도 계산 (Gbps) - simple_ws의 rHttpBytes 등 사용 (이미 bytes/sec)
     let empty_player = serde_json::json!({});
     let (http_gbps, p2p_gbps, p2p_up_gbps) = {
         let p1 = realtime_data.get("player1").unwrap_or(&empty_player);
         let r_http = p1.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
         let r_p2p = p1.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
         let r_p2p_up = p1.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-        // bytes/sec -> GB/s
-        let http_gbs = (r_http as f64) / 1_073_741_824.0;
-        let p2p_gbs = (r_p2p as f64) / 1_073_741_824.0;
-        let p2p_up_gbs = (r_p2p_up as f64) / 1_073_741_824.0;
+        let http_gbs = (r_http as f64) * 8.0 / 1_000_000_000.0;
+        let p2p_gbs = (r_p2p as f64) * 8.0 / 1_000_000_000.0;
+        let p2p_up_gbs = (r_p2p_up as f64) * 8.0 / 1_000_000_000.0;
         (http_gbs, p2p_gbs, p2p_up_gbs)
     };
 
@@ -3470,8 +3455,8 @@ async fn api_traffic(
         }
     }
 
-    // 4. 서버별 속도 맵 구성 (r_* 합산 / 30 = GB/s)
-    let mut server_speed_map: std::collections::HashMap<String, (f64, f64, f64)> = std::collections::HashMap::new();
+    // 4. 서버별 속도 맵 구성 (r_* 합산 / 30 = Gbps) + viewers/unique_ips
+    let mut server_speed_map: std::collections::HashMap<String, (f64, f64, f64, i64, i64)> = std::collections::HashMap::new();
     if let Some(dataset) = server_speed_data.get("data").and_then(|d| d.as_array()) {
         for row in dataset {
             if let Some(arr) = row.as_array() {
@@ -3479,92 +3464,63 @@ async fn api_traffic(
                 let r_http = arr.get(1).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
                 let r_p2p = arr.get(2).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
                 let r_p2p_up = arr.get(3).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
-                // bytes/30sec -> GB/s
-                let http_gbs = (r_http as f64) / 30.0 / 1_073_741_824.0;
-                let p2p_gbs = (r_p2p as f64) / 30.0 / 1_073_741_824.0;
-                let p2p_up_gbs = (r_p2p_up as f64) / 30.0 / 1_073_741_824.0;
-                server_speed_map.insert(server, (http_gbs, p2p_gbs, p2p_up_gbs));
+                let viewers = arr.get(4).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
+                let unique_ips = arr.get(5).and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))).unwrap_or(0);
+                let http_gbs = (r_http as f64) * 8.0 / 30.0 / 1_000_000_000.0;
+                let p2p_gbs = (r_p2p as f64) * 8.0 / 30.0 / 1_000_000_000.0;
+                let p2p_up_gbs = (r_p2p_up as f64) * 8.0 / 30.0 / 1_000_000_000.0;
+                server_speed_map.insert(server, (http_gbs, p2p_gbs, p2p_up_gbs, viewers, unique_ips));
             }
         }
     }
 
-    // 5. CDN 서버 병합 (트래픽 기준 정렬)
+    // 5. 서버 병합 (속도 기준 정렬, 스케일링 없이 raw 값 표시)
     let mut all_servers: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for s in server_speed_map.keys() { all_servers.insert(s.clone()); }
     for s in server_traffic_map.keys() { all_servers.insert(s.clone()); }
-    for s in visitor_map.keys() { all_servers.insert(s.clone()); }
 
     let mut cdn_servers: Vec<(String, i64, i64, i64, i64, i64, i64, f64, f64, f64)> = all_servers.iter()
-        .filter(|s| !s.is_empty() && s.starts_with("every"))  // CDN 서버만 (every1-9)
+        .filter(|s| s.starts_with("every") && *s != "every999")
         .map(|s| {
             let (http, p2p, p2p_up, peak) = server_traffic_map.get(s).copied().unwrap_or((0, 0, 0, 0));
-            let (visitors, requests) = visitor_map.get(s).copied().unwrap_or((0, 0));
-            let (http_gbs, p2p_gbs, p2p_up_gbs) = server_speed_map.get(s).copied().unwrap_or((0.0, 0.0, 0.0));
-            (s.clone(), http, p2p, p2p_up, peak, visitors, requests, http_gbs, p2p_gbs, p2p_up_gbs)
+            let (http_gbs, p2p_gbs, p2p_up_gbs, viewers, unique_ips) = server_speed_map.get(s).copied().unwrap_or((0.0, 0.0, 0.0, 0, 0));
+            (s.clone(), http, p2p, p2p_up, peak, viewers, unique_ips, http_gbs, p2p_gbs, p2p_up_gbs)
         })
         .collect();
-    cdn_servers.sort_by(|a, b| b.1.cmp(&a.1)); // HTTP 내림차순
+    cdn_servers.sort_by(|a, b| b.7.partial_cmp(&a.7).unwrap_or(std::cmp::Ordering::Equal));
 
-    // CDN 서버 속도 합계 먼저 계산 (스케일 팩터용)
-    let mut cdn_http_gbs_total: f64 = 0.0;
-    let mut cdn_p2p_gbs_total: f64 = 0.0;
-    let mut cdn_p2p_up_gbs_total: f64 = 0.0;
-    for (_, _, _, _, _, _, _, http_gbs, p2p_gbs, p2p_up_gbs) in &cdn_servers {
-        cdn_http_gbs_total += http_gbs;
-        cdn_p2p_gbs_total += p2p_gbs;
-        cdn_p2p_up_gbs_total += p2p_up_gbs.min(*p2p_gbs);
-    }
-
-    // 스케일 팩터 계산 (총합 / CDN 합계) - 서버별 속도가 총합과 일치하도록
-    let http_scale = if cdn_http_gbs_total > 0.001 { http_gbps / cdn_http_gbs_total } else { 1.0 };
-    let p2p_scale = if cdn_p2p_gbs_total > 0.001 { p2p_gbps / cdn_p2p_gbs_total } else { 1.0 };
-    let p2p_up_scale = if cdn_p2p_up_gbs_total > 0.001 { p2p_up_gbps / cdn_p2p_up_gbs_total } else { 1.0 };
-
-    for (server, http, p2p, p2p_up, _peak, visitors, requests, http_gbs, p2p_gbs, p2p_up_gbs) in cdn_servers {
-        // P2P 업로드가 다운로드를 초과하지 않도록 클램핑 (표시 일관성)
+    let mut sum_http_gbps: f64 = 0.0;
+    let mut sum_p2p_gbps: f64 = 0.0;
+    let mut sum_p2p_up_gbps: f64 = 0.0;
+    for &(ref server, http, p2p, p2p_up, _peak, viewers, unique_ips, http_gbs, p2p_gbs, p2p_up_gbs) in &cdn_servers {
         let clamped_p2p_up = p2p_up.min(p2p);
         let clamped_p2p_up_gbs = p2p_up_gbs.min(p2p_gbs);
-
-        // 스케일 적용
-        let scaled_http_gbs = http_gbs * http_scale;
-        let scaled_p2p_gbs = p2p_gbs * p2p_scale;
-        let scaled_p2p_up_gbs = (clamped_p2p_up_gbs * p2p_up_scale).min(scaled_p2p_gbs);
+        sum_http_gbps += http_gbs;
+        sum_p2p_gbps += p2p_gbs;
+        sum_p2p_up_gbps += clamped_p2p_up_gbs;
 
         servers.push(serde_json::json!({
             "server": server,
             "http": http,
             "p2p": p2p,
             "p2pUp": clamped_p2p_up,
-            "httpGbps": format!("{:.2}", scaled_http_gbs),
-            "p2pGbps": format!("{:.2}", scaled_p2p_gbs),
-            "p2pUpGbps": format!("{:.2}", scaled_p2p_up_gbs),
-            "visitors": visitors,
-            "requests": requests
+            "httpGbps": format!("{:.2}", http_gbs),
+            "p2pGbps": format!("{:.2}", p2p_gbs),
+            "p2pUpGbps": format!("{:.2}", clamped_p2p_up_gbs),
+            "visitors": viewers,
+            "requests": unique_ips
         }));
     }
 
-    // 플레이어별 속도 계산 - simple_ws realtime_data 사용 (bytes/sec -> GB/s)
-    let mut player_speeds: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-    if let Some(p) = realtime_data.get("player1") {
-        let r_http = p.get("rHttpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-        let r_p2p = p.get("rP2pBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-        let r_p2p_up = p.get("rP2pUpBytes").and_then(|v| v.as_i64()).unwrap_or(0);
-        // bytes/sec -> GB/s
-        let http_gbs = (r_http as f64) / 1_073_741_824.0;
-        let p2p_gbs = (r_p2p as f64) / 1_073_741_824.0;
-        let p2p_up_gbs = (r_p2p_up as f64) / 1_073_741_824.0;
-        player_speeds.insert("player1".to_string(), serde_json::json!({
-            "httpGbps": format!("{:.2}", http_gbs),
-            "p2pGbps": format!("{:.2}", p2p_gbs),
-            "p2pUpGbps": format!("{:.2}", p2p_up_gbs)
-        }));
-    }
+    totals["httpGbps"] = serde_json::json!(format!("{:.2}", sum_http_gbps));
+    totals["p2pGbps"] = serde_json::json!(format!("{:.2}", sum_p2p_gbps));
+    totals["p2pUpGbps"] = serde_json::json!(format!("{:.2}", sum_p2p_up_gbps));
 
     let result = serde_json::json!({
         "period": period,
         "timeline": timeline,
         "totals": totals,
-        "servers": servers,
-        "playerSpeeds": player_speeds
+        "servers": servers
     });
 
     let body = result.to_string();
